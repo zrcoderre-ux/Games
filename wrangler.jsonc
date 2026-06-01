@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "card-games",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [
+      { "name": "HighLowJack", "class_name": "HighLowJackServer" },
+      { "name": "Rummy500", "class_name": "Rummy500Server" }
+    ]
+  },
+  // NOTE: the HLJ class was previously named "GameServer". If you had already
+  // deployed v1 as "GameServer", replace the v1 line below with a rename:
+  //   { "tag": "v1", "new_sqlite_classes": ["GameServer"] },
+  //   { "tag": "v2", "renamed_classes": [{ "from": "GameServer", "to": "HighLowJackServer" }] },
+  //   { "tag": "v3", "new_sqlite_classes": ["Rummy500Server"] }
+  // If you have NOT deployed yet, the clean two-line version is fine:
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["HighLowJackServer"] },
+    { "tag": "v2", "new_sqlite_classes": ["Rummy500Server"] }
+  ]
+}
