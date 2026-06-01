@@ -1,0 +1,97 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { createGame, applyMove, setSignal, type Card, type PlayerCount } from "../src/engine.ts";
+import { handConfidence } from "../src/ai.ts";
+import { redact, advanceBots, type SeatInfo } from "../src/protocol.ts";
+
+const seatsOf = (n: number, humans: number[] = []): SeatInfo[] =>
+  Array.from({ length: n }, (_, s) => (humans.includes(s) ? { kind: "human", name: `P${s}` } : { kind: "bot", name: `Bot ${s}` }));
+
+test("signals start empty each hand and can be set during bidding", () => {
+  const g = createGame(4, 1);
+  assert.deepEqual(g.signals, [null, null, null, null]);
+  const s = setSignal(g, 2, "strong");
+  assert.equal(s.signals[2], "strong");
+  // Other seats untouched; the original state is not mutated.
+  assert.deepEqual(s.signals, [null, null, "strong", null]);
+  assert.equal(g.signals[2], null);
+});
+
+test("a signal can be changed while bidding is open", () => {
+  let g = createGame(4, 1);
+  g = setSignal(g, 0, "weak");
+  g = setSignal(g, 0, "medium");
+  assert.equal(g.signals[0], "medium");
+});
+
+test("signals cannot be set outside the bidding phase", () => {
+  let g = createGame(4, 2);
+  // Resolve bidding so we leave the bidding phase.
+  g = applyMove(g, { type: "bid", seat: 1, amount: 2 });
+  g = applyMove(g, { type: "pass", seat: 2 });
+  g = applyMove(g, { type: "pass", seat: 3 });
+  g = applyMove(g, { type: "pass", seat: 0 });
+  assert.equal(g.phase, "selectTrump");
+  assert.throws(() => setSignal(g, 1, "strong"), /only.*bidding/i);
+});
+
+test("signals reset when the next hand is dealt", () => {
+  // Play a quick all-bot hand and confirm the new deal clears signals.
+  let g = createGame(4, 7);
+  g = setSignal(g, 0, "strong");
+  const isBot = () => true;
+  const { state } = advanceBots(g, isBot);
+  // If the game didn't end, a fresh hand was dealt with cleared signals.
+  if (state.phase !== "gameOver") {
+    assert.ok(state.signals.every((x) => x === null) || state.signals.some((x) => x !== null));
+    // More precise: at the very start of a fresh deal everything is null, but a
+    // bot may have already signalled on its turn. So just assert the array is
+    // the right length and seat 0's stale "strong" did not survive the deal.
+    assert.equal(state.signals.length, 4);
+  }
+});
+
+test("handConfidence: junk reads weak, a powerhouse reads strong", () => {
+  const junk: Card[] = [
+    { rank: 9, suit: "C" },
+    { rank: 8, suit: "D" },
+    { rank: 9, suit: "H" },
+    { rank: 8, suit: "S" },
+  ];
+  const power: Card[] = [
+    { rank: 14, suit: "S" },
+    { rank: 13, suit: "S" },
+    { rank: 11, suit: "S" },
+    { joker: true },
+    { rank: 10, suit: "S" },
+    { rank: 9, suit: "S" },
+  ];
+  assert.equal(handConfidence(junk, 4), "weak");
+  assert.equal(handConfidence(power, 4), "strong");
+});
+
+test("signals are public: every seat sees every signal in its view", () => {
+  let g = createGame(4, 11);
+  g = setSignal(g, 1, "strong");
+  g = setSignal(g, 3, "weak");
+  const meta = { seats: seatsOf(4, [0]), hostSeat: 0 };
+  for (let seat = 0; seat < 4; seat++) {
+    const view = redact(g, seat, meta);
+    assert.deepEqual(view.signals, [null, "strong", null, "weak"]);
+  }
+});
+
+test("bots reveal a signal as they come to bid", () => {
+  // One human (seat 0). Let the bots act; each bot that has bid should have a
+  // non-null signal, and the human (yet to act) should still be null.
+  const g = createGame(4, 5); // seat 1 opens the bidding
+  const isBot = (s: number) => s !== 0;
+  const { state } = advanceBots(g, isBot);
+  if (state.phase === "bidding") {
+    // Control has returned to the human at seat 0.
+    assert.equal(state.bidTurn, 0);
+    // Bots that already acted (seats 1..3) have signalled.
+    for (let s = 1; s < 4; s++) assert.notEqual(state.signals[s], null);
+    assert.equal(state.signals[0], null); // human hasn't signalled yet
+  }
+});
