@@ -8,7 +8,7 @@ const SUIT = { S: "\u2660", H: "\u2665", D: "\u2666", C: "\u2663" };
 const RED = new Set(["H", "D"]);
 const GAMES = {
   rummy500: { label: "Rummy 500", players: [2, 3, 4, 5, 6, 7, 8], target: 500 },
-  highlowjack: { label: "High Low Jack", players: [4, 6, 8], target: 21 },
+  "high-low-jack": { label: "High Low Jack", players: [4, 6, 8], target: 21 },
 };
 
 const app = document.getElementById("app");
@@ -23,7 +23,6 @@ const S = {
   connected: false,
   intentionalClose: false,
   view: null,
-  selCount: null, // chosen player count in lobby
   rummySel: new Set(), // selected card ids
   rummyLayoff: null, // selected meld id for layoff
 };
@@ -117,7 +116,7 @@ function render() {
   if (!S.connected || !S.view) return renderConnecting();
   const v = S.view;
   if (v.phase === "lobby") return renderLobby(v);
-  if (S.party === "highlowjack") return renderHLJ(v);
+  if (S.party === "high-low-jack") return renderHLJ(v);
   return renderRummy(v);
 }
 
@@ -137,7 +136,7 @@ function renderStart() {
       <div class="field"><label>Game</label>
         <select id="f-game">
           <option value="rummy500" ${g === "rummy500" ? "selected" : ""}>Rummy 500</option>
-          <option value="highlowjack" ${g === "highlowjack" ? "selected" : ""}>High Low Jack</option>
+          <option value="high-low-jack" ${g === "high-low-jack" ? "selected" : ""}>High Low Jack</option>
         </select>
       </div>
       <div class="field"><label>Room code</label><input id="f-room" value="${esc(S.room || "")}" placeholder="leave blank to create a new room" autocomplete="off" /></div>
@@ -147,7 +146,6 @@ function renderStart() {
 
 // ---------- lobby ----------
 function renderLobby(v) {
-  if (S.selCount == null) S.selCount = v.players;
   const isHost = v.you !== null && v.you === v.hostSeat;
   const counts = GAMES[S.party].players;
 
@@ -180,10 +178,10 @@ function renderLobby(v) {
     ? `<div class="panel">
          <h2>Start the game</h2>
          <div class="field"><label>Players</label><div class="row">${counts
-           .map((c) => `<button class="sm ${c === S.selCount ? "primary" : ""}" data-action="setcount" data-count="${c}">${c}</button>`)
+           .map((c) => `<button class="sm ${c === v.players ? "primary" : ""}" data-action="setcount" data-count="${c}">${c}</button>`)
            .join("")}</div></div>
-         <div class="field"><label>Play to (points)</label><input id="f-target" type="number" min="1" value="${GAMES[S.party].target}" /></div>
-         <p class="muted">Any empty seats become bots when you start.</p>
+         <div class="field"><label>Play to (points)</label><input id="f-target" type="number" min="1" value="${v.target}" /></div>
+         <p class="muted">Players can sit in any empty seat; choose more seats to make room. Empty seats become bots when you deal.</p>
          <button class="primary" data-action="start">Deal</button>
        </div>`
     : `<div class="panel center muted">Waiting for the host to start…</div>`;
@@ -401,7 +399,6 @@ function doConnect() {
   S.name = name;
   S.party = game;
   S.room = room;
-  S.selCount = null;
   localStorage.setItem("cg_name", name);
   history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
   connect();
@@ -425,7 +422,7 @@ function doLeave() {
 
 function doStart() {
   const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-  send({ t: "start", config: { players: S.selCount, target } });
+  send({ t: "start", config: { players: S.view.players, target } });
 }
 
 function toggleSel(id) {
@@ -466,7 +463,10 @@ app.addEventListener("click", (e) => {
     case "sit": return send({ t: "sit", seat: +t.dataset.seat });
     case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
     case "removebot": return send({ t: "removeBot", seat: +t.dataset.seat });
-    case "setcount": S.selCount = +t.dataset.count; return render();
+    case "setcount": {
+      const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
+      return send({ t: "setConfig", config: { players: +t.dataset.count, target } });
+    }
     case "start": return doStart();
     case "newgame": return send({ t: "newGame" });
     case "move-bid": return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
@@ -485,6 +485,14 @@ app.addEventListener("click", (e) => {
     case "meld-selected": return doMeld();
     case "layoff-selected": return doLayoff();
     case "discard-selected": return doDiscard();
+  }
+});
+
+// keep the host's "play to" value in the shared lobby config (so re-renders don't lose it)
+app.addEventListener("change", (e) => {
+  if (e.target.id === "f-target" && S.view && S.view.phase === "lobby") {
+    const target = parseInt(e.target.value, 10);
+    if (target > 0) send({ t: "setConfig", config: { players: S.view.players, target } });
   }
 });
 
