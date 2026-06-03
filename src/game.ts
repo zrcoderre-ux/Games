@@ -90,6 +90,9 @@ export interface Game<State, Move extends SeatedMove, Config, View> {
   // A bot's move for the seat to act. Reads only its own (redactable) info.
   aiMove(state: State, seat: number): Move;
 
+  // OPTIONAL: ms between bot moves (default 1600). Set lower for fast-paced games.
+  botStepMs?: number;
+
   // OPTIONAL: side actions that do NOT advance the turn (Pitch hand signals).
   // Games without them (Rummy) omit this property entirely.
   aux?: {

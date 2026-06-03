@@ -507,6 +507,12 @@ function legalMoves(state: RummyState): RummyMove[] {
     if (state.stock.length > 0) moves.push({ type: "drawStock", seat });
     const top = state.discard[state.discard.length - 1];
     if (top) moves.push({ type: "drawDiscard", seat, cardId: top.id }); // top is always takeable
+    // Whole-pile pickup: offer bottom card when it can be immediately melded/laid off
+    if (state.discard.length > 1) {
+      const bottom = state.discard[0];
+      if (canFormMeldWith([...hand, ...state.discard], bottom) || canLayoff(state, bottom))
+        moves.push({ type: "drawDiscard", seat, cardId: bottom.id });
+    }
     return moves;
   }
 
@@ -731,6 +737,7 @@ function aiMove(state: RummyState, seat: number): RummyMove {
 
 export const rummy500Module: Game<RummyState, RummyMove, RummyConfig, RummyView> = {
   meta: { id: "rummy-500", name: "Rummy 500", supportedPlayerCounts: [2, 3, 4, 5, 6, 7, 8] },
+  botStepMs: 400,
   seatCount: (config) => config.players,
   createGame,
   seatToAct,
