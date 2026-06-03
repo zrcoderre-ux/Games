@@ -376,18 +376,22 @@ function tableShell(v, parts) {
     // Map seat offset (1..n-1) to a CSS position class
     // Layout per player count (opponents = n-1):
     //   2p: [top]
-    //   3p: [left, right]  (NW, NE)
+    //   3p: [left, right]
     //   4p: [left, top, right]
-    //   5p: [left, top-left, top-right, right]
-    //   6p: [left, top-left, top, top-right, right]
+    //   5p: [left, tl, tr, right]
+    //   6p: [left, tl, tl2, tr2, tr, right]
+    //   7p: [left, tl, tl2, top, tr2, tr, right]
+    //   8p: same as 7p (max supported)
     const LAYOUTS = {
       1: ["pos-top"],
       2: ["pos-left", "pos-right"],
       3: ["pos-left", "pos-top", "pos-right"],
       4: ["pos-left", "pos-top pos-tl", "pos-top pos-tr", "pos-right"],
       5: ["pos-left", "pos-top pos-tl", "pos-top", "pos-top pos-tr", "pos-right"],
+      6: ["pos-left", "pos-top pos-tl", "pos-top pos-tl2", "pos-top pos-tr2", "pos-top pos-tr", "pos-right"],
+      7: ["pos-left", "pos-top pos-tl", "pos-top pos-tl2", "pos-top", "pos-top pos-tr2", "pos-top pos-tr", "pos-right"],
     };
-    const layout = LAYOUTS[n - 1] || LAYOUTS[5];
+    const layout = LAYOUTS[n - 1] || LAYOUTS[7];
     const slots = podItems.length
       ? podItems.map(({ seat, html }, idx) => {
           const cls = layout[idx] || "pos-top";
