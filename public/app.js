@@ -203,11 +203,13 @@ function podHTML(v, i, o = {}) {
   return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""}">
     ${o.team ? `<span class="teamchip t${o.team}">${o.team}</span>` : ""}
     ${o.dealer ? `<span class="dealer">D</span>` : ""}
-    <div class="ministack">${mb}</div>
-    ${avatarHTML(name)}
-    <div class="name">${esc(name)}</div>
+    <div class="ministack">${mb}${avatarHTML(name)}</div>
+    <div class="pod-info">
+      <span class="name">${esc(name)}</span>
+      ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
+      <span class="count">${o.count}</span>
+    </div>
     ${o.note ? `<div class="note">${esc(o.note)}</div>` : ""}
-    <div class="nums"><span class="count">${o.count}</span>${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}</div>
   </div>`;
 }
 
