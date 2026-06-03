@@ -69,15 +69,16 @@ button{font-family:inherit}
 
 #app{
   position:relative;z-index:1;
-  min-height:100dvh;
-  padding:max(10px,env(safe-area-inset-top)) 10px max(14px,env(safe-area-inset-bottom));
+  height:100dvh;overflow:hidden;
+  padding:0 0 0;
   display:flex;flex-direction:column;
 }
 
 /* ---------- App bar ---------- */
 .appbar{
   display:flex;align-items:center;gap:10px;
-  padding:4px 6px 12px;
+  padding:max(8px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left));
+  flex:none;
 }
 .brand{display:flex;align-items:center;gap:9px;min-width:0}
 .brand .glyph{
@@ -251,40 +252,50 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
    TABLE  (game view)
    ============================================================ */
 .table{
-  flex:1;position:relative;display:flex;flex-direction:column;
-  border-radius:26px;
+  flex:1;position:relative;z-index:0;
+  display:flex;flex-direction:column;
+  /* Clip the oval to the screen; the oval background is drawn via ::before */
+  overflow:hidden;
+  animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
   padding:14px 12px 12px;
+}
+/* Oval felt + wood frame — extends 25% beyond each side */
+.table::before{
+  content:"";
+  position:absolute;
+  top:0;bottom:0;
+  left:-30%;right:-30%;
+  border-radius:50%;
   background:
     radial-gradient(120% 70% at 50% 12%, rgba(255,236,190,.16), rgba(255,236,190,0) 46%),
     radial-gradient(140% 120% at 50% 8%, var(--felt-2) 0%, var(--felt-1) 42%, var(--felt-0) 100%);
   box-shadow:
-    inset 0 0 60px rgba(0,0,0,.45),
-    inset 0 0 0 12px var(--wood-2),
-    inset 0 0 0 14px var(--wood-edge),
-    inset 0 2px 0 16px rgba(255,255,255,.05),
-    0 18px 40px -16px rgba(0,0,0,.7);
-  overflow:hidden;
-  animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
+    inset 0 0 80px rgba(0,0,0,.45),
+    inset 0 0 0 16px var(--wood-2),
+    inset 0 0 0 18px var(--wood-edge),
+    inset 0 2px 0 20px rgba(255,255,255,.05),
+    0 18px 60px -16px rgba(0,0,0,.7);
+  pointer-events:none;
+  z-index:0;
 }
-/* wood frame grain */
-.table::before{
-  content:"";position:absolute;inset:0;border-radius:26px;pointer-events:none;
-  box-shadow:inset 0 0 0 14px transparent;
-  background:
-    repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 2px, transparent 2px 9px);
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;mask-composite:exclude;padding:14px;opacity:.4;
-}
-/* felt noise */
+/* felt noise layer */
 .table::after{
-  content:"";position:absolute;inset:14px;border-radius:16px;pointer-events:none;
+  content:"";
+  position:absolute;
+  top:18px;bottom:18px;
+  left:calc(-30% + 18px);right:calc(-30% + 18px);
+  border-radius:50%;
+  pointer-events:none;
   background-image:var(--noise);background-size:170px;opacity:.06;mix-blend-mode:overlay;
+  z-index:0;
 }
+/* All direct children float above the oval */
+.table>*{position:relative;z-index:1}
 
 /* top rail of opponents */
 .rail.top{
   display:flex;justify-content:space-around;align-items:flex-start;gap:6px;
-  padding:2px 2px 4px;min-height:74px;position:relative;z-index:2;flex-wrap:wrap;
+  padding:2px 2px 4px;min-height:74px;z-index:2;flex-wrap:wrap;
 }
 
 /* opponent pod */
@@ -372,12 +383,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .meld .card:first-child{margin-left:0}
 
 /* ---------- Self rail (you) ---------- */
-.selfwrap{position:relative;z-index:3;margin-top:auto;padding-top:6px}
+.selfwrap{position:relative;z-index:3;margin-top:auto;padding-top:6px;display:flex;flex-direction:column;align-items:center}
 .selfbar{
   display:flex;align-items:center;gap:10px;
   background:linear-gradient(180deg,rgba(74,47,27,.92),rgba(43,28,18,.92));
   border:1px solid rgba(205,160,90,.28);border-radius:14px;
-  padding:8px 12px;margin:0 2px 8px;
+  padding:8px 12px;margin:0 2px 8px;width:100%;box-sizing:border-box;
   box-shadow:inset 0 1px 0 rgba(205,160,90,.2),0 6px 16px -10px rgba(0,0,0,.6);
 }
 .selfbar .name{font-weight:700;font-size:14.5px}
@@ -394,11 +405,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hand{
   display:flex;justify-content:center;align-items:flex-end;
   min-height:104px;padding:18px 6px 6px;position:relative;
+  width:100%;box-sizing:border-box;
 }
 .hand.empty{min-height:0;padding:0}
 
 /* actions */
-.actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;padding:4px 2px 2px}
+.actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;padding:4px 2px 2px;width:100%;box-sizing:border-box}
 .actions .btn{flex:1 1 auto;min-width:120px;max-width:220px}
 .hint{width:100%;text-align:center;font-size:12.5px;color:var(--ink-soft);font-style:italic;font-family:"Fraunces",serif}
 
@@ -511,7 +523,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* ---------- responsive niceties ---------- */
 @media (min-width:560px){
-  #app{padding-left:16px;padding-right:16px}
   .card{--w:70px}
   .hand{min-height:118px}
 }
