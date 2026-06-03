@@ -377,9 +377,12 @@ function tableShell(v, parts) {
   } else {
     self = `<div class="selfbar"><div class="name">Spectating</div><div class="me-pts">${parts.selfMeta || ""}</div></div>`;
   }
-  return `${appbar(v, { log: true })}<div class="table">
-    <div class="rail top deal">${railPods}</div>
-    <div class="center">${parts.center}</div>
+  return `<div class="table">
+    ${appbar(v, { log: true })}
+    <div class="felt">
+      <div class="rail top deal">${railPods}</div>
+      <div class="center">${parts.center}</div>
+    </div>
     <div class="selfwrap">${self}</div>
   </div>${logSheet()}`;
 }
