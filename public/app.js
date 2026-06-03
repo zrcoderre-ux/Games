@@ -50,11 +50,21 @@ const S = {
   pickGame: "rummy500", // start-screen selection
   room: null,
   ws: null,
+  offline: false, // playing locally vs bots (no server)
+  hotseat: false, // 2+ local humans sharing the device (pass-and-play)
+  revealedSeat: null, // which human seat's hand is currently unlocked on screen
+  awaitingPass: false, // showing the privacy hand-off screen
+  passTo: null, // seat we're passing the device to
+  passReady: false, // hand-off delay elapsed; reveal button enabled
   connected: false,
   intentionalClose: false,
   view: null,
   rummySel: new Set(), // selected card ids
   rummyLayoff: null, // selected meld id for layoff
+  rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
+  discardOpen: false, // discard-pile popup open?
+  dragId: null, // card id being dragged within the hand
+  dropBeforeId: null, // drop target (insert before this card id; null = end)
   heartsPass: new Set(), // selected card ids to pass (Hearts)
   pjCard: null, // selected card id (Pegs & Jokers)
   pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
@@ -139,6 +149,8 @@ function cardHTML(c, o = {}) {
   if (o.action) a.push(`data-action="${o.action}"`);
   if (o.key) a.push(`data-key="${o.key}"`);
   if (o.id !== undefined) a.push(`data-cardid="${o.id}"`);
+  if (o.draggable) a.push(`draggable="true"`);
+  if (o.win) cls.push("win");
   if (c.joker) {
     cls.push("red");
     return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl"><b>\u2605</b></span><span class="pip">\u2605</span><span class="corner br"><b>\u2605</b></span></div>`;
@@ -244,29 +256,83 @@ function send(m) {
   if (S.ws && S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify(m));
 }
 
+// Shared frame handler for both the real socket and the offline LocalRoom.
+function onFrame(e) {
+  let msg;
+  try { msg = JSON.parse(e.data); } catch { return; }
+  if (msg.t === "view") { S.view = msg.view; maybePromptPass(); render(); }
+  else if (msg.t === "error") { toast(msg.message); }
+}
+
+// Pass-and-play privacy gate: when the active hand belongs to a different local
+// human than the one currently looking, hide everything behind a hand-off
+// screen until they confirm they're ready. The view frame already holds the
+// next player's cards, but the interstitial renders none of them.
+function maybePromptPass() {
+  const v = S.view;
+  S.hotseat = S.offline && !!v && v.seats && v.seats.filter((s) => s.kind === "human").length >= 2;
+  if (!S.hotseat || S.awaitingPass) return;
+  if (!v || v.phase === "lobby" || v.phase === "gameOver") return;
+  if (v.you != null && v.yourTurn && v.you !== S.revealedSeat) {
+    S.passTo = v.you;
+    S.awaitingPass = true;
+    S.passReady = false;
+    // A short beat so the device can actually change hands before it unlocks.
+    setTimeout(() => { S.passReady = true; if (S.awaitingPass) render(); }, 1400);
+  }
+}
+
+function joinOnOpen() {
+  S.connected = true;
+  send({ t: "join", pid: S.pid, name: S.name });
+}
+
 function connect() {
   S.intentionalClose = false;
+  if (S.offline) return connectLocal();
+
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const url = `${proto}//${location.host}/parties/${S.party}/${encodeURIComponent(S.room)}`;
   const ws = new WebSocket(url);
   S.ws = ws;
-  ws.onopen = () => {
-    S.connected = true;
-    send({ t: "join", pid: S.pid, name: S.name });
+  let opened = false;
+
+  // If we can't reach the server, fall back to local play vs bots.
+  const fallback = (why) => {
+    if (opened || S.intentionalClose || S.offline) return;
+    clearTimeout(fbTimer);
+    try { ws.close(); } catch {}
+    toast(why || "No connection — playing offline vs bots.");
+    connectLocal();
   };
-  ws.onmessage = (e) => {
-    let msg;
-    try { msg = JSON.parse(e.data); } catch { return; }
-    if (msg.t === "view") { S.view = msg.view; render(); }
-    else if (msg.t === "error") { toast(msg.message); }
-  };
+  const fbTimer = setTimeout(() => fallback(), 3500);
+
+  ws.onopen = () => { opened = true; clearTimeout(fbTimer); joinOnOpen(); };
+  ws.onmessage = onFrame;
   ws.onclose = () => {
     S.connected = false;
-    if (S.intentionalClose) return;
+    if (S.intentionalClose || S.offline) return;
+    if (!opened) return fallback();
     render();
     setTimeout(() => { if (!S.connected && !S.intentionalClose) connect(); }, 1500);
   };
-  ws.onerror = () => {};
+  ws.onerror = () => { if (!opened) fallback(); };
+  render();
+}
+
+let localMod = null;
+async function connectLocal() {
+  S.offline = true;
+  try {
+    if (!localMod) localMod = await import("/local.js");
+  } catch (err) {
+    return toast("Couldn't load offline mode.");
+  }
+  const sock = localMod.createLocalSocket(S.party);
+  S.ws = sock;
+  sock.onopen = joinOnOpen;
+  sock.onmessage = onFrame;
+  sock.onclose = () => { S.connected = false; };
   render();
 }
 
@@ -275,9 +341,9 @@ function appbar(v, opts = {}) {
   return `<div class="appbar">
     <div class="brand"><div class="glyph">P</div><span class="wordmark">${esc(GAMES[S.party].label)}</span></div>
     <div class="spacer"></div>
-    <div class="roomtag">room <b>${esc(S.room)}</b></div>
+    ${S.offline ? `<div class="roomtag">offline · ${S.hotseat ? "pass &amp; play" : "vs bots"}</div>` : `<div class="roomtag">room <b>${esc(S.room)}</b></div>`}
     ${opts.log ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
-    <button class="btn sm ghost" data-action="copy-link">Share</button>
+    ${S.offline ? "" : `<button class="btn sm ghost" data-action="copy-link">Share</button>`}
     <button class="btn sm ghost" data-action="leave">Leave</button>
   </div>`;
 }
@@ -322,6 +388,7 @@ function tableShell(v, parts) {
 function render() {
   if (!S.party) return renderStart();
   if (!S.connected || !S.view) return renderConnecting();
+  if (S.awaitingPass) return renderPass();
   const v = S.view;
   if (v.phase === "lobby") return renderLobby(v);
   if (S.party === "high-low-jack") return renderHLJ(v);
@@ -336,6 +403,25 @@ function renderConnecting() {
       <div class="hero"><div class="logo">\u2663</div><h2>Reaching the table…</h2>
       <p class="sub">${S.connected ? "Joined — dealing you in." : "Connecting to the room."}</p></div>
     </div></div>`;
+}
+
+// ---------- pass-and-play hand-off ----------
+function renderPass() {
+  const v = S.view;
+  const name = seatName(v, S.passTo);
+  const ready = S.passReady;
+  app.__set = `<div class="passwrap">
+    <div class="passcard">
+      <div class="passlogo">\u{1F0A0}</div>
+      <p class="passlabel">Pass the device to</p>
+      <h1 class="passname">${esc(name)}</h1>
+      <p class="sub">Hand it over so no one else sees the cards, then tap below.</p>
+      <button class="btn" style="width:100%;margin-top:20px" data-action="reveal-hand" ${ready ? "" : "disabled"}>
+        ${ready ? `I’m ${esc(name)} — show my hand` : "One moment…"}
+      </button>
+      <button class="btn ghost sm" style="width:100%;margin-top:10px" data-action="leave">Leave game</button>
+    </div>
+  </div>`;
 }
 
 // ---------- start screen ----------
@@ -360,8 +446,12 @@ function renderStart() {
         <label>Pick a game</label>
         <div class="games">${cards}</div>
         <label>Room code</label>
-        <input class="field" id="f-room" value="${esc(S.room || "")}" placeholder="blank = new room" autocomplete="off" />
-        <div style="margin-top:18px"><button class="btn" style="width:100%" data-action="connect">Take a seat</button></div>
+        <input class="field" id="f-room" value="${esc(S.room || "")}" placeholder="blank = new room" autocomplete="off" ${S.offline ? "disabled" : ""} />
+        <label class="toggle">
+          <input type="checkbox" id="f-offline" ${S.offline ? "checked" : ""} data-action="toggle-offline" />
+          <span>Play offline vs bots <em>— no connection, you + computer players</em></span>
+        </label>
+        <div style="margin-top:18px"><button class="btn" style="width:100%" data-action="connect">${S.offline ? "Play offline" : "Take a seat"}</button></div>
       </div>
     </div>`;
 }
@@ -388,10 +478,14 @@ function renderLobby(v) {
       if (isEmpty) tags.push(`<span class="chip empty">empty</span>`);
       let ctrl = "";
       if (isEmpty) {
-        ctrl = `<button class="btn sm" data-action="sit" data-seat="${i}">Sit</button>` +
+        ctrl =
+          (S.offline ? "" : `<button class="btn sm" data-action="sit" data-seat="${i}">Sit</button>`) +
+          (S.offline ? `<button class="btn sm" data-action="addhuman" data-seat="${i}">+ Player</button>` : "") +
           (isHost ? `<button class="btn sm ghost" data-action="addbot" data-seat="${i}">+ Bot</button>` : "");
       } else if (s.kind === "bot" && isHost) {
         ctrl = `<button class="btn sm danger" data-action="removebot" data-seat="${i}">Remove</button>`;
+      } else if (S.offline && s.kind === "human" && i !== v.hostSeat) {
+        ctrl = `<button class="btn sm danger" data-action="clearseat" data-seat="${i}">Remove</button>`;
       }
       return `<div class="seat ${you ? "me" : ""}">${av}
         <div><div class="nm">${isEmpty ? `Seat ${i + 1}` : esc(s.name || "Player")}</div><div class="rl">${role}</div></div>
@@ -419,16 +513,22 @@ function renderLobby(v) {
        </div>`
     : `<div class="panel" style="text-align:center"><p class="sub">Waiting for the host to deal…</p></div>`;
 
-  app.__set = `${appbar(v)}
-    <div class="stage">
-      <div class="panel cream">
+  const sharePanel = S.offline
+    ? `<div class="panel cream">
+        <h2>Offline game</h2>
+        <p class="sub">All on this device. Add bots to play solo, or add more <b>players</b> for pass-and-play — each gets their own hidden hand, and the device asks you to hand it over between turns.</p>
+      </div>`
+    : `<div class="panel cream">
         <h2>Lobby</h2>
         <p class="sub">Share this link so friends can pull up a chair.</p>
         <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
           <input class="field" readonly value="${esc(link)}" style="font-size:13px" onclick="this.select()" />
           <button class="btn sm" data-action="copy-link">Copy</button>
         </div>
-      </div>
+      </div>`;
+  app.__set = `${appbar(v)}
+    <div class="stage">
+      ${sharePanel}
       <div class="panel"><h2 style="margin-bottom:10px">Seats</h2><div class="seats">${seats}</div></div>
       ${hostPanel}
     </div>`;
@@ -457,6 +557,25 @@ function renderGameOver(v, title, scoresHTML) {
         isHost ? `<button class="btn" data-action="newgame">Deal a new game</button>` : `<p class="sub">Waiting for the host to deal again…</p>`
       }</div>
     </div>`;
+}
+
+// Which card in a completed High Low Jack trick won it (port of engine
+// trickWinner): highest trump — joker is the lowest trump — else highest of the
+// led suit. Returns the index into the play-order cards array.
+function hljWinIdx(cards, trump) {
+  if (!cards || !cards.length) return -1;
+  const tval = (c) => (c.joker ? 0 : c.suit === trump ? c.rank : null);
+  const trumps = cards.filter((c) => tval(c) != null);
+  if (trumps.length) {
+    let best = trumps[0];
+    for (const c of trumps) if (tval(c) > tval(best)) best = c;
+    return cards.indexOf(best);
+  }
+  const ledSuit = cards[0].joker ? trump : cards[0].suit;
+  const followers = cards.filter((c) => !c.joker && c.suit === ledSuit);
+  let best = followers[0];
+  for (const c of followers) if (c.rank > best.rank) best = c;
+  return cards.indexOf(best);
 }
 
 // ---------- High Low Jack ----------
@@ -509,8 +628,9 @@ function renderHLJ(v) {
       .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true })}<span class="who t${teamLetter(p.seat)}">${esc(seatName(v, p.seat))}</span></div>`)
       .join("")}</div>`;
   } else if (v.phase !== "bidding" && v.lastTrick) {
+    const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     trick = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
-      .map((c) => `<div class="play">${cardHTML(c, { mini: true })}</div>`)
+      .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
       .join("")}</div></div>`;
   } else {
     trick = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
@@ -558,6 +678,56 @@ function renderHLJ(v) {
   app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
+// ---------- Rummy 500: client-side rule mirror ----------
+// These mirror rummy-module.ts so the UI can disable illegal actions outright
+// (the server still re-validates). Jokers are wild in both sets and runs.
+function rIsSet(cards) {
+  if (cards.length < 3) return false;
+  const nat = cards.filter((c) => !c.joker);
+  return nat.length > 0 && nat.every((c) => c.rank === nat[0].rank);
+}
+function rIsRun(cards) {
+  if (cards.length < 3) return false;
+  const nat = cards.filter((c) => !c.joker);
+  const jokers = cards.length - nat.length;
+  if (!nat.length) return false;
+  const suit = nat[0].suit;
+  if (!nat.every((c) => c.suit === suit)) return false;
+  for (const ace of [1, 14]) {
+    const ranks = nat.map((c) => (c.rank === 14 ? ace : c.rank)).sort((a, b) => a - b);
+    if (new Set(ranks).size !== ranks.length) continue;
+    const lo = ranks[0], hi = ranks[ranks.length - 1];
+    if (lo < 1 || hi > 14) continue;
+    const gaps = hi - lo + 1 - ranks.length;
+    if (gaps < 0 || gaps > jokers) continue;
+    const extra = jokers - gaps;
+    if (hi - lo + 1 + extra > 14) continue;
+    if ((lo - 1) + (14 - hi) < extra) continue;
+    return true;
+  }
+  return false;
+}
+const rValidMeld = (cards) => rIsSet(cards) || rIsRun(cards);
+const rCanLayoff = (meld, cards) =>
+  meld.kind === "set" ? rIsSet([...meld.cards, ...cards]) : rIsRun([...meld.cards, ...cards]);
+
+// Reconcile S.rummyOrder with the live hand: keep order, append new cards, drop gone ones.
+function rummyOrdered(hand) {
+  const ids = hand.map((c) => c.id);
+  S.rummyOrder = S.rummyOrder.filter((id) => ids.includes(id));
+  for (const id of ids) if (!S.rummyOrder.includes(id)) S.rummyOrder.push(id);
+  return S.rummyOrder.map((id) => hand.find((c) => c.id === id)).filter(Boolean);
+}
+function rummySort(hand, mode) {
+  const rank = (c) => (c.joker ? 100 : c.rank); // jokers sort to the end
+  const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
+  const by = mode === "suit"
+    ? (a, b) => (a.joker - b.joker) || (suitOrder[a.suit] - suitOrder[b.suit]) || (rank(a) - rank(b))
+    : (a, b) => (rank(a) - rank(b)) || (suitOrder[a.suit] - suitOrder[b.suit]);
+  S.rummyOrder = [...hand].sort(by).map((c) => c.id);
+  render();
+}
+
 // ---------- Rummy 500 ----------
 function renderRummy(v) {
   // prune stale selections (cards no longer in hand)
@@ -598,10 +768,25 @@ function renderRummy(v) {
       </div>
       <div class="pts">${v.stockCount} left</div>
     </div>`;
+  // Discard pile: the previous cards peek out beneath the top card; tapping the
+  // pile opens a popup with the full list. The top card itself is the draw target.
+  const peek = v.discard.slice(-5); // a few cards fanned beneath the top
+  const stackCards = peek
+    .map((c, i) => {
+      const isTop = i === peek.length - 1;
+      const off = (peek.length - 1 - i) * 7; // older cards shifted up-left
+      const style = `position:absolute;left:${-off}px;top:${-off}px;z-index:${i}`;
+      if (isTop)
+        return cardHTML(c, { action: discardDraw ? "draw-discard" : "", id: c.id, playable: !!discardDraw, style });
+      return cardHTML(c, { style: style + ";filter:brightness(.92)" });
+    })
+    .join("");
   const discard = `<div class="pile">
       <div class="lbl">Discard</div>
-      ${top ? cardHTML(top, { action: discardDraw ? "draw-discard" : "", id: top.id, playable: !!discardDraw }) : `<div class="card" style="opacity:.22"></div>`}
-      <div class="pts">${v.discard.length}</div>
+      <div class="discardstack" data-action="open-discard" title="View the whole discard pile">
+        ${top ? stackCards : `<div class="card" style="opacity:.22"></div>`}
+      </div>
+      <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
     </div>`;
   const melds = v.melds.length
     ? `<div class="melds">${v.melds
@@ -614,30 +799,50 @@ function renderRummy(v) {
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
   const center = `<div class="piles">${stock}${discard}</div>${melds}`;
 
-  // hand (fanned), highlight the must-meld card, dim when not your play turn
-  const hand = fanHand(v.yourHand, (c) => ({
+  // hand (fanned, in the player's chosen order), highlight the must-meld card,
+  // dim when not your play turn; cards are draggable to reorder.
+  const ordered = rummyOrdered(v.yourHand);
+  const hand = fanHand(ordered, (c) => ({
     action: "toggle-card",
     id: c.id,
+    draggable: true,
     sel: S.rummySel.has(c.id),
     must: c.id === v.mustMeldCardId,
     playable: inPlay,
     dim: !inPlay && !S.rummySel.has(c.id),
   }));
 
+  // selected card objects, for client-side legality of the action buttons
+  const selCards = ordered.filter((c) => S.rummySel.has(c.id));
+  const layMeld = v.melds.find((m) => m.id === S.rummyLayoff);
+  const canMeld = selCards.length >= 3 && rValidMeld(selCards);
+  const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards);
+  const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;
+
+  // sort controls (available whenever you hold cards)
+  const sortBar = v.yourHand.length
+    ? `<button class="btn ghost sm" data-action="sort-suit">Sort \u2660\u2665</button>
+       <button class="btn ghost sm" data-action="sort-rank">Sort 1\u20139</button>`
+    : "";
+
   // actions
   const acts = [];
   if (v.yourTurn && v.turnPhase === "draw") {
     if (canStock) acts.push(`<button class="btn" data-action="draw-stock">Draw stock</button>`);
-    if (discardDraw && top) acts.push(`<button class="btn ghost" data-action="draw-discard" data-cardid="${top.id}">Take ${rankLabel(top.rank)}${SUIT[top.suit]}</button>`);
-    acts.push(`<span class="hint">Draw to begin your turn.</span>`);
+    if (discardDraw && top) acts.push(`<button class="btn ghost" data-action="draw-discard" data-cardid="${top.id}">Take ${top.joker ? "\u2605" : rankLabel(top.rank) + SUIT[top.suit]}</button>`);
+    acts.push(sortBar);
+    acts.push(`<span class="hint">Draw to begin your turn \u2014 the top discard is always yours to take.</span>`);
   } else if (inPlay) {
     const n = S.rummySel.size;
-    acts.push(`<button class="btn" data-action="meld-selected" ${n >= 3 ? "" : "disabled"}>Meld${n ? ` (${n})` : ""}</button>`);
-    acts.push(`<button class="btn ghost" data-action="layoff-selected" ${n >= 1 && S.rummyLayoff !== null ? "" : "disabled"}>Lay off</button>`);
-    acts.push(`<button class="btn" data-action="discard-selected" ${n === 1 ? "" : "disabled"}>Discard</button>`);
+    acts.push(`<button class="btn" data-action="meld-selected" ${canMeld ? "" : "disabled"}>Meld${n ? ` (${n})` : ""}</button>`);
+    acts.push(`<button class="btn ghost" data-action="layoff-selected" ${canLay ? "" : "disabled"}>Lay off</button>`);
+    acts.push(`<button class="btn" data-action="discard-selected" ${canDiscard ? "" : "disabled"}>Discard</button>`);
     if (n) acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    acts.push(sortBar);
     if (v.mustMeldCardId != null) acts.push(`<span class="hint">The green card must be melded or laid off before you discard.</span>`);
-    else acts.push(`<span class="hint">Select cards \u2192 Meld (3+), Lay off (tap a meld), or Discard (one).</span>`);
+    else acts.push(`<span class="hint">Select cards \u2192 Meld (3+), Lay off (tap a meld), or Discard (one). Drag to reorder.</span>`);
+  } else {
+    acts.push(sortBar);
   }
 
   const selfMeta = v.you != null ? `Score ${v.scores[v.you]} \u00b7 play to ${v.target}` : `play to ${v.target}`;
@@ -645,7 +850,23 @@ function renderRummy(v) {
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v);
+}
+
+// Popup listing the whole discard pile, newest at the top-right.
+function discardModal(v) {
+  if (!S.discardOpen) return "";
+  const cards = v.discard.length
+    ? v.discard.map((c, i) => `<div class="dcard ${i === v.discard.length - 1 ? "top" : ""}">${cardHTML(c, { mini: true })}</div>`).join("")
+    : `<div class="callout" style="font-size:13px">The discard pile is empty.</div>`;
+  return `<div class="modal-back" data-action="close-discard">
+      <div class="modal" data-stop="1">
+        <div class="modalhead"><span>Discard pile \u2014 ${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</span>
+          <button class="btn sm ghost" data-action="close-discard">Close</button></div>
+        <div class="modalbody"><div class="dgrid">${cards}</div></div>
+        <p class="sub" style="margin:8px 14px 0">Oldest first \u2014 the highlighted card is on top.</p>
+      </div>
+    </div>`;
 }
 
 // ---------- actions ----------
@@ -703,9 +924,10 @@ function renderHearts(v) {
     const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${broken}<span class="crest">hand ${v.handNo + 1}</span></div>`;
     const showLast = v.currentTrick.length === 0 && v.lastTrick;
     const cards = v.currentTrick.length ? v.currentTrick : showLast ? v.lastTrick.cards : [];
+    const winSeat = showLast ? v.lastTrick.winner : null;
     const trick = cards.length
       ? `<div class="trick">${cards
-          .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true })}<span class="who">${esc(seatName(v, p.seat))}</span></div>`)
+          .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true, win: p.seat === winSeat })}<span class="who">${esc(seatName(v, p.seat))}</span></div>`)
           .join("")}</div>`
       : `<div class="callout">Lead a card to open the trick.</div>`;
     const note = showLast
@@ -932,12 +1154,18 @@ function doConnect() {
   let room = document.getElementById("f-room").value.trim();
   if (!name) return toast("Enter a name first.");
   if (!GAMES[game]) return toast("Pick a game.");
-  if (!room) room = Math.random().toString(36).slice(2, 7);
+  S.offline = !!document.getElementById("f-offline")?.checked;
   S.name = name;
   S.party = game;
-  S.room = room;
   localStorage.setItem("cg_name", name);
-  history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
+  if (S.offline) {
+    S.room = "solo";
+    history.replaceState(null, "", `/?game=${game}`);
+  } else {
+    if (!room) room = Math.random().toString(36).slice(2, 7);
+    S.room = room;
+    history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
+  }
   connect();
 }
 
@@ -948,16 +1176,24 @@ function copyLink() {
 
 function doLeave() {
   S.intentionalClose = true;
-  send({ t: "leave" });
+  if (!S.offline) send({ t: "leave" });
   try { S.ws?.close(); } catch {}
   S.view = null;
   S.connected = false;
   S.party = null;
+  S.offline = false;
+  S.hotseat = false;
+  S.awaitingPass = false;
+  S.revealedSeat = null;
   history.replaceState(null, "", "/");
   renderStart();
 }
 
 function doStart() {
+  // The setup person holds the device, so seat 0 is already "revealed" — others
+  // get the privacy hand-off as the turn reaches them.
+  S.revealedSeat = 0;
+  S.awaitingPass = false;
   if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: S.view.players, marbles: S.view.marbles } });
   const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
   send({ t: "start", config: { players: S.view.players, target } });
@@ -993,9 +1229,16 @@ function doDiscard() {
 app.addEventListener("click", (e) => {
   const t = e.target.closest("[data-action]");
   if (!t) return;
+  // clicks inside the modal shouldn't fall through to the backdrop's close
+  if (t.classList.contains("modal-back") && e.target.closest("[data-stop]")) return;
   const v = S.view;
   switch (t.dataset.action) {
+    case "open-discard": S.discardOpen = true; return render();
+    case "close-discard": S.discardOpen = false; return render();
+    case "sort-suit": return rummySort(v.yourHand, "suit");
+    case "sort-rank": return rummySort(v.yourHand, "rank");
     case "pick-game": S.pickGame = t.dataset.game; return renderStart();
+    case "toggle-offline": S.offline = !!t.checked; return renderStart();
     case "toggle-log": S.showLog = !S.showLog; return render();
     case "connect": return doConnect();
     case "copy-link": return copyLink();
@@ -1003,12 +1246,20 @@ app.addEventListener("click", (e) => {
     case "sit": return send({ t: "sit", seat: +t.dataset.seat });
     case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
     case "removebot": return send({ t: "removeBot", seat: +t.dataset.seat });
+    case "addhuman": {
+      const seat = +t.dataset.seat;
+      const name = (prompt("Player name?", `Player ${seat + 1}`) || "").trim();
+      if (name) send({ t: "addHuman", seat, name });
+      return;
+    }
+    case "clearseat": return send({ t: "clearSeat", seat: +t.dataset.seat });
+    case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
     case "setcount": {
       const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
       return send({ t: "setConfig", config: { players: +t.dataset.count, target } });
     }
     case "start": return doStart();
-    case "newgame": return send({ t: "newGame" });
+    case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
     case "move-bid": return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
     case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
     case "move-trump": return send({ t: "move", move: { type: "selectTrump", seat: v.you, suit: t.dataset.suit } });
@@ -1052,6 +1303,47 @@ app.addEventListener("click", (e) => {
     }
   }
 });
+
+// ---------- drag to reorder your hand (Rummy) ----------
+// We track the drop target during the drag, then reorder S.rummyOrder once on
+// drop — re-rendering mid-drag would cancel the native drag in some browsers.
+function handCard(el) {
+  const c = el && el.closest(".hand [data-cardid]");
+  return c ? +c.dataset.cardid : null;
+}
+app.addEventListener("dragstart", (e) => {
+  const id = handCard(e.target);
+  if (id == null) return;
+  S.dragId = id;
+  S.dropBeforeId = null;
+  e.dataTransfer.effectAllowed = "move";
+  e.target.closest("[data-cardid]")?.classList.add("dragging");
+});
+app.addEventListener("dragover", (e) => {
+  if (S.dragId == null) return;
+  e.preventDefault();
+  const el = e.target.closest && e.target.closest(".hand [data-cardid]");
+  if (!el) return;
+  const over = +el.dataset.cardid;
+  const r = el.getBoundingClientRect();
+  const after = e.clientX > r.left + r.width / 2; // dropped on the right half → after this card
+  const ids = S.rummyOrder.filter((x) => x !== S.dragId);
+  const pos = ids.indexOf(over) + (after ? 1 : 0);
+  S.dropBeforeId = pos >= ids.length ? null : ids[pos];
+});
+function endDrag(e) {
+  if (S.dragId == null) return;
+  if (e) e.preventDefault();
+  const ids = S.rummyOrder.filter((x) => x !== S.dragId);
+  const idx = S.dropBeforeId == null ? ids.length : ids.indexOf(S.dropBeforeId);
+  ids.splice(idx < 0 ? ids.length : idx, 0, S.dragId);
+  S.rummyOrder = ids;
+  S.dragId = null;
+  S.dropBeforeId = null;
+  render();
+}
+app.addEventListener("drop", endDrag);
+app.addEventListener("dragend", endDrag);
 
 // keep the host's "play to" value in the shared lobby config (so re-renders don't lose it)
 app.addEventListener("change", (e) => {
