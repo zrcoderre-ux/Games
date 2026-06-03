@@ -569,7 +569,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   z-index:60!important;
 }
 .fan-inner .card.playable{box-shadow:0 2px 2px rgba(0,0,0,.25),0 8px 16px -6px rgba(0,0,0,.55),0 0 0 1.5px rgba(231,196,133,.55),inset 0 0 0 1px rgba(150,110,60,.3)}
-.fan-inner .card.dim{filter:brightness(.45) saturate(.5)}
+.fan-inner .card.dim{filter:brightness(.45) saturate(.5);cursor:default;pointer-events:none}
 .fan-inner .card.must{box-shadow:0 2px 2px rgba(0,0,0,.25),0 8px 16px -6px rgba(0,0,0,.55),0 0 0 2px var(--ok),inset 0 0 0 1px rgba(150,110,60,.3)}
 /* selected cards in the row above */
 .selrow .card{cursor:pointer;box-shadow:0 16px 26px -10px rgba(0,0,0,.7),0 0 0 2px var(--amber),0 0 14px rgba(224,164,78,.5)}

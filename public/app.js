@@ -950,14 +950,17 @@ function renderRummy(v) {
         must: c.id === v.mustMeldCardId,
       })).join("")}</div>`
     : "";
-  const fan = fanHand(fanCards, (c) => ({
-    action: "toggle-card",
-    id: c.id,
-    draggable: true,
-    must: c.id === v.mustMeldCardId,
-    playable: inPlay,
-    dim: inPlay && compatibleIds != null && !compatibleIds.has(c.id),
-  }));
+  const fan = fanHand(fanCards, (c) => {
+    const incompatible = inPlay && compatibleIds != null && !compatibleIds.has(c.id);
+    return {
+      action: incompatible ? "" : "toggle-card",
+      id: incompatible ? undefined : c.id,
+      draggable: !incompatible,
+      must: c.id === v.mustMeldCardId,
+      playable: inPlay && !incompatible,
+      dim: incompatible,
+    };
+  });
   const hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
   const canMeld = selCards.length >= 3 && rValidMeld(selCards);
   const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards);
