@@ -559,6 +559,23 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 @keyframes dropin{from{opacity:0;transform:translateY(-18px) scale(.9) rotate(-3deg)}to{opacity:1;transform:none}}
 @keyframes turnpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.12)}}
 @keyframes dealin{from{opacity:0;transform:translateY(26px) scale(.9)}to{opacity:1}}
+@keyframes jokerpulse{0%{transform:scale(1)}30%{transform:scale(1.22)}60%{transform:scale(.96)}100%{transform:scale(1)}}
+@keyframes badgeshow{0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}60%{transform:translate(-50%,-50%) scale(1.1)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+
+/* joker-as badge on melded jokers */
+.card.joker-wild{cursor:pointer;position:relative}
+.joker-as-badge{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(6,9,16,.82);border:1px solid var(--brass-hi);
+  border-radius:6px;padding:2px 5px;
+  font-size:11px;font-weight:700;font-family:monospace;
+  color:var(--cream);pointer-events:none;white-space:nowrap;
+  opacity:.72;transition:opacity .15s;
+}
+.joker-as-badge.red{color:var(--suit-red)}
+.card.joker-wild:hover .joker-as-badge{opacity:1}
+.card.joker-pulse{animation:jokerpulse .7s cubic-bezier(.2,.8,.2,1) both}
+.card.joker-pulse .joker-as-badge{animation:badgeshow .4s cubic-bezier(.2,.8,.2,1) both;opacity:1}
 /* trick-winning card: a brief lift + golden flash */
 @keyframes wincard{
   0%{transform:translateY(0) scale(1);box-shadow:0 2px 2px rgba(0,0,0,.25),0 7px 14px -6px rgba(0,0,0,.55),inset 0 0 0 1px rgba(150,110,60,.3)}

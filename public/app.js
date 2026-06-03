@@ -154,7 +154,12 @@ function cardHTML(c, o = {}) {
   if (o.win) cls.push("win");
   if (c.joker) {
     cls.push("red");
-    return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl"><b>\u2605</b></span><span class="pip">\u2605</span><span class="corner br"><b>\u2605</b></span></div>`;
+    if (o.jokerAs) cls.push("joker-wild");
+    const badge = o.jokerAs
+      ? `<span class="joker-as-badge ${RED.has(o.jokerAs.suit) ? "red" : ""}">${rankLabel(o.jokerAs.rank)}${SUIT[o.jokerAs.suit]}</span>`
+      : "";
+    const action = o.jokerAs ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
+    return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl"><b>\u2605</b></span><span class="pip">\u2605</span><span class="corner br"><b>\u2605</b></span>${badge}</div>`;
   }
   if (RED.has(c.suit)) cls.push("red");
   const r = rankLabel(c.rank);
@@ -791,6 +796,47 @@ function rummySort(hand, mode) {
 }
 
 // ---------- Rummy 500 ----------
+
+// Mirror of orderRunCards from rummy-module — returns parallel array of
+// resolved {rank,suit} for each card (null for natural cards).
+function resolveJokers(meld) {
+  const cards = meld.cards;
+  if (meld.kind === "set") {
+    const naturalRank = cards.find((c) => !c.joker)?.rank;
+    if (naturalRank == null) return cards.map(() => null);
+    const usedSuits = new Set(cards.filter((c) => !c.joker).map((c) => c.suit));
+    const freeSuits = ["S", "H", "C", "D"].filter((s) => !usedSuits.has(s));
+    let si = 0;
+    return cards.map((c) => c.joker ? { rank: naturalRank, suit: freeSuits[si++] ?? "S" } : null);
+  }
+  // run: mirror orderRunCards logic
+  const naturals = cards.filter((c) => !c.joker);
+  const jokers = cards.filter((c) => c.joker);
+  if (!naturals.length) return cards.map(() => null);
+  for (const aceRank of [1, 14]) {
+    const eff = naturals.map((c) => ({ c, r: c.rank === 14 ? aceRank : c.rank })).sort((a, b) => a.r - b.r);
+    const ranks = eff.map((x) => x.r);
+    if (new Set(ranks).size !== ranks.length) continue;
+    const low = ranks[0], high = ranks[ranks.length - 1];
+    const gaps = high - low + 1 - ranks.length;
+    if (gaps < 0 || gaps > jokers.length) continue;
+    const extra = jokers.length - gaps;
+    const after = Math.min(extra, 14 - high);
+    const before = extra - after;
+    if (before > low - 1) continue;
+    const suit = naturals[0].suit; // runs are same suit
+    const byRank = new Map(eff.map((x) => [x.r, x.c]));
+    const jkAssign = [];
+    for (let r = low - before; r <= high + after; r++) if (!byRank.has(r)) jkAssign.push(r);
+    let ji = 0;
+    // Map original jokers to their assigned ranks in order they appear in cards[]
+    const jokerRanks = new Map();
+    for (const jk of jokers) jokerRanks.set(jk, jkAssign[ji++]);
+    return cards.map((c) => c.joker ? { rank: jokerRanks.get(c) ?? 0, suit } : null);
+  }
+  return cards.map(() => null);
+}
+
 function renderRummy(v) {
   // prune stale selections (cards no longer in hand)
   const handIds = new Set(v.yourHand.map((c) => c.id));
@@ -852,7 +898,8 @@ function renderRummy(v) {
     ? `<div class="melds">${v.melds
         .map((m) => {
           const active = S.rummyLayoff === m.id;
-          const cards = m.cards.map((c) => cardHTML(c, { mini: true })).join("");
+          const jokerRes = resolveJokers(m);
+          const cards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined })).join("");
           return `<div class="meld ${inPlay ? "tappable" : ""} ${active ? "target" : ""}" ${inPlay ? `data-action="select-meld" data-meldid="${m.id}"` : ""}><div class="row">${cards}</div><span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         })
         .join("")}</div>`
@@ -1360,6 +1407,11 @@ app.addEventListener("click", (e) => {
     }
     case "draw-stock": return send({ t: "move", move: { type: "drawStock", seat: v.you } });
     case "draw-discard": S.discardOpen = false; return send({ t: "move", move: { type: "drawDiscard", seat: v.you, cardId: +t.dataset.cardid } });
+    case "reveal-joker": {
+      t.classList.add("joker-pulse");
+      setTimeout(() => t.classList.remove("joker-pulse"), 700);
+      return;
+    }
     case "toggle-card": return toggleSel(+t.dataset.cardid);
     case "select-meld": S.rummyLayoff = S.rummyLayoff === +t.dataset.meldid ? null : +t.dataset.meldid; return render();
     case "meld-selected": return doMeld();
