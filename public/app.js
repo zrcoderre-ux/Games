@@ -50,6 +50,7 @@ const S = {
   pickGame: "rummy500", // start-screen selection
   room: null,
   ws: null,
+  offline: false, // playing locally vs bots (no server)
   connected: false,
   intentionalClose: false,
   view: null,
@@ -250,29 +251,65 @@ function send(m) {
   if (S.ws && S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify(m));
 }
 
+// Shared frame handler for both the real socket and the offline LocalRoom.
+function onFrame(e) {
+  let msg;
+  try { msg = JSON.parse(e.data); } catch { return; }
+  if (msg.t === "view") { S.view = msg.view; render(); }
+  else if (msg.t === "error") { toast(msg.message); }
+}
+
+function joinOnOpen() {
+  S.connected = true;
+  send({ t: "join", pid: S.pid, name: S.name });
+}
+
 function connect() {
   S.intentionalClose = false;
+  if (S.offline) return connectLocal();
+
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const url = `${proto}//${location.host}/parties/${S.party}/${encodeURIComponent(S.room)}`;
   const ws = new WebSocket(url);
   S.ws = ws;
-  ws.onopen = () => {
-    S.connected = true;
-    send({ t: "join", pid: S.pid, name: S.name });
+  let opened = false;
+
+  // If we can't reach the server, fall back to local play vs bots.
+  const fallback = (why) => {
+    if (opened || S.intentionalClose || S.offline) return;
+    clearTimeout(fbTimer);
+    try { ws.close(); } catch {}
+    toast(why || "No connection — playing offline vs bots.");
+    connectLocal();
   };
-  ws.onmessage = (e) => {
-    let msg;
-    try { msg = JSON.parse(e.data); } catch { return; }
-    if (msg.t === "view") { S.view = msg.view; render(); }
-    else if (msg.t === "error") { toast(msg.message); }
-  };
+  const fbTimer = setTimeout(() => fallback(), 3500);
+
+  ws.onopen = () => { opened = true; clearTimeout(fbTimer); joinOnOpen(); };
+  ws.onmessage = onFrame;
   ws.onclose = () => {
     S.connected = false;
-    if (S.intentionalClose) return;
+    if (S.intentionalClose || S.offline) return;
+    if (!opened) return fallback();
     render();
     setTimeout(() => { if (!S.connected && !S.intentionalClose) connect(); }, 1500);
   };
-  ws.onerror = () => {};
+  ws.onerror = () => { if (!opened) fallback(); };
+  render();
+}
+
+let localMod = null;
+async function connectLocal() {
+  S.offline = true;
+  try {
+    if (!localMod) localMod = await import("/local.js");
+  } catch (err) {
+    return toast("Couldn't load offline mode.");
+  }
+  const sock = localMod.createLocalSocket(S.party);
+  S.ws = sock;
+  sock.onopen = joinOnOpen;
+  sock.onmessage = onFrame;
+  sock.onclose = () => { S.connected = false; };
   render();
 }
 
@@ -281,9 +318,9 @@ function appbar(v, opts = {}) {
   return `<div class="appbar">
     <div class="brand"><div class="glyph">P</div><span class="wordmark">${esc(GAMES[S.party].label)}</span></div>
     <div class="spacer"></div>
-    <div class="roomtag">room <b>${esc(S.room)}</b></div>
+    ${S.offline ? `<div class="roomtag">offline · vs bots</div>` : `<div class="roomtag">room <b>${esc(S.room)}</b></div>`}
     ${opts.log ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
-    <button class="btn sm ghost" data-action="copy-link">Share</button>
+    ${S.offline ? "" : `<button class="btn sm ghost" data-action="copy-link">Share</button>`}
     <button class="btn sm ghost" data-action="leave">Leave</button>
   </div>`;
 }
@@ -366,8 +403,12 @@ function renderStart() {
         <label>Pick a game</label>
         <div class="games">${cards}</div>
         <label>Room code</label>
-        <input class="field" id="f-room" value="${esc(S.room || "")}" placeholder="blank = new room" autocomplete="off" />
-        <div style="margin-top:18px"><button class="btn" style="width:100%" data-action="connect">Take a seat</button></div>
+        <input class="field" id="f-room" value="${esc(S.room || "")}" placeholder="blank = new room" autocomplete="off" ${S.offline ? "disabled" : ""} />
+        <label class="toggle">
+          <input type="checkbox" id="f-offline" ${S.offline ? "checked" : ""} data-action="toggle-offline" />
+          <span>Play offline vs bots <em>— no connection, you + computer players</em></span>
+        </label>
+        <div style="margin-top:18px"><button class="btn" style="width:100%" data-action="connect">${S.offline ? "Play offline" : "Take a seat"}</button></div>
       </div>
     </div>`;
 }
@@ -425,16 +466,22 @@ function renderLobby(v) {
        </div>`
     : `<div class="panel" style="text-align:center"><p class="sub">Waiting for the host to deal…</p></div>`;
 
-  app.__set = `${appbar(v)}
-    <div class="stage">
-      <div class="panel cream">
+  const sharePanel = S.offline
+    ? `<div class="panel cream">
+        <h2>Offline game</h2>
+        <p class="sub">Playing on this device against the computer. Add or remove bots below, then deal.</p>
+      </div>`
+    : `<div class="panel cream">
         <h2>Lobby</h2>
         <p class="sub">Share this link so friends can pull up a chair.</p>
         <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
           <input class="field" readonly value="${esc(link)}" style="font-size:13px" onclick="this.select()" />
           <button class="btn sm" data-action="copy-link">Copy</button>
         </div>
-      </div>
+      </div>`;
+  app.__set = `${appbar(v)}
+    <div class="stage">
+      ${sharePanel}
       <div class="panel"><h2 style="margin-bottom:10px">Seats</h2><div class="seats">${seats}</div></div>
       ${hostPanel}
     </div>`;
@@ -1060,12 +1107,18 @@ function doConnect() {
   let room = document.getElementById("f-room").value.trim();
   if (!name) return toast("Enter a name first.");
   if (!GAMES[game]) return toast("Pick a game.");
-  if (!room) room = Math.random().toString(36).slice(2, 7);
+  S.offline = !!document.getElementById("f-offline")?.checked;
   S.name = name;
   S.party = game;
-  S.room = room;
   localStorage.setItem("cg_name", name);
-  history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
+  if (S.offline) {
+    S.room = "solo";
+    history.replaceState(null, "", `/?game=${game}`);
+  } else {
+    if (!room) room = Math.random().toString(36).slice(2, 7);
+    S.room = room;
+    history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
+  }
   connect();
 }
 
@@ -1076,11 +1129,12 @@ function copyLink() {
 
 function doLeave() {
   S.intentionalClose = true;
-  send({ t: "leave" });
+  if (!S.offline) send({ t: "leave" });
   try { S.ws?.close(); } catch {}
   S.view = null;
   S.connected = false;
   S.party = null;
+  S.offline = false;
   history.replaceState(null, "", "/");
   renderStart();
 }
@@ -1130,6 +1184,7 @@ app.addEventListener("click", (e) => {
     case "sort-suit": return rummySort(v.yourHand, "suit");
     case "sort-rank": return rummySort(v.yourHand, "rank");
     case "pick-game": S.pickGame = t.dataset.game; return renderStart();
+    case "toggle-offline": S.offline = !!t.checked; return renderStart();
     case "toggle-log": S.showLog = !S.showLog; return render();
     case "connect": return doConnect();
     case "copy-link": return copyLink();

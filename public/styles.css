@@ -622,3 +622,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .dcard{transition:transform .1s ease}
 .dcard.top{transform:translateY(-2px)}
 .dcard.top .card{box-shadow:0 2px 2px rgba(0,0,0,.25),0 7px 14px -6px rgba(0,0,0,.55),0 0 0 2px var(--brass-hi)}
+
+/* offline toggle on the start screen */
+.toggle{display:flex;align-items:flex-start;gap:10px;margin:14px 0 0;text-transform:none;letter-spacing:0;font-weight:600;color:#3a2a16;cursor:pointer}
+.toggle input{width:20px;height:20px;margin:0;flex:none;accent-color:var(--brass);cursor:pointer}
+.toggle em{display:block;font-style:normal;font-weight:500;font-size:12.5px;color:#7a6240}
