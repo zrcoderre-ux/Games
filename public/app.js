@@ -51,6 +51,11 @@ const S = {
   room: null,
   ws: null,
   offline: false, // playing locally vs bots (no server)
+  hotseat: false, // 2+ local humans sharing the device (pass-and-play)
+  revealedSeat: null, // which human seat's hand is currently unlocked on screen
+  awaitingPass: false, // showing the privacy hand-off screen
+  passTo: null, // seat we're passing the device to
+  passReady: false, // hand-off delay elapsed; reveal button enabled
   connected: false,
   intentionalClose: false,
   view: null,
@@ -255,8 +260,26 @@ function send(m) {
 function onFrame(e) {
   let msg;
   try { msg = JSON.parse(e.data); } catch { return; }
-  if (msg.t === "view") { S.view = msg.view; render(); }
+  if (msg.t === "view") { S.view = msg.view; maybePromptPass(); render(); }
   else if (msg.t === "error") { toast(msg.message); }
+}
+
+// Pass-and-play privacy gate: when the active hand belongs to a different local
+// human than the one currently looking, hide everything behind a hand-off
+// screen until they confirm they're ready. The view frame already holds the
+// next player's cards, but the interstitial renders none of them.
+function maybePromptPass() {
+  const v = S.view;
+  S.hotseat = S.offline && !!v && v.seats && v.seats.filter((s) => s.kind === "human").length >= 2;
+  if (!S.hotseat || S.awaitingPass) return;
+  if (!v || v.phase === "lobby" || v.phase === "gameOver") return;
+  if (v.you != null && v.yourTurn && v.you !== S.revealedSeat) {
+    S.passTo = v.you;
+    S.awaitingPass = true;
+    S.passReady = false;
+    // A short beat so the device can actually change hands before it unlocks.
+    setTimeout(() => { S.passReady = true; if (S.awaitingPass) render(); }, 1400);
+  }
 }
 
 function joinOnOpen() {
@@ -318,7 +341,7 @@ function appbar(v, opts = {}) {
   return `<div class="appbar">
     <div class="brand"><div class="glyph">P</div><span class="wordmark">${esc(GAMES[S.party].label)}</span></div>
     <div class="spacer"></div>
-    ${S.offline ? `<div class="roomtag">offline · vs bots</div>` : `<div class="roomtag">room <b>${esc(S.room)}</b></div>`}
+    ${S.offline ? `<div class="roomtag">offline · ${S.hotseat ? "pass &amp; play" : "vs bots"}</div>` : `<div class="roomtag">room <b>${esc(S.room)}</b></div>`}
     ${opts.log ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
     ${S.offline ? "" : `<button class="btn sm ghost" data-action="copy-link">Share</button>`}
     <button class="btn sm ghost" data-action="leave">Leave</button>
@@ -365,6 +388,7 @@ function tableShell(v, parts) {
 function render() {
   if (!S.party) return renderStart();
   if (!S.connected || !S.view) return renderConnecting();
+  if (S.awaitingPass) return renderPass();
   const v = S.view;
   if (v.phase === "lobby") return renderLobby(v);
   if (S.party === "high-low-jack") return renderHLJ(v);
@@ -379,6 +403,25 @@ function renderConnecting() {
       <div class="hero"><div class="logo">\u2663</div><h2>Reaching the table…</h2>
       <p class="sub">${S.connected ? "Joined — dealing you in." : "Connecting to the room."}</p></div>
     </div></div>`;
+}
+
+// ---------- pass-and-play hand-off ----------
+function renderPass() {
+  const v = S.view;
+  const name = seatName(v, S.passTo);
+  const ready = S.passReady;
+  app.__set = `<div class="passwrap">
+    <div class="passcard">
+      <div class="passlogo">\u{1F0A0}</div>
+      <p class="passlabel">Pass the device to</p>
+      <h1 class="passname">${esc(name)}</h1>
+      <p class="sub">Hand it over so no one else sees the cards, then tap below.</p>
+      <button class="btn" style="width:100%;margin-top:20px" data-action="reveal-hand" ${ready ? "" : "disabled"}>
+        ${ready ? `I’m ${esc(name)} — show my hand` : "One moment…"}
+      </button>
+      <button class="btn ghost sm" style="width:100%;margin-top:10px" data-action="leave">Leave game</button>
+    </div>
+  </div>`;
 }
 
 // ---------- start screen ----------
@@ -435,10 +478,14 @@ function renderLobby(v) {
       if (isEmpty) tags.push(`<span class="chip empty">empty</span>`);
       let ctrl = "";
       if (isEmpty) {
-        ctrl = `<button class="btn sm" data-action="sit" data-seat="${i}">Sit</button>` +
+        ctrl =
+          (S.offline ? "" : `<button class="btn sm" data-action="sit" data-seat="${i}">Sit</button>`) +
+          (S.offline ? `<button class="btn sm" data-action="addhuman" data-seat="${i}">+ Player</button>` : "") +
           (isHost ? `<button class="btn sm ghost" data-action="addbot" data-seat="${i}">+ Bot</button>` : "");
       } else if (s.kind === "bot" && isHost) {
         ctrl = `<button class="btn sm danger" data-action="removebot" data-seat="${i}">Remove</button>`;
+      } else if (S.offline && s.kind === "human" && i !== v.hostSeat) {
+        ctrl = `<button class="btn sm danger" data-action="clearseat" data-seat="${i}">Remove</button>`;
       }
       return `<div class="seat ${you ? "me" : ""}">${av}
         <div><div class="nm">${isEmpty ? `Seat ${i + 1}` : esc(s.name || "Player")}</div><div class="rl">${role}</div></div>
@@ -469,7 +516,7 @@ function renderLobby(v) {
   const sharePanel = S.offline
     ? `<div class="panel cream">
         <h2>Offline game</h2>
-        <p class="sub">Playing on this device against the computer. Add or remove bots below, then deal.</p>
+        <p class="sub">All on this device. Add bots to play solo, or add more <b>players</b> for pass-and-play — each gets their own hidden hand, and the device asks you to hand it over between turns.</p>
       </div>`
     : `<div class="panel cream">
         <h2>Lobby</h2>
@@ -1135,11 +1182,18 @@ function doLeave() {
   S.connected = false;
   S.party = null;
   S.offline = false;
+  S.hotseat = false;
+  S.awaitingPass = false;
+  S.revealedSeat = null;
   history.replaceState(null, "", "/");
   renderStart();
 }
 
 function doStart() {
+  // The setup person holds the device, so seat 0 is already "revealed" — others
+  // get the privacy hand-off as the turn reaches them.
+  S.revealedSeat = 0;
+  S.awaitingPass = false;
   if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: S.view.players, marbles: S.view.marbles } });
   const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
   send({ t: "start", config: { players: S.view.players, target } });
@@ -1192,12 +1246,20 @@ app.addEventListener("click", (e) => {
     case "sit": return send({ t: "sit", seat: +t.dataset.seat });
     case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
     case "removebot": return send({ t: "removeBot", seat: +t.dataset.seat });
+    case "addhuman": {
+      const seat = +t.dataset.seat;
+      const name = (prompt("Player name?", `Player ${seat + 1}`) || "").trim();
+      if (name) send({ t: "addHuman", seat, name });
+      return;
+    }
+    case "clearseat": return send({ t: "clearSeat", seat: +t.dataset.seat });
+    case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
     case "setcount": {
       const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
       return send({ t: "setConfig", config: { players: +t.dataset.count, target } });
     }
     case "start": return doStart();
-    case "newgame": return send({ t: "newGame" });
+    case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
     case "move-bid": return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
     case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
     case "move-trump": return send({ t: "move", move: { type: "selectTrump", seat: v.you, suit: t.dataset.suit } });

@@ -46,7 +46,8 @@ var LocalRoom = class {
   // the seat whose view we currently emit
   name = "You";
   botTimer = null;
-  // Single entry point, matching the wire protocol the client already speaks.
+  // Single entry point, matching the wire protocol the client already speaks
+  // (plus the two pass-and-play lobby extras).
   handle(msg) {
     try {
       switch (msg.t) {
@@ -60,6 +61,10 @@ var LocalRoom = class {
           return this.addBot(msg.seat);
         case "removeBot":
           return this.removeBot(msg.seat);
+        case "addHuman":
+          return this.addHuman(msg.seat, msg.name);
+        case "clearSeat":
+          return this.clearSeat(msg.seat);
         case "setConfig":
           return this.setConfig(msg.config);
         case "start":
@@ -124,6 +129,22 @@ var LocalRoom = class {
     this.seats[seat] = { kind: "empty", name: null };
     this.broadcast();
   }
+  // Pass-and-play: seat another local human (each gets their own private hand).
+  addHuman(seat, name) {
+    if (this.state) throw new Error("Add players from the lobby, before the game starts");
+    if (seat < 0 || seat >= this.seats.length) throw new Error("No such seat");
+    if (this.seats[seat].kind !== "empty") throw new Error("Seat is occupied");
+    this.seats[seat] = { kind: "human", name: name || `Player ${seat + 1}` };
+    this.broadcast();
+  }
+  // Clear any non-host seat back to empty (offline lobby housekeeping).
+  clearSeat(seat) {
+    if (this.state) throw new Error("Can't change seats once the game has started");
+    if (seat < 0 || seat >= this.seats.length) throw new Error("No such seat");
+    if (seat === this.hostSeat) throw new Error("Can't clear the host seat");
+    this.seats[seat] = { kind: "empty", name: null };
+    this.broadcast();
+  }
   setConfig(config) {
     if (this.state) throw new Error("Can't resize the table once the game has started");
     const n = this.game.seatCount(config);
@@ -166,6 +187,7 @@ var LocalRoom = class {
     this.config = config;
     this.seats = seats;
     this.state = this.game.createGame(config, (Date.now() ^ Math.random() * 4294967295) >>> 0);
+    this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
   move(move) {
@@ -176,9 +198,16 @@ var LocalRoom = class {
     if (move.seat !== seat) throw new Error("Seat mismatch");
     if (!this.game.isLegal(this.state, move)) throw new Error("Illegal move");
     this.state = this.game.applyMove(this.state, move);
-    const next = this.game.seatToAct(this.state);
-    if (next !== null && this.seats[next].kind === "human") this.viewSeat = next;
+    this.syncViewSeat();
     this.resolveBotsAndBroadcast();
+  }
+  // The device always shows the hand of whoever is to act, when that seat is a
+  // human — this is what makes the turn "pass" to the next person in hot-seat.
+  // While a bot is to act, the view stays put so the last human watches it play.
+  syncViewSeat() {
+    if (!this.state) return;
+    const seat = this.game.seatToAct(this.state);
+    if (seat !== null && this.seats[seat]?.kind === "human") this.viewSeat = seat;
   }
   aux(payload) {
     if (!this.state) throw new Error("No game in progress");
@@ -232,6 +261,7 @@ var LocalRoom = class {
     }
     ns = this.game.applyMove(ns, this.game.aiMove(ns, seat));
     this.state = ns;
+    this.syncViewSeat();
     this.broadcast();
     this.scheduleBotStep();
   }

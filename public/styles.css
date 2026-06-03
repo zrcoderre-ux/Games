@@ -627,3 +627,13 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .toggle{display:flex;align-items:flex-start;gap:10px;margin:14px 0 0;text-transform:none;letter-spacing:0;font-weight:600;color:#3a2a16;cursor:pointer}
 .toggle input{width:20px;height:20px;margin:0;flex:none;accent-color:var(--brass);cursor:pointer}
 .toggle em{display:block;font-style:normal;font-weight:500;font-size:12.5px;color:#7a6240}
+
+/* pass-and-play hand-off screen */
+.passwrap{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:22px;
+  background:radial-gradient(120% 90% at 50% -10%, #3a2415 0%, var(--wood-1) 45%, var(--wood-0) 100%)}
+.passcard{width:100%;max-width:380px;text-align:center;background:linear-gradient(170deg,#3a2616,#2a1a0f);
+  border:1px solid rgba(205,160,90,.3);border-radius:var(--radius);padding:30px 24px;
+  box-shadow:var(--shadow-soft),inset 0 1px 0 rgba(205,160,90,.18);animation:rise .35s cubic-bezier(.2,.8,.2,1) both}
+.passlogo{font-size:64px;line-height:1;color:var(--brass-hi);margin-bottom:10px;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
+.passlabel{color:var(--ink-soft);font-size:13px;letter-spacing:.6px;text-transform:uppercase;margin:0}
+.passname{font-family:"Fraunces",serif;font-size:30px;color:var(--brass-hi);margin:4px 0 8px}
