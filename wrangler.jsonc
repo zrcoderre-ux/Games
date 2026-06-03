@@ -12,17 +12,19 @@
   "durable_objects": {
     "bindings": [
       { "name": "HighLowJack", "class_name": "HighLowJackServer" },
-      { "name": "Rummy500", "class_name": "Rummy500Server" }
+      { "name": "Rummy500", "class_name": "Rummy500Server" },
+      { "name": "Hearts", "class_name": "HeartsServer" },
+      { "name": "PegsAndJokers", "class_name": "PegsAndJokersServer" }
     ]
   },
-  // NOTE: the HLJ class was previously named "GameServer". If you had already
-  // deployed v1 as "GameServer", replace the v1 line below with a rename:
-  //   { "tag": "v1", "new_sqlite_classes": ["GameServer"] },
-  //   { "tag": "v2", "renamed_classes": [{ "from": "GameServer", "to": "HighLowJackServer" }] },
-  //   { "tag": "v3", "new_sqlite_classes": ["Rummy500Server"] }
-  // If you have NOT deployed yet, the clean two-line version is fine:
+  // Migrations are append-only and must match what production has already
+  // applied. v1/v2 were the only ones ever deployed (Hearts existed in code on
+  // `main` but had no binding/migration, so it never shipped). v3/v4 add the
+  // two new Durable Object classes cleanly.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["HighLowJackServer"] },
-    { "tag": "v2", "new_sqlite_classes": ["Rummy500Server"] }
+    { "tag": "v2", "new_sqlite_classes": ["Rummy500Server"] },
+    { "tag": "v3", "new_sqlite_classes": ["HeartsServer"] },
+    { "tag": "v4", "new_sqlite_classes": ["PegsAndJokersServer"] }
   ]
 }

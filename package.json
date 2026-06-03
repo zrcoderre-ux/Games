@@ -8,7 +8,9 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
-    "test:rummy": "node src/rummy.smoke.ts"
+    "test:rummy": "node src/rummy.smoke.ts",
+    "test:hearts": "node src/hearts.smoke.ts",
+    "test:pj": "node src/pj.smoke.ts"
   },
   "dependencies": {
     "partyserver": "^0.5.6"

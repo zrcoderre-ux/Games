@@ -13,5 +13,5 @@
   "include": ["src/**/*.ts"],
   // rummy.smoke.ts is a Node script (uses `process`); it's run via `node`, not
   // bundled into the Worker, so keep it out of the Worker type-check.
-  "exclude": ["node_modules", "src/rummy.smoke.ts"]
+  "exclude": ["node_modules", "src/rummy.smoke.ts", "src/hearts.smoke.ts", "src/pj.smoke.ts"]
 }

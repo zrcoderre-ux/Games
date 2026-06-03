@@ -1,8 +1,8 @@
 # card-games
 
 A combined online card-game app on Cloudflare Workers + Durable Objects (one
-Durable Object instance per room) via [PartyServer]. Two games today — **High
-Low Jack** (a Pitch variant) and **Rummy 500** — share one room engine.
+Durable Object instance per room) via [PartyServer]. Four games today — **High
+Low Jack** (a Pitch variant), **Rummy 500**, **Hearts**, and **Pegs & Jokers** — share one room engine.
 
 ## Architecture
 
@@ -26,6 +26,8 @@ src/
   game.ts           Game<> interface + room types + wire protocol
   hlj-module.ts     High Low Jack as a pure module (adapter over engine/ai/protocol)
   rummy-module.ts   Rummy 500 as a pure module
+  hearts-module.ts  Hearts as a pure module
+  pj-module.ts      Pegs and Jokers as a pure module (board + cards)
   engine.ts         HLJ rules engine
   ai.ts             HLJ heuristic AI
   protocol.ts       HLJ redact() + PlayerView
@@ -34,8 +36,8 @@ src/
   rummy.smoke.ts    Rummy bot-vs-bot smoke test (run with `node`)
 ```
 
-Routing is by party name: `/parties/highlowjack/<room>` and
-`/parties/rummy500/<room>`.
+Routing is by party name: `/parties/high-low-jack/<room>`, `/parties/rummy500/<room>`,
+`/parties/hearts/<room>`, and `/parties/pegs-and-jokers/<room>`.
 
 ## Develop
 

@@ -1,0 +1,1707 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Parlor — preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>/* ============================================================
+   PARLOR — warm cozy card-room theme
+   Walnut wood · warm green baize · brass · cream cards
+   ============================================================ */
+
+:root{
+  /* wood */
+  --wood-0:#1c120a;
+  --wood-1:#2b1c12;
+  --wood-2:#4a2f1b;
+  --wood-3:#63401f;
+  --wood-edge:#855a2e;
+  --wood-hi:#a8773f;
+  /* felt */
+  --felt-0:#1f4a37;
+  --felt-1:#2c6049;
+  --felt-2:#3a7659;
+  /* surfaces & ink */
+  --cream:#f4ead0;
+  --cream-2:#e9dcbb;
+  --parchment:#fbf4e3;
+  --ink:#f0e3c4;
+  --ink-soft:#cdb98e;
+  --ink-dim:#9c8862;
+  /* accents */
+  --brass:#cda05a;
+  --brass-hi:#e7c485;
+  --amber:#e0a44e;
+  --ember:#c96a3a;
+  /* suit */
+  --suit-red:#a8392c;
+  --suit-blk:#2a2018;
+  /* misc */
+  --ok:#6fae6f;
+  --warn:#d9a441;
+  --bad:#c25b46;
+  --radius:18px;
+  --shadow-soft:0 10px 30px -12px rgba(0,0,0,.55);
+  --noise:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:"Hanken Grotesk",system-ui,sans-serif;
+  color:var(--ink);
+  background:
+    radial-gradient(120% 80% at 50% -10%, #3a2415 0%, var(--wood-1) 38%, var(--wood-0) 100%);
+  background-attachment:fixed;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+/* wood grain wash over the whole page */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    repeating-linear-gradient(96deg, rgba(0,0,0,.16) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(91deg, rgba(168,119,63,.06) 0 1px, transparent 1px 14px);
+  opacity:.5;
+}
+body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:var(--noise);background-size:160px;opacity:.05;mix-blend-mode:overlay;
+}
+
+h1,h2,h3{font-family:"Fraunces",Georgia,serif;font-weight:600;letter-spacing:.2px;margin:0}
+button{font-family:inherit}
+
+#app{
+  position:relative;z-index:1;
+  min-height:100dvh;
+  padding:max(10px,env(safe-area-inset-top)) 10px max(14px,env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;
+}
+
+/* ---------- App bar ---------- */
+.appbar{
+  display:flex;align-items:center;gap:10px;
+  padding:4px 6px 12px;
+}
+.brand{display:flex;align-items:center;gap:9px;min-width:0}
+.brand .glyph{
+  width:30px;height:30px;border-radius:9px;flex:none;
+  background:linear-gradient(160deg,var(--brass-hi),var(--brass) 55%,#9c7232);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 7px rgba(0,0,0,.4);
+  display:grid;place-items:center;color:#3a2410;font-weight:800;font-size:15px;
+  font-family:"Fraunces",serif;
+}
+.brand .wordmark{font-family:"Fraunces",serif;font-size:19px;font-weight:600;color:var(--ink);letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .spacer{flex:1}
+.roomtag{
+  font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;
+  background:rgba(0,0,0,.22);border:1px solid rgba(205,160,90,.22);
+  padding:5px 10px;border-radius:999px;
+}
+.roomtag b{color:var(--brass-hi);font-weight:700;letter-spacing:.6px}
+
+/* ---------- Tactile buttons ---------- */
+.btn{
+  appearance:none;border:0;cursor:pointer;
+  font-weight:700;font-size:15px;letter-spacing:.2px;
+  padding:13px 18px;border-radius:13px;color:#36240f;
+  background:linear-gradient(178deg,var(--brass-hi),var(--brass) 60%,#a9803f);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 -2px 0 rgba(120,80,30,.5),
+    0 4px 0 #7c5526,
+    0 9px 16px -6px rgba(0,0,0,.6);
+  transition:transform .07s ease, box-shadow .07s ease, filter .15s;
+  user-select:none;
+}
+.btn:hover{filter:brightness(1.04)}
+.btn:active{
+  transform:translateY(3px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.4),
+    inset 0 2px 6px rgba(90,55,20,.5),
+    0 1px 0 #7c5526,
+    0 4px 8px -5px rgba(0,0,0,.6);
+}
+.btn:disabled{filter:grayscale(.5) brightness(.8);opacity:.6;cursor:not-allowed;transform:none}
+.btn.ghost{
+  background:linear-gradient(178deg,#5a3c22,#3f2a17);
+  color:var(--ink);
+  box-shadow:
+    inset 0 1px 0 rgba(205,160,90,.28),
+    inset 0 -2px 0 rgba(0,0,0,.35),
+    0 4px 0 #241608,
+    0 9px 16px -8px rgba(0,0,0,.6);
+}
+.btn.ghost:active{box-shadow:inset 0 2px 6px rgba(0,0,0,.5),0 1px 0 #241608;transform:translateY(3px)}
+.btn.sm{padding:9px 13px;font-size:13.5px;border-radius:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 0 #7c5526,0 6px 10px -6px rgba(0,0,0,.5)}
+.btn.sm:active{transform:translateY(2px)}
+.btn.danger{background:linear-gradient(178deg,#d3795f,#a8412c);color:#fff3ec;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 4px 0 #6e2418,0 9px 16px -8px rgba(0,0,0,.6)}
+.btn-row{display:flex;flex-wrap:wrap;gap:10px}
+
+/* ---------- Panels (lobby / start / gameover) ---------- */
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:16px}
+.panel{
+  width:100%;max-width:460px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,.06)),
+    linear-gradient(170deg,#3a2616,#2a1a0f);
+  border:1px solid rgba(205,160,90,.25);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-soft), inset 0 1px 0 rgba(205,160,90,.18);
+  padding:20px;
+  animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
+}
+.panel.cream{
+  background:
+    radial-gradient(120% 80% at 50% 0%, var(--parchment), var(--cream) 70%);
+  color:#3a2a16;border:1px solid #caa86f;
+  box-shadow:var(--shadow-soft),inset 0 1px 0 rgba(255,255,255,.7);
+}
+.panel.cream h1,.panel.cream h2,.panel.cream label{color:#3a2a16}
+.panel .sub{color:var(--ink-soft);font-size:13.5px;margin-top:4px}
+.panel.cream .sub{color:#7a6240}
+.hero{text-align:center;padding:8px 0 4px}
+.hero .logo{
+  width:64px;height:64px;border-radius:18px;margin:0 auto 12px;
+  background:linear-gradient(160deg,var(--brass-hi),var(--brass) 55%,#8d6531);
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.5),0 8px 18px -6px rgba(0,0,0,.6);
+  display:grid;place-items:center;font-family:"Fraunces",serif;font-weight:700;font-size:30px;color:#3a2410;
+}
+.hero h1{font-size:32px;line-height:1.05}
+.hero .tag{font-style:italic;color:var(--ink-soft);font-family:"Fraunces",serif;font-size:15px;margin-top:6px}
+
+label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);letter-spacing:.5px;text-transform:uppercase;margin:14px 0 6px}
+.field{
+  width:100%;padding:13px 14px;font-size:16px;font-family:inherit;
+  color:var(--ink);background:rgba(0,0,0,.25);
+  border:1px solid rgba(205,160,90,.28);border-radius:12px;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.35);
+}
+.panel.cream .field{color:#3a2a16;background:rgba(255,255,255,.55);border-color:#c7a76d;box-shadow:inset 0 2px 5px rgba(120,90,40,.18)}
+.field:focus{outline:none;border-color:var(--brass);box-shadow:inset 0 2px 6px rgba(0,0,0,.35),0 0 0 3px rgba(205,160,90,.25)}
+
+/* game chooser */
+.games{display:grid;gap:12px;margin-top:6px}
+.gamecard{
+  display:flex;align-items:center;gap:14px;text-align:left;width:100%;
+  padding:16px;border-radius:15px;cursor:pointer;
+  background:linear-gradient(170deg,#402a18,#2c1c10);
+  border:1px solid rgba(205,160,90,.22);
+  box-shadow:inset 0 1px 0 rgba(205,160,90,.16),0 6px 14px -8px rgba(0,0,0,.6);
+  transition:transform .12s, box-shadow .12s, border-color .12s;
+}
+.gamecard:hover{transform:translateY(-2px);border-color:rgba(205,160,90,.5);box-shadow:0 12px 22px -10px rgba(0,0,0,.7)}
+.gamecard:active{transform:translateY(0)}
+.gamecard .ic{
+  width:50px;height:66px;flex:none;border-radius:9px;position:relative;
+  background:linear-gradient(150deg,var(--parchment),var(--cream-2));
+  box-shadow:0 4px 10px -3px rgba(0,0,0,.5),inset 0 0 0 1px rgba(150,110,60,.35);
+  transform:rotate(-7deg);
+}
+.gamecard .ic::after{
+  content:attr(data-s);position:absolute;inset:0;display:grid;place-items:center;
+  font-size:26px;color:var(--suit-red);
+}
+.gamecard .ic.b{position:absolute;transform:rotate(7deg) translate(8px,0)}
+.gamecard .meta h3{font-size:19px}
+.gamecard .meta p{margin:3px 0 0;font-size:13px;color:var(--ink-soft);line-height:1.35}
+.gamecard .go{margin-left:auto;color:var(--brass-hi);font-size:22px;flex:none}
+
+/* counts / segmented */
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg button{
+  appearance:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:15px;
+  min-width:46px;padding:10px 12px;border-radius:11px;color:var(--ink);
+  background:rgba(0,0,0,.22);border:1px solid rgba(205,160,90,.25);
+  box-shadow:inset 0 1px 0 rgba(205,160,90,.12);
+  transition:transform .08s, background .12s, color .12s;
+}
+.seg button:active{transform:translateY(2px)}
+.seg button.on{
+  background:linear-gradient(178deg,var(--brass-hi),var(--brass));color:#36240f;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 8px -3px rgba(0,0,0,.5);
+}
+
+/* seat list (lobby) */
+.seats{display:grid;gap:9px;margin-top:6px}
+.seat{
+  display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:13px;
+  background:rgba(0,0,0,.2);border:1px solid rgba(205,160,90,.16);
+}
+.seat.me{border-color:rgba(205,160,90,.5);background:rgba(205,160,90,.1)}
+.seat .nm{font-weight:600;font-size:15px}
+.seat .rl{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.6px}
+.seat .tags{margin-left:auto;display:flex;gap:6px;align-items:center}
+.chip{font-size:11px;font-weight:700;letter-spacing:.4px;padding:3px 9px;border-radius:999px;text-transform:uppercase}
+.chip.host{background:rgba(224,164,78,.2);color:var(--amber);border:1px solid rgba(224,164,78,.4)}
+.chip.bot{background:rgba(111,174,111,.16);color:#9ed09e;border:1px solid rgba(111,174,111,.35)}
+.chip.you{background:rgba(205,160,90,.22);color:var(--brass-hi);border:1px solid rgba(205,160,90,.45)}
+.chip.empty{background:transparent;color:var(--ink-dim);border:1px dashed rgba(205,160,90,.3)}
+
+/* ---------- Avatar ---------- */
+.avatar{
+  width:42px;height:42px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-family:"Fraunces",serif;font-weight:700;font-size:17px;color:#2a1c0e;
+  background:linear-gradient(160deg,var(--av-1,#d9b06a),var(--av-2,#b07f3e));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 8px -3px rgba(0,0,0,.55);
+  position:relative;
+  transition:box-shadow .35s ease;
+}
+.avatar.bot{font-size:18px}
+.avatar .crown{position:absolute;-top:8px;top:-9px;left:50%;transform:translateX(-50%);font-size:13px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
+
+/* ============================================================
+   TABLE  (game view)
+   ============================================================ */
+.table{
+  flex:1;position:relative;display:flex;flex-direction:column;
+  border-radius:26px;
+  padding:14px 12px 12px;
+  background:
+    radial-gradient(120% 70% at 50% 12%, rgba(255,236,190,.16), rgba(255,236,190,0) 46%),
+    radial-gradient(140% 120% at 50% 8%, var(--felt-2) 0%, var(--felt-1) 42%, var(--felt-0) 100%);
+  box-shadow:
+    inset 0 0 60px rgba(0,0,0,.45),
+    inset 0 0 0 12px var(--wood-2),
+    inset 0 0 0 14px var(--wood-edge),
+    inset 0 2px 0 16px rgba(255,255,255,.05),
+    0 18px 40px -16px rgba(0,0,0,.7);
+  overflow:hidden;
+  animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
+}
+/* wood frame grain */
+.table::before{
+  content:"";position:absolute;inset:0;border-radius:26px;pointer-events:none;
+  box-shadow:inset 0 0 0 14px transparent;
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 2px, transparent 2px 9px);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;padding:14px;opacity:.4;
+}
+/* felt noise */
+.table::after{
+  content:"";position:absolute;inset:14px;border-radius:16px;pointer-events:none;
+  background-image:var(--noise);background-size:170px;opacity:.06;mix-blend-mode:overlay;
+}
+
+/* top rail of opponents */
+.rail.top{
+  display:flex;justify-content:space-around;align-items:flex-start;gap:6px;
+  padding:2px 2px 4px;min-height:74px;position:relative;z-index:2;flex-wrap:wrap;
+}
+
+/* opponent pod */
+.pod{
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  max-width:96px;padding:6px 8px;border-radius:14px;position:relative;
+  transition:transform .2s;
+}
+.pod .ministack{height:26px;display:flex;align-items:center;justify-content:center;margin-bottom:-2px}
+.pod .ministack .mb{
+  width:18px;height:26px;border-radius:4px;margin-left:-11px;
+  background:
+    repeating-linear-gradient(45deg,#7a2d24 0 3px,#9a3a2e 3px 6px),
+    var(--suit-red);
+  box-shadow:0 1px 2px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,230,200,.35);
+}
+.pod .ministack .mb:first-child{margin-left:0}
+.pod .name{
+  font-size:12.5px;font-weight:700;max-width:92px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:var(--ink);text-shadow:0 1px 2px rgba(0,0,0,.5);
+}
+.pod .nums{display:flex;gap:5px;align-items:center}
+.pod .count{
+  font-size:11px;font-weight:700;color:#3a2a14;background:var(--cream-2);
+  padding:1px 7px;border-radius:999px;box-shadow:0 1px 2px rgba(0,0,0,.4);
+}
+.pod .pts{font-size:11px;color:var(--ink-soft);font-weight:600}
+.pod .dealer{
+  position:absolute;top:0;right:2px;width:18px;height:18px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#fff,#d8d0bd 60%,#a89870);
+  color:#5a4a28;font-size:10px;font-weight:800;display:grid;place-items:center;
+  box-shadow:0 1px 3px rgba(0,0,0,.5);border:1px solid rgba(0,0,0,.15);
+}
+/* active turn glow */
+.pod.active .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 3px var(--brass-hi),0 0 16px 2px rgba(231,196,133,.6);animation:turnpulse 1.6s ease-in-out infinite}
+.pod.active .name{color:var(--brass-hi)}
+
+/* ---------- Center play area ---------- */
+.center{
+  flex:1;position:relative;z-index:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;min-height:140px;padding:6px 0;
+}
+.callout{
+  font-family:"Fraunces",serif;font-style:italic;font-size:16px;color:var(--ink);
+  text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.5);max-width:90%;
+}
+.callout .em{color:var(--brass-hi);font-style:normal;font-weight:600}
+
+/* trump / status crest */
+.crest{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(0,0,0,.28);border:1px solid rgba(205,160,90,.35);
+  padding:6px 13px;border-radius:999px;font-size:13px;font-weight:600;color:var(--ink);
+  box-shadow:inset 0 1px 0 rgba(205,160,90,.2);
+}
+.crest .suit{font-size:18px}
+.crest .suit.red{color:var(--suit-red)}
+.crest .suit.blk{color:#e8dcc2}
+
+/* trick layout (HLJ) */
+.trick{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:flex-end}
+.trick .play{display:flex;flex-direction:column;align-items:center;gap:5px;animation:dropin .5s cubic-bezier(.2,.8,.2,1) both}
+.trick .who{font-size:11px;color:var(--ink-soft);font-weight:600;max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trick .play.lead .who{color:var(--brass-hi)}
+
+/* piles (Rummy) */
+.piles{display:flex;gap:22px;align-items:flex-start;justify-content:center}
+.pile{display:flex;flex-direction:column;align-items:center;gap:6px}
+.pile .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);font-weight:700}
+.pile .stockwrap{position:relative}
+.pile .stockwrap .deep{position:absolute;top:3px;left:3px;opacity:.6}
+.melds{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:100%;margin-top:2px}
+.meld{
+  display:flex;background:rgba(0,0,0,.18);padding:6px;border-radius:11px;
+  border:1px solid rgba(205,160,90,.18);
+}
+.meld .card{margin-left:-22px}
+.meld .card:first-child{margin-left:0}
+
+/* ---------- Self rail (you) ---------- */
+.selfwrap{position:relative;z-index:3;margin-top:auto;padding-top:6px}
+.selfbar{
+  display:flex;align-items:center;gap:10px;
+  background:linear-gradient(180deg,rgba(74,47,27,.92),rgba(43,28,18,.92));
+  border:1px solid rgba(205,160,90,.28);border-radius:14px;
+  padding:8px 12px;margin:0 2px 8px;
+  box-shadow:inset 0 1px 0 rgba(205,160,90,.2),0 6px 16px -10px rgba(0,0,0,.6);
+}
+.selfbar .name{font-weight:700;font-size:14.5px}
+.selfbar .me-pts{font-size:12px;color:var(--ink-soft)}
+.selfbar .turnflag{
+  margin-left:auto;font-family:"Fraunces",serif;font-style:italic;font-size:14px;
+  color:#2a1c0e;background:linear-gradient(178deg,var(--brass-hi),var(--brass));
+  padding:5px 12px;border-radius:999px;font-weight:600;
+  box-shadow:0 2px 8px -2px rgba(0,0,0,.5);animation:turnpulse 1.6s ease-in-out infinite;
+}
+.selfbar .waitflag{margin-left:auto;font-size:12.5px;color:var(--ink-dim)}
+
+/* hand fan */
+.hand{
+  display:flex;justify-content:center;align-items:flex-end;
+  min-height:104px;padding:18px 6px 6px;position:relative;
+}
+.hand.empty{min-height:0;padding:0}
+
+/* actions */
+.actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;padding:4px 2px 2px}
+.actions .btn{flex:1 1 auto;min-width:120px;max-width:220px}
+.hint{width:100%;text-align:center;font-size:12.5px;color:var(--ink-soft);font-style:italic;font-family:"Fraunces",serif}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.card{
+  --w:62px;
+  width:var(--w);height:calc(var(--w)*1.42);
+  border-radius:9px;position:relative;flex:none;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.85), rgba(255,255,255,0) 38%),
+    linear-gradient(180deg, var(--parchment), var(--cream-2));
+  box-shadow:
+    0 2px 2px rgba(0,0,0,.25),
+    0 7px 14px -6px rgba(0,0,0,.55),
+    inset 0 0 0 1px rgba(150,110,60,.3);
+  color:var(--suit-blk);
+  transition:transform .34s cubic-bezier(.2,.85,.25,1), box-shadow .24s ease, filter .24s ease;
+  font-family:"Fraunces",serif;
+  cursor:default;
+}
+.card.red{color:var(--suit-red)}
+.card .corner{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:.86;font-weight:700}
+.card .corner b{font-size:calc(var(--w)*.28);font-weight:700}
+.card .corner i{font-size:calc(var(--w)*.2);font-style:normal;margin-top:1px}
+.card .corner.tl{top:5px;left:6px}
+.card .corner.br{bottom:5px;right:6px;transform:rotate(180deg)}
+.card .pip{
+  position:absolute;inset:0;display:grid;place-items:center;
+  font-size:calc(var(--w)*.5);opacity:.92;
+}
+.card .court{
+  position:absolute;inset:14% 10%;border-radius:5px;display:grid;place-items:center;
+  font-size:calc(var(--w)*.34);font-weight:600;
+  background:
+    repeating-linear-gradient(45deg, rgba(168,57,44,.06) 0 5px, transparent 5px 10px);
+  box-shadow:inset 0 0 0 1px rgba(150,110,60,.25);
+}
+/* mini cards (opponents/melds/trick) */
+.card.mini{--w:44px;border-radius:7px}
+.card.mini .corner.br{display:none}
+.card.mini .pip{font-size:calc(var(--w)*.42)}
+.card.lg{--w:66px}
+
+/* card back (stock, deck) */
+.card.back{
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.12), transparent 40%),
+    repeating-linear-gradient(45deg,#8c2f25 0 7px,#a23a2d 7px 14px),
+    var(--suit-red);
+  box-shadow:0 2px 2px rgba(0,0,0,.25),0 7px 14px -6px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,230,200,.35),inset 0 0 0 5px rgba(140,47,37,.55);
+}
+.card.back::after{
+  content:"";position:absolute;inset:8px;border-radius:5px;
+  border:1px solid rgba(255,230,200,.35);
+  background:radial-gradient(circle at 50% 50%, rgba(231,196,133,.3), transparent 60%);
+}
+
+/* interaction states (hand) */
+.hand .card{cursor:pointer}
+.hand .card.playable:hover,.hand .card.playable:focus{
+  transform:translateY(-22px) rotate(0deg) scale(1.04)!important;
+  box-shadow:0 18px 30px -10px rgba(0,0,0,.7),0 0 0 2px var(--brass-hi),inset 0 0 0 1px rgba(150,110,60,.3)!important;
+  z-index:60!important;
+}
+.hand .card.sel{
+  transform:translateY(-20px) rotate(0deg)!important;
+  box-shadow:0 16px 26px -10px rgba(0,0,0,.7),0 0 0 2px var(--amber),0 0 14px rgba(224,164,78,.5),inset 0 0 0 1px rgba(150,110,60,.3)!important;
+  z-index:55!important;
+}
+.hand .card.playable{box-shadow:0 2px 2px rgba(0,0,0,.25),0 8px 16px -6px rgba(0,0,0,.55),0 0 0 1.5px rgba(231,196,133,.55),inset 0 0 0 1px rgba(150,110,60,.3)}
+.hand .card.dim{filter:brightness(.82) saturate(.85)}
+.hand .card.must{box-shadow:0 2px 2px rgba(0,0,0,.25),0 8px 16px -6px rgba(0,0,0,.55),0 0 0 2px var(--ok),inset 0 0 0 1px rgba(150,110,60,.3)}
+
+/* ---------- toast ---------- */
+.toast{
+  position:fixed;left:50%;top:14px;transform:translate(-50%,-26px);z-index:99;
+  background:linear-gradient(180deg,#4a2f1b,#2b1c12);color:var(--ink);
+  border:1px solid rgba(205,160,90,.4);
+  padding:11px 18px;border-radius:13px;font-size:14px;font-weight:600;
+  box-shadow:0 12px 28px -10px rgba(0,0,0,.7),inset 0 1px 0 rgba(205,160,90,.25);
+  opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;max-width:88vw;text-align:center;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- animations ---------- */
+@keyframes rise{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes dropin{from{opacity:0;transform:translateY(-18px) scale(.9) rotate(-3deg)}to{opacity:1;transform:none}}
+@keyframes turnpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.12)}}
+@keyframes dealin{from{opacity:0;transform:translateY(26px) scale(.9)}to{opacity:1}}
+.deal>*{animation:dealin .55s cubic-bezier(.2,.8,.2,1) both}
+.deal>*:nth-child(1){animation-delay:.02s}
+.deal>*:nth-child(2){animation-delay:.05s}
+.deal>*:nth-child(3){animation-delay:.08s}
+.deal>*:nth-child(4){animation-delay:.11s}
+.deal>*:nth-child(5){animation-delay:.14s}
+.deal>*:nth-child(6){animation-delay:.17s}
+.deal>*:nth-child(n+7){animation-delay:.2s}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001s!important;animation-delay:0!important}
+}
+
+/* ---------- responsive niceties ---------- */
+@media (min-width:560px){
+  #app{padding-left:16px;padding-right:16px}
+  .card{--w:70px}
+  .hand{min-height:118px}
+}
+@media (max-width:360px){
+  .card{--w:56px}
+  .pod{max-width:80px}
+}
+
+/* ---------- additions for table components ---------- */
+.pod .note{font-size:11px;font-style:italic;color:var(--ink-soft);font-family:"Fraunces",serif;margin-top:-2px;text-transform:capitalize}
+.pod.partner .name{color:var(--brass-hi)}
+.pod.partner .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 2px rgba(205,160,90,.45),0 3px 8px -3px rgba(0,0,0,.55)}
+
+.panel.cream .tag{color:#9a753c}
+.avatar.big{width:54px;height:54px;font-size:21px}
+
+.gamecard.on{border-color:var(--brass);box-shadow:0 0 0 2px rgba(205,160,90,.45),inset 0 1px 0 rgba(205,160,90,.2),0 8px 18px -10px rgba(0,0,0,.7)}
+.gamecard.on .go{color:var(--brass-hi)}
+
+/* melds: cards in a row, owner beneath */
+.meld{flex-direction:column;align-items:center;gap:4px}
+.meld .row{display:flex}
+.meld .row .card{margin-left:-22px}
+.meld .row .card:first-child{margin-left:0}
+.meld .owner{font-size:10px;color:var(--ink-soft);font-weight:600;letter-spacing:.3px}
+.meld.tappable{cursor:pointer;transition:transform .12s, box-shadow .12s}
+.meld.tappable:hover{transform:translateY(-2px);box-shadow:0 8px 16px -8px rgba(0,0,0,.6)}
+.meld.target{outline:2px solid var(--amber);outline-offset:2px;background:rgba(224,164,78,.12)}
+
+.pile .pts{font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:2px}
+
+/* ============================================================
+   TEAMS (High Low Jack) · last trick · move log
+   ============================================================ */
+:root{ --teamA:#e7a64e; --teamB:#5cae9c; }
+
+/* team ring on opponent avatars (active brass glow still wins) */
+.pod.tA .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 2px var(--teamA),0 3px 8px -3px rgba(0,0,0,.55)}
+.pod.tB .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 2px var(--teamB),0 3px 8px -3px rgba(0,0,0,.55)}
+
+.teamchip{position:absolute;top:-2px;left:0;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;
+  font-size:11px;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.55);border:1px solid rgba(0,0,0,.18);z-index:2}
+.teamchip.tA{background:var(--teamA);color:#3a2306}
+.teamchip.tB{background:var(--teamB);color:#0c241f}
+
+.teamdot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.teamdot.tA{background:var(--teamA)}
+.teamdot.tB{background:var(--teamB)}
+
+.teambadge{display:inline-flex;align-items:center;gap:5px;font-weight:800;font-size:11px;letter-spacing:.6px;
+  text-transform:uppercase;padding:3px 10px;border-radius:999px;box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+.teambadge.tA{background:var(--teamA);color:#3a2306}
+.teambadge.tB{background:var(--teamB);color:#0c241f}
+.me-partner{color:var(--ink-soft);font-size:12px;margin-left:8px}
+
+.crestrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.crest.score{gap:7px}
+.crest.score.mine{border-color:var(--brass-hi);box-shadow:inset 0 1px 0 rgba(205,160,90,.3),0 0 0 1px var(--brass-hi)}
+
+.trick .who.tA{color:var(--teamA)}
+.trick .who.tB{color:var(--teamB)}
+
+/* last trick (shown when current trick is empty) */
+.lasttrick{display:flex;flex-direction:column;align-items:center;gap:7px}
+.lt-label{font-family:"Fraunces",serif;font-style:italic;font-size:12.5px;color:var(--ink-soft)}
+.trick.faded{opacity:.6}
+.trick.faded .play{animation:none}
+
+/* move-log slide-up sheet */
+.logsheet{position:fixed;left:0;right:0;bottom:0;z-index:120;max-height:62vh;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,#3a2616,#221408);border-top:1px solid rgba(205,160,90,.4);
+  border-radius:18px 18px 0 0;box-shadow:0 -16px 44px -16px rgba(0,0,0,.85);
+  padding:10px max(12px,env(safe-area-inset-left)) max(14px,env(safe-area-inset-bottom));
+  animation:slideup .28s cubic-bezier(.2,.8,.2,1) both}
+.loghead{display:flex;align-items:center;justify-content:space-between;font-family:"Fraunces",serif;font-size:17px;
+  color:var(--ink);padding:2px 2px 9px;border-bottom:1px solid rgba(205,160,90,.2)}
+.loglist{overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-top:9px;-webkit-overflow-scrolling:touch}
+.logrow{font-size:13.5px;color:var(--ink);padding:7px 11px;background:rgba(0,0,0,.22);border-radius:9px;
+  border:1px solid rgba(205,160,90,.12)}
+.logrow b{color:var(--brass-hi);font-weight:700}
+.logrow i{color:var(--ink-soft);font-style:italic}
+.lc{font-weight:700;font-family:"Fraunces",serif}
+.lc.red{color:var(--suit-red)}
+@keyframes slideup{from{transform:translateY(100%)}to{transform:none}}
+
+/* ---------- Pegs & Jokers ---------- */
+.pjstrip{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:100%}
+.pjseat{display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:11px;
+  background:rgba(0,0,0,.22);border:1px solid rgba(168,119,63,.25);font-size:12px;color:var(--ink-soft)}
+.pjseat.active{border-color:var(--brass);background:rgba(205,160,90,.16);color:var(--ink)}
+.pjseat.me .nm{color:var(--ink);font-weight:600}
+.pjseat .dot{width:11px;height:11px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.4)}
+.pjseat .nm{max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pjseat .hm{font-family:Fraunces,serif;color:var(--brass-hi);font-weight:600}
+.pjwrap{width:100%;margin:2px auto 0;filter:drop-shadow(0 14px 26px rgba(0,0,0,.5))}
+.pjsvg{width:100%;height:auto;display:block;border-radius:8px}
+.pjcardslot{display:inline-block;cursor:pointer;transition:transform .08s ease}
+.pjcardslot:active{transform:translateY(1px)}
+
+body{padding-bottom:64px}</style></head>
+<body><div id="toast" class="toast"></div><main id="app"></main><div id="pvbar">
+  <button onclick="__pv('start')">Start</button><button onclick="__pv('lobby')">Lobby</button>
+  <button onclick="__pv('hljbid')">HLJ bid</button><button onclick="__pv('hljplay')">HLJ play</button>
+  <button onclick="__pv('rummy')">Rummy</button>
+  <button onclick="__pv('heartspass')">Hearts pass</button><button onclick="__pv('heartsplay')">Hearts play</button>
+  <button onclick="__pv('pj')">Pegs &amp; Jokers</button>
+  <button onclick="__pv('over')">Game over</button>
+  <span class="pvhint">tap "Log" in the bar ↑</span>
+</div>
+<style>#pvbar{position:fixed;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:#1c120b;border-top:1px solid rgba(205,160,90,.3);z-index:9999}
+#pvbar button{font:600 12px/1 Hanken Grotesk,sans-serif;color:#3a2410;background:linear-gradient(#e7c485,#c89b5a);border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+#pvbar .pvhint{color:#cda05a;font:600 11px Hanken Grotesk,sans-serif;align-self:center;margin-left:6px}</style>
+<script type="module">// Parlor — card games client. Vanilla ES module, native WebSocket, no build step.
+// The server is the rules authority: we turn `view.legalMoves` into controls, and
+// for Rummy melds we let the player select cards and submit — the server validates.
+// This file's RENDER layer draws a cozy parlor table; all networking/protocol is unchanged.
+
+const SUIT = { S: "\u2660", H: "\u2665", D: "\u2666", C: "\u2663" };
+const RED = new Set(["H", "D"]);
+const GAMES = {
+  rummy500: {
+    label: "Rummy 500",
+    players: [2, 3, 4, 5, 6, 7, 8],
+    target: 500,
+    suit: "\u2665",
+    blurb: "Draw, build runs & sets, race to 500.",
+    range: "2\u20138 players",
+  },
+  "high-low-jack": {
+    label: "High Low Jack",
+    players: [4, 6, 8],
+    target: 21,
+    suit: "\u2660",
+    blurb: "Bid, take trump tricks, chase the Jack.",
+    range: "4 / 6 / 8 players",
+  },
+  hearts: {
+    label: "Hearts",
+    players: [3, 4, 5],
+    target: 100,
+    suit: "\u2665",
+    blurb: "Dodge hearts & the Black Lady; lowest score wins.",
+    range: "3 / 4 / 5 players",
+  },
+  "pegs-and-jokers": {
+    label: "Pegs & Jokers",
+    players: [4, 6],
+    marbles: [3, 4, 5],
+    suit: "\u2660",
+    blurb: "Race your marbles home; jokers bump, sevens split.",
+    range: "4 or 6 players \u00b7 partners",
+  },
+};
+
+const app = document.getElementById("app");
+const toastEl = document.getElementById("toast");
+
+const S = {
+  pid: null,
+  name: "",
+  party: null,
+  pickGame: "rummy500", // start-screen selection
+  room: null,
+  ws: null,
+  connected: false,
+  intentionalClose: false,
+  view: null,
+  rummySel: new Set(), // selected card ids
+  rummyLayoff: null, // selected meld id for layoff
+  heartsPass: new Set(), // selected card ids to pass (Hearts)
+  pjCard: null, // selected card id (Pegs & Jokers)
+  pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
+  showLog: false,
+};
+
+// Pegs & Jokers peg colors, one per seat. Even seats are team A, odd are team B.
+const PJ_PEG = ["#b8413a", "#d79a3c", "#2f9069", "#3f6bb0", "#8a52a0", "#3aa0a8"];
+const shade = (hex, p) => {
+  const n = parseInt(hex.slice(1), 16), c = (v) => Math.max(0, Math.min(255, v));
+  return `#${((c((n >> 16) + p) << 16) | (c(((n >> 8) & 255) + p) << 8) | c((n & 255) + p)).toString(16).padStart(6, "0")}`;
+};
+
+// ---------- in-place DOM morphing ----------
+// We re-render whole screens as HTML strings, but patch them into the live DOM
+// node-by-node instead of replacing innerHTML. Unchanged nodes are kept, so there
+// is no flash on every server update, entrance animations don't replay, and CSS
+// transitions (card position, turn glow) actually tween between states.
+function morphNode(a, b) {
+  if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) {
+    a.replaceWith(b.cloneNode(true));
+    return;
+  }
+  if (a.nodeType === 3 || a.nodeType === 8) {
+    if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue;
+    return;
+  }
+  for (let i = a.attributes.length - 1; i >= 0; i--) {
+    const n = a.attributes[i].name;
+    if (!b.hasAttribute(n)) a.removeAttribute(n);
+  }
+  for (const at of b.attributes) {
+    if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
+  }
+  // keep form fields usable: sync value/checked unless the user is editing it now
+  if ((a.nodeName === "INPUT" || a.nodeName === "TEXTAREA" || a.nodeName === "SELECT") && a !== document.activeElement) {
+    const bv = b.getAttribute("value");
+    if (bv != null && a.value !== bv) a.value = bv;
+  }
+  morphList(a, b);
+}
+function morphList(parent, source) {
+  let a = parent.firstChild;
+  let b = source.firstChild;
+  while (b) {
+    const bnext = b.nextSibling;
+    if (!a) { parent.appendChild(b.cloneNode(true)); b = bnext; continue; }
+    const anext = a.nextSibling;
+    morphNode(a, b);
+    a = anext; b = bnext;
+  }
+  while (a) { const n = a.nextSibling; parent.removeChild(a); a = n; }
+}
+function patch(html) {
+  const tpl = document.createElement("template");
+  tpl.innerHTML = html;
+  morphList(app, tpl.content);
+}
+Object.defineProperty(app, "__set", { configurable: true, set(html) { patch(html); } });
+
+// ---------- utilities ----------
+const esc = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const rankLabel = (r) => (r === 14 ? "A" : r === 13 ? "K" : r === 12 ? "Q" : r === 11 ? "J" : String(r));
+const cardKey = (c) => (c.joker ? "joker" : `${c.rank}${c.suit}`);
+
+// elegant card face: corner pips (rank + suit) + center pip, court face for J/Q/K
+function cardHTML(c, o = {}) {
+  const st = o.style ? ` style="${o.style}"` : "";
+  const cls = ["card"];
+  if (o.mini) cls.push("mini");
+  if (o.lg) cls.push("lg");
+  if (o.back) {
+    cls.push("back");
+    return `<div class="${cls.join(" ")}"${st}></div>`;
+  }
+  if (o.playable) cls.push("playable");
+  if (o.sel) cls.push("sel");
+  if (o.must) cls.push("must");
+  if (o.dim) cls.push("dim");
+  const a = [];
+  if (o.action) a.push(`data-action="${o.action}"`);
+  if (o.key) a.push(`data-key="${o.key}"`);
+  if (o.id !== undefined) a.push(`data-cardid="${o.id}"`);
+  if (c.joker) {
+    cls.push("red");
+    return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl"><b>\u2605</b></span><span class="pip">\u2605</span><span class="corner br"><b>\u2605</b></span></div>`;
+  }
+  if (RED.has(c.suit)) cls.push("red");
+  const r = rankLabel(c.rank);
+  const s = SUIT[c.suit];
+  const corner = `<b>${r}</b><i>${s}</i>`;
+  const court = c.rank >= 11 && c.rank <= 13;
+  const center = court
+    ? `<span class="court">${r}<span style="font-size:.55em;margin-left:1px">${s}</span></span>`
+    : `<span class="pip">${s}</span>`;
+  return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span>${center}<span class="corner br">${corner}</span></div>`;
+}
+
+function seatName(v, i) {
+  const s = v.seats[i];
+  if (!s || s.kind === "empty") return `Seat ${i + 1}`;
+  return s.name || (s.kind === "bot" ? `Bot ${i + 1}` : `Seat ${i + 1}`);
+}
+
+// ---------- avatars ----------
+const AV = [
+  ["#e7c485", "#c08a3e"], ["#e0a44e", "#b5662f"], ["#cfa86a", "#9c7232"], ["#d98f6a", "#a85138"],
+  ["#bcae74", "#86763c"], ["#d6a3a0", "#a86560"], ["#a9b58f", "#6f7c4f"], ["#cda05a", "#8d6531"],
+];
+function avHash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+function initials(name) {
+  const w = String(name).trim().split(/\s+/).filter(Boolean);
+  if (w.length >= 2) return (w[0][0] + w[1][0]).toUpperCase();
+  const x = w[0] || "?";
+  return (x.length > 1 ? x[0] + x[1] : x[0]).toUpperCase().slice(0, 2);
+}
+function avatarHTML(name, o = {}) {
+  const [a, b] = AV[avHash(name) % AV.length];
+  return `<div class="avatar${o.big ? " big" : ""}" style="--av-1:${a};--av-2:${b}">${esc(initials(name))}${o.host ? `<span class="crown">\u265B</span>` : ""}</div>`;
+}
+
+// opponent pod
+function podHTML(v, i, o = {}) {
+  const name = seatName(v, i);
+  const backs = Math.min(o.count || 0, 4);
+  const mb = Array.from({ length: backs }, () => `<span class="mb"></span>`).join("");
+  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""}">
+    ${o.team ? `<span class="teamchip t${o.team}">${o.team}</span>` : ""}
+    ${o.dealer ? `<span class="dealer">D</span>` : ""}
+    <div class="ministack">${mb}</div>
+    ${avatarHTML(name)}
+    <div class="name">${esc(name)}</div>
+    ${o.note ? `<div class="note">${esc(o.note)}</div>` : ""}
+    <div class="nums"><span class="count">${o.count}</span>${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}</div>
+  </div>`;
+}
+
+// fanned hand with per-card rotation + arc, overlap scaled to fit
+function fanHand(cards, optFn) {
+  const n = cards.length;
+  if (!n) return "";
+  const cardW = 64;
+  const avail = Math.min(360, (window.innerWidth || 360) - 30);
+  const step = n > 1 ? Math.min(44, Math.max(20, (avail - cardW) / (n - 1))) : 0;
+  const overlap = step - cardW; // negative => overlap
+  const spread = Math.min(3, 24 / n);
+  const arc = n > 2 ? Math.min(13, n * 1.4) : 0;
+  const mid = (n - 1) / 2 || 1;
+  return cards
+    .map((c, i) => {
+      const off = i - (n - 1) / 2;
+      const rot = off * spread;
+      const lift = -arc * (1 - (off / mid) ** 2);
+      const o = optFn(c, i) || {};
+      o.style = `${i ? `margin-left:${overlap.toFixed(1)}px;` : ""}transform:rotate(${rot.toFixed(2)}deg) translateY(${lift.toFixed(1)}px);z-index:${i + 1};`;
+      return cardHTML(c, o);
+    })
+    .join("");
+}
+
+let toastTimer = null;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3200);
+}
+
+// ---------- move log (authoritative: rendered from view.log) ----------
+function cardText(c) {
+  if (!c) return "";
+  if (c.joker) return `<span class="lc red">\u2605</span>`;
+  return `<span class="lc ${RED.has(c.suit) ? "red" : ""}">${rankLabel(c.rank)}${SUIT[c.suit]}</span>`;
+}
+function logEntryHTML(v, e) {
+  const who = e.seat != null ? `<b>${esc(seatName(v, e.seat))}</b> ` : "";
+  const body = e.seat == null ? `<i>${esc(e.msg)}</i>` : esc(e.msg);
+  const suit = e.suit ? ` <span class="lc ${RED.has(e.suit) ? "red" : ""}">${SUIT[e.suit]}</span>` : "";
+  const cards = (e.cards || []).map((c) => cardText(c)).join(" ");
+  const tail = e.tail ? ` ${esc(e.tail)}` : "";
+  return `${who}${body}${suit}${cards ? " " + cards : ""}${tail}`;
+}
+
+// ---------- networking ----------
+function send(m) {
+  if (S.ws && S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify(m));
+}
+
+function connect() {
+  S.intentionalClose = false;
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const url = `${proto}//${location.host}/parties/${S.party}/${encodeURIComponent(S.room)}`;
+  const ws = new WebSocket(url);
+  S.ws = ws;
+  ws.onopen = () => {
+    S.connected = true;
+    send({ t: "join", pid: S.pid, name: S.name });
+  };
+  ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.t === "view") { S.view = msg.view; render(); }
+    else if (msg.t === "error") { toast(msg.message); }
+  };
+  ws.onclose = () => {
+    S.connected = false;
+    if (S.intentionalClose) return;
+    render();
+    setTimeout(() => { if (!S.connected && !S.intentionalClose) connect(); }, 1500);
+  };
+  ws.onerror = () => {};
+  render();
+}
+
+// ---------- app bar ----------
+function appbar(v, opts = {}) {
+  return `<div class="appbar">
+    <div class="brand"><div class="glyph">P</div><span class="wordmark">${esc(GAMES[S.party].label)}</span></div>
+    <div class="spacer"></div>
+    <div class="roomtag">room <b>${esc(S.room)}</b></div>
+    ${opts.log ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
+    <button class="btn sm ghost" data-action="copy-link">Share</button>
+    <button class="btn sm ghost" data-action="leave">Leave</button>
+  </div>`;
+}
+
+function logSheet() {
+  if (!S.showLog) return "";
+  const v = S.view;
+  const entries = v && v.log ? v.log : [];
+  const rows = entries.length
+    ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("")
+    : `<div class="logrow" style="color:var(--ink-dim)">No moves yet — they'll appear here as the hand plays out.</div>`;
+  return `<div class="logsheet">
+      <div class="loghead"><span>Move log</span><button class="btn sm ghost" data-action="toggle-log">Close</button></div>
+      <div class="loglist">${rows}</div>
+    </div>`;
+}
+
+// shared table frame: pods on the top rail, center play area, your rail at the bottom
+function tableShell(v, parts) {
+  const railPods = parts.pods.join("") || `<div class="callout">Waiting for players to arrive…</div>`;
+  let self;
+  if (v.you != null) {
+    const myName = seatName(v, v.you);
+    self = `<div class="selfbar">
+        ${avatarHTML(myName, { host: v.you === v.hostSeat })}
+        <div><div class="name">${esc(myName)}</div><div class="me-pts">${parts.selfMeta || ""}</div></div>
+        ${parts.selfTurn || ""}
+      </div>
+      <div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
+      <div class="actions">${parts.actions || `<span class="hint">Watching the table…</span>`}</div>`;
+  } else {
+    self = `<div class="selfbar"><div class="name">Spectating</div><div class="me-pts">${parts.selfMeta || ""}</div></div>`;
+  }
+  return `${appbar(v, { log: true })}<div class="table">
+    <div class="rail top deal">${railPods}</div>
+    <div class="center">${parts.center}</div>
+    <div class="selfwrap">${self}</div>
+  </div>${logSheet()}`;
+}
+
+// ---------- render router ----------
+function render() {
+  if (!S.party) return renderStart();
+  if (!S.connected || !S.view) return renderConnecting();
+  const v = S.view;
+  if (v.phase === "lobby") return renderLobby(v);
+  if (S.party === "high-low-jack") return renderHLJ(v);
+  if (S.party === "hearts") return renderHearts(v);
+  if (S.party === "pegs-and-jokers") return renderPJ(v);
+  return renderRummy(v);
+}
+
+function renderConnecting() {
+  app.__set = `${appbar({})}
+    <div class="stage"><div class="panel cream" style="text-align:center">
+      <div class="hero"><div class="logo">\u2663</div><h2>Reaching the table…</h2>
+      <p class="sub">${S.connected ? "Joined — dealing you in." : "Connecting to the room."}</p></div>
+    </div></div>`;
+}
+
+// ---------- start screen ----------
+function renderStart() {
+  const g = S.pickGame;
+  const cards = Object.entries(GAMES)
+    .map(([id, info]) =>
+      `<button class="gamecard ${id === g ? "on" : ""}" data-action="pick-game" data-game="${id}">
+        <span class="ic" data-s="${info.suit}"></span>
+        <div class="meta"><h3>${esc(info.label)}</h3><p>${esc(info.blurb)}</p><p style="color:var(--ink-dim);margin-top:2px">${esc(info.range)}</p></div>
+        <span class="go">${id === g ? "\u25C9" : "\u25CB"}</span>
+      </button>`,
+    )
+    .join("");
+  app.__set = `
+    <div class="stage" style="justify-content:center;padding-top:6vh">
+      <div class="panel cream">
+        <div class="hero"><div class="logo">\u2660</div><h1>Parlor</h1><p class="tag">a cozy room for cards</p></div>
+        <input type="hidden" id="f-game" value="${esc(g)}" />
+        <label>Your name</label>
+        <input class="field" id="f-name" value="${esc(S.name || "")}" placeholder="e.g. Alex" autocomplete="off" />
+        <label>Pick a game</label>
+        <div class="games">${cards}</div>
+        <label>Room code</label>
+        <input class="field" id="f-room" value="${esc(S.room || "")}" placeholder="blank = new room" autocomplete="off" />
+        <div style="margin-top:18px"><button class="btn" style="width:100%" data-action="connect">Take a seat</button></div>
+      </div>
+    </div>`;
+}
+
+// ---------- lobby ----------
+function renderLobby(v) {
+  const isHost = v.you !== null && v.you === v.hostSeat;
+  const isPJ = S.party === "pegs-and-jokers";
+  const counts = isPJ ? [4] : GAMES[S.party].players;
+  const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
+
+  const seats = v.seats
+    .map((s, i) => {
+      const you = i === v.you;
+      const isEmpty = s.kind === "empty";
+      const av = isEmpty
+        ? `<div class="avatar" style="--av-1:#5a3c22;--av-2:#3f2a17;color:var(--ink-dim);font-size:14px">${i + 1}</div>`
+        : avatarHTML(s.name || "Player", { host: i === v.hostSeat });
+      const role = isEmpty ? "open seat" : s.kind === "bot" ? "computer" : i === v.hostSeat ? "host" : "player";
+      const tags = [];
+      if (you) tags.push(`<span class="chip you">you</span>`);
+      else if (i === v.hostSeat && !isEmpty) tags.push(`<span class="chip host">host</span>`);
+      if (s.kind === "bot") tags.push(`<span class="chip bot">bot</span>`);
+      if (isEmpty) tags.push(`<span class="chip empty">empty</span>`);
+      let ctrl = "";
+      if (isEmpty) {
+        ctrl = `<button class="btn sm" data-action="sit" data-seat="${i}">Sit</button>` +
+          (isHost ? `<button class="btn sm ghost" data-action="addbot" data-seat="${i}">+ Bot</button>` : "");
+      } else if (s.kind === "bot" && isHost) {
+        ctrl = `<button class="btn sm danger" data-action="removebot" data-seat="${i}">Remove</button>`;
+      }
+      return `<div class="seat ${you ? "me" : ""}">${av}
+        <div><div class="nm">${isEmpty ? `Seat ${i + 1}` : esc(s.name || "Player")}</div><div class="rl">${role}</div></div>
+        <div class="tags">${tags.join("")}${ctrl}</div></div>`;
+    })
+    .join("");
+
+  const cfgControls = isPJ
+    ? `<label>Players</label>
+         <div class="seg">${[4, 6].map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="pj-setplayers" data-count="${c}">${c}</button>`).join("")}</div>
+         <p class="sub" style="margin:4px 0 0">${v.players === 6 ? "Two teams of three (alternating seats)." : "Two pairs (partners opposite)."}</p>
+         <label>Marbles per player</label>
+         <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div>`
+    : `<label>Players</label>
+         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>
+         <label>Play to (points)</label>
+         <input class="field" id="f-target" type="number" min="1" value="${v.target}" />`;
+
+  const hostPanel = isHost
+    ? `<div class="panel">
+         <h2>Set up the table</h2>
+         ${cfgControls}
+         <p class="sub" style="margin-top:10px">Anyone can sit in an open seat. Empty seats become bots when you deal.</p>
+         <div style="margin-top:14px"><button class="btn" style="width:100%" data-action="start">${isPJ ? "Deal & start" : "Deal the cards"}</button></div>
+       </div>`
+    : `<div class="panel" style="text-align:center"><p class="sub">Waiting for the host to deal…</p></div>`;
+
+  app.__set = `${appbar(v)}
+    <div class="stage">
+      <div class="panel cream">
+        <h2>Lobby</h2>
+        <p class="sub">Share this link so friends can pull up a chair.</p>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <input class="field" readonly value="${esc(link)}" style="font-size:13px" onclick="this.select()" />
+          <button class="btn sm" data-action="copy-link">Copy</button>
+        </div>
+      </div>
+      <div class="panel"><h2 style="margin-bottom:10px">Seats</h2><div class="seats">${seats}</div></div>
+      ${hostPanel}
+    </div>`;
+}
+
+// ---------- shared: game over ----------
+function scoreList(rows) {
+  return `<div class="seats">${rows
+    .map(
+      (r) => `<div class="seat ${r.you ? "me" : ""}">${avatarHTML(r.name)}
+        <div class="nm">${esc(r.name)}${r.you ? ' <span class="chip you">you</span>' : ""}${r.win ? ' <span class="chip host">winner</span>' : ""}</div>
+        <div class="tags"><b style="font-family:Fraunces,serif;font-size:22px;color:${r.win ? "var(--brass-hi)" : "var(--ink)"}">${r.score}</b></div></div>`,
+    )
+    .join("")}</div>`;
+}
+
+function renderGameOver(v, title, scoresHTML) {
+  const isHost = v.you !== null && v.you === v.hostSeat;
+  app.__set = `${appbar(v)}
+    <div class="stage">
+      <div class="panel cream" style="text-align:center">
+        <div class="hero"><div class="logo">\u2660</div><h1>${esc(title)}</h1><p class="sub">Good game.</p></div>
+      </div>
+      <div class="panel"><h2 style="margin-bottom:10px">Final scores</h2>${scoresHTML}</div>
+      <div class="panel" style="text-align:center">${
+        isHost ? `<button class="btn" data-action="newgame">Deal a new game</button>` : `<p class="sub">Waiting for the host to deal again…</p>`
+      }</div>
+    </div>`;
+}
+
+// ---------- High Low Jack ----------
+function renderHLJ(v) {
+  if (v.phase === "gameOver") {
+    const w = v.winner;
+    const you = v.you;
+    const rows = [
+      { name: "Team A", score: v.scores[0], win: w === 0, you: you != null && you % 2 === 0 },
+      { name: "Team B", score: v.scores[1], win: w === 1, you: you != null && you % 2 === 1 },
+    ];
+    return renderGameOver(v, w == null ? "Game over" : `Team ${w === 0 ? "A" : "B"} wins!`, scoreList(rows));
+  }
+
+  const lm = v.yourTurn ? v.legalMoves : [];
+  const bids = lm.filter((m) => m.type === "bid");
+  const canPass = lm.some((m) => m.type === "pass");
+  const trumpChoices = lm.filter((m) => m.type === "selectTrump");
+  const plays = new Set(lm.filter((m) => m.type === "play").map((m) => cardKey(m.card)));
+  const highBid = v.highBid ? `${v.highBid.amount} (${esc(seatName(v, v.highBid.seat))})` : "\u2014";
+
+  const teamLetter = (i) => (i % 2 === 0 ? "A" : "B");
+
+  // pods (everyone but you), tagged with their team
+  const pods = v.seats
+    .map((s, i) =>
+      i === v.you
+        ? ""
+        : podHTML(v, i, {
+            active: i === v.toAct,
+            dealer: i === v.dealerSeat,
+            team: teamLetter(i),
+            partner: v.you != null && i % 2 === v.you % 2,
+            count: v.handCounts[i],
+            note: v.phase === "bidding" && v.signals[i] ? v.signals[i] : null,
+          }),
+    )
+    .filter(Boolean);
+
+  // center: trump + team scores, then the trick (or the last completed trick)
+  const you = v.you;
+  const myTeam = you != null ? you % 2 : null;
+  const trumpCrest = `<span class="crest"><span class="suit ${v.trump && RED.has(v.trump) ? "red" : "blk"}">${v.trump ? SUIT[v.trump] : "\u2014"}</span> trump</span>`;
+  const teamCrest = (t) =>
+    `<span class="crest score t${t === 0 ? "A" : "B"} ${myTeam === t ? "mine" : ""}"><span class="teamdot t${t === 0 ? "A" : "B"}"></span>Team ${t === 0 ? "A" : "B"} ${v.scores[t]}${myTeam === t ? " \u00b7 you" : ""}</span>`;
+  const bidCrest = v.phase === "bidding" ? `<span class="crest">high bid: ${highBid}</span>` : "";
+  let trick;
+  if (v.currentTrick.length) {
+    trick = `<div class="trick">${v.currentTrick
+      .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true })}<span class="who t${teamLetter(p.seat)}">${esc(seatName(v, p.seat))}</span></div>`)
+      .join("")}</div>`;
+  } else if (v.phase !== "bidding" && v.lastTrick) {
+    trick = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
+      .map((c) => `<div class="play">${cardHTML(c, { mini: true })}</div>`)
+      .join("")}</div></div>`;
+  } else {
+    trick = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
+  }
+  const center = `<div class="crestrow">${trumpCrest}${teamCrest(0)}${teamCrest(1)}${bidCrest}</div>${trick}`;
+
+  // hand (fanned), dim non-legal cards while it's your turn to play
+  const hand = fanHand(v.yourHand, (c) => ({
+    playable: plays.has(cardKey(c)),
+    dim: plays.size > 0 && !plays.has(cardKey(c)),
+    action: plays.has(cardKey(c)) ? "play-card" : "",
+    key: cardKey(c),
+  }));
+
+  // actions
+  const acts = [];
+  if (v.yourTurn) {
+    bids.forEach((m) => acts.push(`<button class="btn sm" data-action="move-bid" data-amount="${m.amount}">Bid ${m.amount}</button>`));
+    if (canPass) acts.push(`<button class="btn ghost sm" data-action="move-pass">Pass</button>`);
+    if (trumpChoices.length) {
+      acts.push(`<span class="hint">Choose trump:</span>`);
+      trumpChoices.forEach((m) =>
+        acts.push(`<button class="btn sm" data-action="move-trump" data-suit="${m.suit}"><span style="font-size:18px;color:${RED.has(m.suit) ? "var(--suit-red)" : "#2a2018"}">${SUIT[m.suit]}</span></button>`),
+      );
+    }
+    if (plays.size) acts.push(`<span class="hint">Tap a glowing card to play.</span>`);
+  }
+  if (v.phase === "bidding" && v.you != null) {
+    acts.push(`<span class="hint">Signal partner:</span>`);
+    ["strong", "medium", "weak"].forEach((l) =>
+      acts.push(`<button class="btn ghost sm" data-action="signal" data-level="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`),
+    );
+  }
+
+  const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
+  const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
+  const selfMeta =
+    you != null
+      ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>`
+      : `play to ${v.target}`;
+  const selfTurn = v.yourTurn
+    ? `<span class="turnflag">Your turn</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+}
+
+// ---------- Rummy 500 ----------
+function renderRummy(v) {
+  // prune stale selections (cards no longer in hand)
+  const handIds = new Set(v.yourHand.map((c) => c.id));
+  for (const id of [...S.rummySel]) if (!handIds.has(id)) S.rummySel.delete(id);
+
+  if (v.phase === "gameOver") {
+    const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
+  }
+
+  const lm = v.yourTurn ? v.legalMoves : [];
+  const canStock = lm.some((m) => m.type === "drawStock");
+  const discardDraw = lm.find((m) => m.type === "drawDiscard");
+  const top = v.discard.length ? v.discard[v.discard.length - 1] : null;
+  const inPlay = v.yourTurn && v.turnPhase === "play";
+
+  const pods = v.seats
+    .map((s, i) =>
+      i === v.you
+        ? ""
+        : podHTML(v, i, {
+            active: i === v.toAct,
+            dealer: i === v.dealerSeat,
+            count: v.handCounts[i],
+            pts: v.scores[i],
+            note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
+          }),
+    )
+    .filter(Boolean);
+
+  // center: stock + discard piles, then melds on the felt
+  const stock = `<div class="pile">
+      <div class="lbl">Stock</div>
+      <div class="stockwrap" ${canStock ? `data-action="draw-stock" style="cursor:pointer"` : ""}>
+        ${v.stockCount > 1 ? cardHTML({}, { back: true, style: "position:absolute;top:3px;left:3px;opacity:.6" }) : ""}
+        ${v.stockCount > 0 ? cardHTML({}, { back: true }) : `<div class="card" style="opacity:.22"></div>`}
+      </div>
+      <div class="pts">${v.stockCount} left</div>
+    </div>`;
+  const discard = `<div class="pile">
+      <div class="lbl">Discard</div>
+      ${top ? cardHTML(top, { action: discardDraw ? "draw-discard" : "", id: top.id, playable: !!discardDraw }) : `<div class="card" style="opacity:.22"></div>`}
+      <div class="pts">${v.discard.length}</div>
+    </div>`;
+  const melds = v.melds.length
+    ? `<div class="melds">${v.melds
+        .map((m) => {
+          const active = S.rummyLayoff === m.id;
+          const cards = m.cards.map((c) => cardHTML(c, { mini: true })).join("");
+          return `<div class="meld ${inPlay ? "tappable" : ""} ${active ? "target" : ""}" ${inPlay ? `data-action="select-meld" data-meldid="${m.id}"` : ""}><div class="row">${cards}</div><span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
+        })
+        .join("")}</div>`
+    : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
+  const center = `<div class="piles">${stock}${discard}</div>${melds}`;
+
+  // hand (fanned), highlight the must-meld card, dim when not your play turn
+  const hand = fanHand(v.yourHand, (c) => ({
+    action: "toggle-card",
+    id: c.id,
+    sel: S.rummySel.has(c.id),
+    must: c.id === v.mustMeldCardId,
+    playable: inPlay,
+    dim: !inPlay && !S.rummySel.has(c.id),
+  }));
+
+  // actions
+  const acts = [];
+  if (v.yourTurn && v.turnPhase === "draw") {
+    if (canStock) acts.push(`<button class="btn" data-action="draw-stock">Draw stock</button>`);
+    if (discardDraw && top) acts.push(`<button class="btn ghost" data-action="draw-discard" data-cardid="${top.id}">Take ${rankLabel(top.rank)}${SUIT[top.suit]}</button>`);
+    acts.push(`<span class="hint">Draw to begin your turn.</span>`);
+  } else if (inPlay) {
+    const n = S.rummySel.size;
+    acts.push(`<button class="btn" data-action="meld-selected" ${n >= 3 ? "" : "disabled"}>Meld${n ? ` (${n})` : ""}</button>`);
+    acts.push(`<button class="btn ghost" data-action="layoff-selected" ${n >= 1 && S.rummyLayoff !== null ? "" : "disabled"}>Lay off</button>`);
+    acts.push(`<button class="btn" data-action="discard-selected" ${n === 1 ? "" : "disabled"}>Discard</button>`);
+    if (n) acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    if (v.mustMeldCardId != null) acts.push(`<span class="hint">The green card must be melded or laid off before you discard.</span>`);
+    else acts.push(`<span class="hint">Select cards \u2192 Meld (3+), Lay off (tap a meld), or Discard (one).</span>`);
+  }
+
+  const selfMeta = v.you != null ? `Score ${v.scores[v.you]} \u00b7 play to ${v.target}` : `play to ${v.target}`;
+  const selfTurn = v.yourTurn
+    ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+}
+
+// ---------- actions ----------
+// ---------- Hearts (Black Lady) ----------
+// Pass direction from the seat offset the server reports (0 = a "hold" hand).
+const passDir = (offset, players) =>
+  offset === 0 ? "hold" : offset === 1 ? "left" : offset === players - 1 ? "right" : "across";
+
+function renderHearts(v) {
+  // Prune stale pass selections (cards that left the hand after the exchange).
+  const handIds = new Set(v.yourHand.map((c) => c.id));
+  for (const id of [...S.heartsPass]) if (!handIds.has(id)) S.heartsPass.delete(id);
+
+  if (v.phase === "gameOver") {
+    const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
+    // Lowest score wins, so the title still points at v.winner (server picks the min).
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
+  }
+
+  const passing = v.phase === "passing";
+  // Hearts cards carry ids; legalMoves give the playable card ids for this turn.
+  const plays = new Set(
+    (v.yourTurn && !passing ? v.legalMoves : []).filter((m) => m.type === "play").map((m) => m.card),
+  );
+
+  // Pods (everyone but you): running total is the big number; cards left as the
+  // stack count; a small note for who's to play / points taken this hand.
+  const pods = v.seats
+    .map((s, i) =>
+      i === v.you
+        ? ""
+        : podHTML(v, i, {
+            active: i === v.toAct,
+            count: v.handCounts[i],
+            pts: v.scores[i],
+            note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
+          }),
+    )
+    .filter(Boolean);
+
+  // Center: passing prompt, or the crests + the trick (kept showing the last
+  // completed trick for a beat once it's swept, so each card is visible).
+  let center;
+  if (passing) {
+    const dir = passDir(v.passOffset, v.players);
+    center = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <span class="crest">passing <b>${dir}</b></span>
+        <span class="crest">hand ${v.handNo + 1}</span>
+      </div>
+      <div class="callout">${
+        v.youPassed ? "Your cards are away \u2014 waiting for the table." : `Choose 3 cards to pass ${dir}.`
+      }</div>`;
+  } else {
+    const broken = `<span class="crest"><span class="suit red">\u2665</span> ${v.heartsBroken ? "broken" : "not broken"}</span>`;
+    const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${broken}<span class="crest">hand ${v.handNo + 1}</span></div>`;
+    const showLast = v.currentTrick.length === 0 && v.lastTrick;
+    const cards = v.currentTrick.length ? v.currentTrick : showLast ? v.lastTrick.cards : [];
+    const trick = cards.length
+      ? `<div class="trick">${cards
+          .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true })}<span class="who">${esc(seatName(v, p.seat))}</span></div>`)
+          .join("")}</div>`
+      : `<div class="callout">Lead a card to open the trick.</div>`;
+    const note = showLast
+      ? `<div class="callout" style="font-size:13px">Trick to ${esc(seatName(v, v.lastTrick.winner))}.</div>`
+      : "";
+    center = `${crests}${trick}${note}`;
+  }
+
+  // Hand: in passing, tap to (de)select up to 3; in play, tap a glowing legal card.
+  const hand = fanHand(v.yourHand, (c) => {
+    if (passing) {
+      return { action: v.youPassed ? "" : "toggle-pass", id: c.id, sel: S.heartsPass.has(c.id), playable: !v.youPassed, dim: v.youPassed };
+    }
+    const can = plays.has(c.id);
+    return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
+  });
+
+  // Actions.
+  const acts = [];
+  if (passing && !v.youPassed) {
+    const n = S.heartsPass.size;
+    acts.push(`<button class="btn" data-action="pass-3" ${v.yourTurn && n === 3 ? "" : "disabled"}>Pass 3${n ? ` (${n})` : ""}</button>`);
+    if (n) acts.push(`<button class="btn ghost sm" data-action="clear-pass">Clear</button>`);
+    acts.push(`<span class="hint">${v.yourTurn ? "Select exactly 3 cards to pass." : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
+  } else if (passing) {
+    acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
+  } else if (v.yourTurn && plays.size) {
+    acts.push(`<span class="hint">Tap a glowing card to play.</span>`);
+  }
+
+  const you = v.you;
+  const selfMeta = you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`;
+  const selfTurn = v.yourTurn
+    ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
+
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+}
+
+// ---------- Pegs & Jokers ----------
+const pjCardLabel = (c) => (!c ? "" : c.joker ? "Joker" : `${rankLabel(c.rank)}${SUIT[c.suit]}`);
+
+function pegXY(board, peg) {
+  if (peg.loc.z === "ring") return board.ring[peg.loc.r];
+  if (peg.loc.z === "castle") return board.castles[peg.owner][peg.loc.i];
+  return board.starts[peg.owner][peg.loc.i];
+}
+
+// A painted golf tee standing in a hole: contact shadow, tapered shaft, a
+// cupped head with paint sheen and a gloss highlight. Color drives gradient
+// stops via CSS vars so one gradient serves every seat color.
+function pjTee(x, y, color, glow) {
+  const top = y - 3.6, hr = 2.15;
+  const f = (n) => n.toFixed(2);
+  return `<g style="--tc:${color};--tc-hi:${shade(color, 48)};--tc-sh:${shade(color, -42)}" ${glow ? 'filter="url(#pjglow)"' : ""}>
+    <ellipse cx="${f(x + 0.5)}" cy="${f(y + 0.6)}" rx="2.4" ry="0.85" fill="#000" opacity="0.34"/>
+    <path d="M ${f(x - 0.62)},${f(top)} L ${f(x + 0.62)},${f(top)} L ${f(x + 0.2)},${f(y + 0.2)} L ${f(x - 0.2)},${f(y + 0.2)} Z" fill="var(--tc-sh)"/>
+    <path d="M ${f(x - 0.62)},${f(top)} L ${f(x - 0.05)},${f(top)} L ${f(x - 0.08)},${f(y + 0.2)} L ${f(x - 0.2)},${f(y + 0.2)} Z" fill="var(--tc)" opacity="0.55"/>
+    <ellipse cx="${f(x)}" cy="${f(top)}" rx="${hr}" ry="${f(hr * 0.74)}" fill="url(#pjhead)" stroke="${glow ? "#fff" : "#180f08"}" stroke-width="${glow ? 0.65 : 0.32}"/>
+    <ellipse cx="${f(x)}" cy="${f(top - 0.22)}" rx="${f(hr * 0.6)}" ry="${f(hr * 0.36)}" fill="#000" opacity="0.18"/>
+    <ellipse cx="${f(x - 0.55)}" cy="${f(top - 0.5)}" rx="0.85" ry="0.5" fill="#fff" opacity="0.62"/>
+  </g>`;
+}
+
+// The dark-wood board: a grained, beveled rectangular frame assembled from
+// trapezoidal panels (slanted seams), a recessed table showing through the
+// hollow, wooden castle arms, drilled holes with depth, and golf-tee pegs.
+function pjBoardSVG(v, glow) {
+  const b = v.board;
+  const W = b.viewW, H = b.viewH, C = b.center, P = b.players;
+  const f = (n) => n.toFixed(2);
+  const hole = (h) => `<g>
+      <circle cx="${f(h.x)}" cy="${f(h.y)}" r="1.75" fill="url(#pjhole)"/>
+      <circle cx="${f(h.x - 0.18)}" cy="${f(h.y - 0.18)}" r="1.75" fill="none" stroke="var(--wood-hi)" stroke-width="0.22" opacity="0.35"/>
+    </g>`;
+  let s = `<svg class="pjsvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <linearGradient id="pjwood" x1="0" y1="0" x2="0.7" y2="1">
+        <stop offset="0%" stop-color="var(--wood-3)"/><stop offset="45%" stop-color="var(--wood-2)"/><stop offset="100%" stop-color="var(--wood-1)"/>
+      </linearGradient>
+      <radialGradient id="pjtable" cx="50%" cy="46%" r="65%">
+        <stop offset="0%" stop-color="#3c2611"/><stop offset="72%" stop-color="#241608"/><stop offset="100%" stop-color="var(--wood-0)"/>
+      </radialGradient>
+      <radialGradient id="pjhole" cx="42%" cy="38%" r="62%">
+        <stop offset="0%" stop-color="#070402"/><stop offset="65%" stop-color="#130c06"/><stop offset="100%" stop-color="#2a1a0d"/>
+      </radialGradient>
+      <linearGradient id="pjhead" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--tc-hi)"/><stop offset="52%" stop-color="var(--tc)"/><stop offset="100%" stop-color="var(--tc-sh)"/>
+      </linearGradient>
+      <linearGradient id="pjsheen" x1="0" y1="0" x2="0.4" y2="1">
+        <stop offset="0%" stop-color="#fff" stop-opacity="0.10"/><stop offset="38%" stop-color="#fff" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.22"/>
+      </linearGradient>
+      <filter id="pjgrain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.018 0.46" numOctaves="2" seed="11" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0"/>
+      </filter>
+      <filter id="pjgrainv" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.4 0.02" numOctaves="2" seed="5" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.42 0"/>
+      </filter>
+      <filter id="pjglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="url(#pjwood)"/>
+    <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="#000" filter="url(#pjgrain)" opacity="0.5" style="mix-blend-mode:multiply"/>
+    <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="url(#pjsheen)"/>
+    <rect x="0.5" y="0.5" width="${f(W - 1)}" height="${f(H - 1)}" rx="4.6" fill="none" stroke="var(--wood-edge)" stroke-width="0.7"/>`;
+  // slanted panel seams: a beveled groove crossing the wood band toward centre
+  for (const sp of b.seams) {
+    const dx = C.x - sp.x, dy = C.y - sp.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+    const ox = sp.x - ux * 8, oy = sp.y - uy * 8, ix = sp.x + ux * 5, iy = sp.y + uy * 5;
+    s += `<line x1="${f(ox)}" y1="${f(oy)}" x2="${f(ix)}" y2="${f(iy)}" stroke="#0b0805" stroke-width="0.8" opacity="0.6"/>`;
+    s += `<line x1="${f(ox + 0.55)}" y1="${f(oy)}" x2="${f(ix + 0.55)}" y2="${f(iy)}" stroke="var(--wood-hi)" stroke-width="0.3" opacity="0.32"/>`;
+  }
+  // recessed table: a dark rim (shadow of the raised frame) then the grained surface
+  const ho = b.hollow;
+  s += `<rect x="${f(ho.x - 1)}" y="${f(ho.y - 1)}" width="${f(ho.w + 2)}" height="${f(ho.h + 2)}" rx="3.6" fill="#000" opacity="0.55"/>`;
+  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="url(#pjtable)"/>`;
+  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="#000" filter="url(#pjgrainv)" opacity="0.4" style="mix-blend-mode:multiply"/>`;
+  s += `<rect x="${f(ho.x + 0.4)}" y="${f(ho.y + 0.4)}" width="${f(ho.w - 0.8)}" height="${f(ho.h - 0.8)}" rx="2.6" fill="none" stroke="#000" stroke-width="0.5" opacity="0.4"/>`;
+  // castle arms: a wooden bar from each rail entry inward to the last heaven hole
+  for (let p = 0; p < P; p++) {
+    const cm = b.ring[b.castleEntries[p]], last = b.castles[p][b.castles[p].length - 1];
+    s += `<line x1="${f(cm.x)}" y1="${f(cm.y + 0.35)}" x2="${f(last.x)}" y2="${f(last.y + 0.35)}" stroke="#000" stroke-width="4.8" stroke-linecap="round" opacity="0.3"/>`;
+    s += `<line x1="${f(cm.x)}" y1="${f(cm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="url(#pjwood)" stroke-width="4.4" stroke-linecap="round"/>`;
+    s += `<line x1="${f(cm.x)}" y1="${f(cm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="var(--wood-hi)" stroke-width="0.5" stroke-linecap="round" opacity="0.25" transform="translate(-0.4,-0.5)"/>`;
+  }
+  // centre hub
+  s += `<circle cx="${C.x}" cy="${C.y}" r="3.6" fill="url(#pjwood)" stroke="var(--wood-edge)" stroke-width="0.4"/>`;
+  s += `<circle cx="${C.x}" cy="${C.y}" r="3.6" fill="#000" filter="url(#pjgrain)" opacity="0.4" style="mix-blend-mode:multiply"/>`;
+  // holes: ring, then each player's castle + start
+  for (const h of b.ring) s += hole(h);
+  for (let p = 0; p < P; p++) { for (const h of b.castles[p]) s += hole(h); for (const h of b.starts[p]) s += hole(h); }
+  // exit collars (colored ring marking where each player joins the track)
+  for (let p = 0; p < P; p++) { const h = b.ring[b.exits[p]]; s += `<circle cx="${f(h.x)}" cy="${f(h.y)}" r="2.5" fill="none" stroke="${PJ_PEG[p]}" stroke-width="0.55" opacity="0.9"/>`; }
+  // pegs as golf tees
+  for (const peg of v.pegs) { const h = pegXY(b, peg); s += pjTee(h.x, h.y, PJ_PEG[peg.owner], glow.has(peg.owner + ":" + peg.idx)); }
+  s += `</svg>`;
+  return s;
+}
+
+function pjMoveLabel(v, m) {
+  const tag = (ref) => `peg ${ref.idx + 1}${ref.owner !== v.you ? " (partner)" : ""}`;
+  const cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+  if (m.type === "move") return `${cap(tag(m.marble))} \u2192 ahead ${m.steps}`;
+  if (m.type === "comeOut") return `Bring ${tag(m.marble)} out`;
+  if (m.type === "split7") return `Split 7: ${tag(m.a.marble)} +${m.a.steps}, ${tag(m.b.marble)} +${m.b.steps}`;
+  if (m.type === "joker") {
+    const victim = v.pegs.find((p) => p.loc.z === "ring" && p.loc.r === m.target);
+    return `Joker: send ${victim ? esc(seatName(v, victim.owner)) : "a rival"} home`;
+  }
+  return `Discard ${pjCardLabel(v.yourHand.find((c) => c.id === m.cardId))}`;
+}
+
+function renderPJ(v) {
+  if (v.phase === "gameOver") {
+    const perTeam = (v.players / 2) * v.marbles;
+    const tally = (t) => v.homeCounts.reduce((a, c, p) => a + (p % 2 === t ? c : 0), 0);
+    const seatsOf = (t) => v.seats.map((_, i) => i).filter((i) => i % 2 === t).map((i) => i + 1).join(" & ");
+    const rows = [
+      { name: `Team A \u00b7 seats ${seatsOf(0)}`, score: `${tally(0)}/${perTeam}`, win: v.winner === 0, you: v.you != null && v.you % 2 === 0 },
+      { name: `Team B \u00b7 seats ${seatsOf(1)}`, score: `${tally(1)}/${perTeam}`, win: v.winner === 1, you: v.you != null && v.you % 2 === 1 },
+    ];
+    return renderGameOver(v, v.winner == null ? "Game over" : `Team ${v.winner === 0 ? "A" : "B"} wins!`, scoreList(rows));
+  }
+
+  const yours = v.yourTurn;
+  const allForfeit = yours && v.legalMoves.length > 0 && v.legalMoves.every((m) => m.type === "forfeit");
+  // Keep a stale card selection from sticking if it's no longer in hand.
+  if (S.pjCard != null && !v.yourHand.some((c) => c.id === S.pjCard)) S.pjCard = null;
+  const candidates = !yours ? [] : allForfeit ? v.legalMoves : S.pjCard == null ? [] : v.legalMoves.filter((m) => m.cardId === S.pjCard);
+  S.pjMoves = candidates;
+
+  const glow = new Set();
+  for (const m of candidates) {
+    if (m.type === "split7") { glow.add(m.a.marble.owner + ":" + m.a.marble.idx); glow.add(m.b.marble.owner + ":" + m.b.marble.idx); }
+    else if (m.marble) glow.add(m.marble.owner + ":" + m.marble.idx);
+  }
+
+  // top rail: a strip of seats with peg color, name, and pegs-home count
+  const strip = v.seats
+    .map((s, i) => `<div class="pjseat ${i === v.toAct ? "active" : ""} ${i === v.you ? "me" : ""}">
+        <span class="dot" style="background:${PJ_PEG[i]}"></span>
+        <span class="nm">${esc(seatName(v, i))}</span><span class="hm">${v.homeCounts[i]}/${v.marbles}</span>
+      </div>`)
+    .join("");
+  const pods = [`<div class="pjstrip">${strip}</div>`];
+
+  // Authentic scale: show the whole board, as large as the viewport allows.
+  const maxW = `min(94vw, ${((v.board.viewW / v.board.viewH) * 90).toFixed(1)}vh)`;
+  const center = `<div class="pjwrap" style="max-width:${maxW}">${pjBoardSVG(v, glow)}</div>`;
+
+  // hand: tap a usable card to reveal its moves
+  const usable = new Set(v.legalMoves.filter((m) => "cardId" in m).map((m) => m.cardId));
+  const hand = v.yourHand
+    .map((c) => `<span class="pjcardslot" ${yours ? `data-action="pj-pick-card" data-cardid="${c.id}"` : ""}>${cardHTML(c, { playable: yours && usable.has(c.id), dim: yours && !usable.has(c.id), sel: S.pjCard === c.id })}</span>`)
+    .join("");
+
+  const acts = [];
+  if (yours && allForfeit) {
+    acts.push(`<span class="hint">No legal move \u2014 discard a card to pass.</span>`);
+    candidates.forEach((m, i) => acts.push(`<button class="btn ghost sm" data-action="pj-move" data-mi="${i}">Discard ${pjCardLabel(v.yourHand.find((c) => c.id === m.cardId))}</button>`));
+  } else if (yours && S.pjCard == null) {
+    acts.push(`<span class="hint">Tap a glowing card to see its moves.</span>`);
+  } else if (yours && candidates.length === 0) {
+    acts.push(`<span class="hint">No move with that card \u2014 pick another.</span>`);
+  } else if (yours) {
+    candidates.forEach((m, i) => acts.push(`<button class="btn sm" data-action="pj-move" data-mi="${i}">${pjMoveLabel(v, m)}</button>`));
+  }
+
+  const perTeam = (v.players / 2) * v.marbles;
+  const homeMine = v.you != null ? v.homeCounts.reduce((a, c, p) => a + (p % 2 === v.you % 2 ? c : 0), 0) : 0;
+  const selfMeta = v.you != null ? `Team ${v.you % 2 === 0 ? "A" : "B"} \u00b7 ${homeMine}/${perTeam} home \u00b7 first team all-home wins` : `first team all-home wins`;
+  const playingPartner = yours && v.playingFor.length && v.playingFor[0] !== v.you;
+  const selfTurn = yours
+    ? `<span class="turnflag">Your turn${playingPartner ? " \u2014 playing teammate" : ""}</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+}
+
+function doConnect() {
+  const name = document.getElementById("f-name").value.trim();
+  const game = document.getElementById("f-game").value;
+  let room = document.getElementById("f-room").value.trim();
+  if (!name) return toast("Enter a name first.");
+  if (!GAMES[game]) return toast("Pick a game.");
+  if (!room) room = Math.random().toString(36).slice(2, 7);
+  S.name = name;
+  S.party = game;
+  S.room = room;
+  localStorage.setItem("cg_name", name);
+  history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
+  connect();
+}
+
+function copyLink() {
+  const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
+  navigator.clipboard?.writeText(link).then(() => toast("Link copied."), () => toast(link));
+}
+
+function doLeave() {
+  S.intentionalClose = true;
+  send({ t: "leave" });
+  try { S.ws?.close(); } catch {}
+  S.view = null;
+  S.connected = false;
+  S.party = null;
+  history.replaceState(null, "", "/");
+  renderStart();
+}
+
+function doStart() {
+  if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: S.view.players, marbles: S.view.marbles } });
+  const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
+  send({ t: "start", config: { players: S.view.players, target } });
+}
+
+function toggleSel(id) {
+  if (S.rummySel.has(id)) S.rummySel.delete(id);
+  else S.rummySel.add(id);
+  render();
+}
+function doMeld() {
+  const cards = [...S.rummySel];
+  if (cards.length < 3) return toast("Select at least 3 cards to meld.");
+  send({ t: "move", move: { type: "meld", seat: S.view.you, cards } });
+  S.rummySel.clear();
+}
+function doLayoff() {
+  if (S.rummyLayoff === null) return toast("Tap a table meld to lay onto.");
+  const cards = [...S.rummySel];
+  if (!cards.length) return toast("Select cards to lay off.");
+  send({ t: "move", move: { type: "layoff", seat: S.view.you, meldId: S.rummyLayoff, cards } });
+  S.rummySel.clear();
+  S.rummyLayoff = null;
+}
+function doDiscard() {
+  if (S.rummySel.size !== 1) return toast("Select exactly one card to discard.");
+  const cardId = [...S.rummySel][0];
+  send({ t: "move", move: { type: "discard", seat: S.view.you, cardId } });
+  S.rummySel.clear();
+}
+
+// ---------- delegated events ----------
+app.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-action]");
+  if (!t) return;
+  const v = S.view;
+  switch (t.dataset.action) {
+    case "pick-game": S.pickGame = t.dataset.game; return renderStart();
+    case "toggle-log": S.showLog = !S.showLog; return render();
+    case "connect": return doConnect();
+    case "copy-link": return copyLink();
+    case "leave": return doLeave();
+    case "sit": return send({ t: "sit", seat: +t.dataset.seat });
+    case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
+    case "removebot": return send({ t: "removeBot", seat: +t.dataset.seat });
+    case "setcount": {
+      const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
+      return send({ t: "setConfig", config: { players: +t.dataset.count, target } });
+    }
+    case "start": return doStart();
+    case "newgame": return send({ t: "newGame" });
+    case "move-bid": return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
+    case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
+    case "move-trump": return send({ t: "move", move: { type: "selectTrump", seat: v.you, suit: t.dataset.suit } });
+    case "signal": return send({ t: "aux", payload: t.dataset.level });
+    case "play-card": {
+      const c = v.yourHand.find((x) => cardKey(x) === t.dataset.key);
+      if (c) send({ t: "move", move: { type: "play", seat: v.you, card: c } });
+      return;
+    }
+    case "draw-stock": return send({ t: "move", move: { type: "drawStock", seat: v.you } });
+    case "draw-discard": return send({ t: "move", move: { type: "drawDiscard", seat: v.you, cardId: +t.dataset.cardid } });
+    case "toggle-card": return toggleSel(+t.dataset.cardid);
+    case "select-meld": S.rummyLayoff = S.rummyLayoff === +t.dataset.meldid ? null : +t.dataset.meldid; return render();
+    case "meld-selected": return doMeld();
+    case "layoff-selected": return doLayoff();
+    case "discard-selected": return doDiscard();
+    case "clear-sel": S.rummySel.clear(); S.rummyLayoff = null; return render();
+    case "toggle-pass": {
+      const id = +t.dataset.cardid;
+      if (S.heartsPass.has(id)) S.heartsPass.delete(id);
+      else if (S.heartsPass.size >= 3) return toast("You pass exactly 3 cards.");
+      else S.heartsPass.add(id);
+      return render();
+    }
+    case "pass-3": {
+      if (S.heartsPass.size !== 3) return toast("Select exactly 3 cards to pass.");
+      send({ t: "move", move: { type: "pass", seat: v.you, cards: [...S.heartsPass] } });
+      S.heartsPass.clear();
+      return;
+    }
+    case "clear-pass": S.heartsPass.clear(); return render();
+    case "play-hearts": return send({ t: "move", move: { type: "play", seat: v.you, card: +t.dataset.cardid } });
+    case "pj-setplayers": return send({ t: "setConfig", config: { players: +t.dataset.count, marbles: v.marbles } });
+    case "pj-setmarbles": return send({ t: "setConfig", config: { players: v.players, marbles: +t.dataset.m } });
+    case "pj-pick-card": S.pjCard = S.pjCard === +t.dataset.cardid ? null : +t.dataset.cardid; return render();
+    case "pj-move": {
+      const m = S.pjMoves[+t.dataset.mi];
+      if (m) send({ t: "move", move: m });
+      S.pjCard = null;
+      return;
+    }
+  }
+});
+
+// keep the host's "play to" value in the shared lobby config (so re-renders don't lose it)
+app.addEventListener("change", (e) => {
+  if (e.target.id === "f-target" && S.view && S.view.phase === "lobby") {
+    const target = parseInt(e.target.value, 10);
+    if (target > 0) send({ t: "setConfig", config: { players: S.view.players, target } });
+  }
+});
+
+// ---------- init ----------
+function init() {
+  S.pid = localStorage.getItem("cg_pid");
+  if (!S.pid) {
+    S.pid = (crypto.randomUUID && crypto.randomUUID()) || `p_${Math.random().toString(36).slice(2)}${Date.now()}`;
+    localStorage.setItem("cg_pid", S.pid);
+  }
+  S.name = localStorage.getItem("cg_name") || "";
+  const q = new URLSearchParams(location.search);
+  const game = q.get("game");
+  const room = q.get("room");
+  if (game && GAMES[game]) { S.party = game; S.pickGame = game; }
+  if (room) S.room = room;
+  if (S.party && S.room && S.name) connect();
+  else { S.party = S.party || null; renderStart(); }
+}
+
+const __VIEWS = {"lobby":{"party":"hearts","view":{"you":0,"players":4,"phase":"lobby","target":100,"seats":[{"kind":"human","name":"Ada"},{"kind":"bot","name":"Bram"},{"kind":"bot","name":"Cleo"},{"kind":"bot","name":"Dev"}],"hostSeat":0,"scores":[0,0,0,0],"winner":null,"handNo":0,"passOffset":0,"toAct":null,"yourTurn":false,"legalMoves":[],"yourHand":[],"handCounts":[0,0,0,0],"youPassed":false,"leader":0,"currentTrick":[],"lastTrick":null,"heartsBroken":false,"trickNo":0,"points":[0,0,0,0],"lastHand":null,"log":[]}},"hljbid":{"party":"high-low-jack","view":{"you":0,"players":4,"phase":"bidding","target":21,"seats":[{"kind":"human","name":"Ada"},{"kind":"bot","name":"Bram"},{"kind":"bot","name":"Cleo"},{"kind":"bot","name":"Dev"}],"hostSeat":0,"scores":[0,0],"winner":null,"dealerSeat":0,"trump":null,"toAct":1,"yourTurn":false,"legalMoves":[],"yourHand":[{"rank":12,"suit":"S"},{"rank":11,"suit":"S"},{"rank":13,"suit":"H"},{"rank":11,"suit":"C"},{"rank":13,"suit":"D"},{"rank":12,"suit":"D"}],"handCounts":[6,6,6,6],"highBid":null,"signals":[null,null,null,null],"currentTrick":[],"lastTrick":null,"lastHand":null,"log":[{"id":1,"seat":0,"msg":"deals the first hand"}]}},"hljplay":{"party":"high-low-jack","view":{"you":0,"players":4,"phase":"playing","target":21,"seats":[{"kind":"human","name":"Ada"},{"kind":"bot","name":"Bram"},{"kind":"bot","name":"Cleo"},{"kind":"bot","name":"Dev"}],"hostSeat":0,"scores":[18,12],"winner":null,"dealerSeat":2,"trump":"S","toAct":3,"yourTurn":false,"legalMoves":[],"yourHand":[{"rank":13,"suit":"D"}],"handCounts":[1,1,0,1],"highBid":{"seat":2,"amount":2},"signals":[null,null,null,null],"currentTrick":[{"seat":2,"card":{"rank":13,"suit":"C"}}],"lastTrick":{"winner":2,"cards":[{"rank":12,"suit":"H"},{"rank":9,"suit":"H"},{"rank":10,"suit":"H"},{"rank":13,"suit":"H"}]},"lastHand":{"bidderSeat":0,"bidderTeam":0,"bid":2,"pointsByTeam":[6,0],"made":true,"deltaByTeam":[6,0],"detail":{"high":0,"low":0,"jack":0,"bonhomme":0,"game":0}},"log":[{"id":148,"seat":2,"msg":"played","cards":[{"rank":13,"suit":"S"}]},{"id":149,"seat":3,"msg":"takes the trick"},{"id":150,"seat":3,"msg":"played","cards":[{"rank":11,"suit":"D"}]},{"id":151,"seat":0,"msg":"played","cards":[{"rank":10,"suit":"H"}]},{"id":152,"seat":1,"msg":"played","cards":[{"rank":13,"suit":"D"}]},{"id":153,"seat":2,"msg":"played","cards":[{"rank":14,"suit":"D"}]},{"id":154,"seat":null,"msg":"Team B bid 2 — made it"},{"id":155,"seat":null,"msg":"High→B    Low→B    Jack→B    Joker→B    Game→B"},{"id":156,"seat":null,"msg":"Score — A 14, B 7"},{"id":157,"seat":0,"msg":"deals the next hand"},{"id":158,"seat":1,"msg":"passed"},{"id":159,"seat":2,"msg":"passed"},{"id":160,"seat":3,"msg":"passed"},{"id":161,"seat":0,"msg":"bid 2"},{"id":162,"seat":0,"msg":"wins the bid at 2"},{"id":163,"seat":0,"msg":"called trump","suit":"S"},{"id":164,"seat":0,"msg":"played","cards":[{"rank":14,"suit":"D"}]},{"id":165,"seat":1,"msg":"played","cards":[{"rank":9,"suit":"S"}]},{"id":166,"seat":2,"msg":"played","cards":[{"rank":10,"suit":"D"}]},{"id":167,"seat":3,"msg":"played","cards":[{"joker":true}]},{"id":168,"seat":1,"msg":"takes the trick"},{"id":169,"seat":1,"msg":"played","cards":[{"rank":14,"suit":"S"}]},{"id":170,"seat":2,"msg":"played","cards":[{"rank":8,"suit":"C"}]},{"id":171,"seat":3,"msg":"played","cards":[{"rank":11,"suit":"S"}]},{"id":172,"seat":0,"msg":"played","cards":[{"rank":8,"suit":"S"}]},{"id":173,"seat":1,"msg":"takes the trick"},{"id":174,"seat":1,"msg":"played","cards":[{"rank":9,"suit":"C"}]},{"id":175,"seat":2,"msg":"played","cards":[{"rank":12,"suit":"C"}]},{"id":176,"seat":3,"msg":"played","cards":[{"rank":8,"suit":"H"}]},{"id":177,"seat":0,"msg":"played","cards":[{"rank":11,"suit":"C"}]},{"id":178,"seat":2,"msg":"takes the trick"},{"id":179,"seat":2,"msg":"played","cards":[{"rank":11,"suit":"H"}]},{"id":180,"seat":3,"msg":"played","cards":[{"rank":10,"suit":"H"}]},{"id":181,"seat":0,"msg":"played","cards":[{"rank":9,"suit":"H"}]},{"id":182,"seat":1,"msg":"played","cards":[{"rank":13,"suit":"D"}]},{"id":183,"seat":2,"msg":"takes the trick"},{"id":184,"seat":2,"msg":"played","cards":[{"rank":12,"suit":"H"}]},{"id":185,"seat":3,"msg":"played","cards":[{"rank":9,"suit":"D"}]},{"id":186,"seat":0,"msg":"played","cards":[{"rank":12,"suit":"S"}]},{"id":187,"seat":1,"msg":"played","cards":[{"rank":13,"suit":"C"}]},{"id":188,"seat":0,"msg":"takes the trick"},{"id":189,"seat":0,"msg":"played","cards":[{"rank":13,"suit":"S"}]},{"id":190,"seat":1,"msg":"played","cards":[{"rank":10,"suit":"C"}]},{"id":191,"seat":2,"msg":"played","cards":[{"rank":13,"suit":"H"}]},{"id":192,"seat":3,"msg":"played","cards":[{"rank":11,"suit":"D"}]},{"id":193,"seat":null,"msg":"Team A bid 2 — set back"},{"id":194,"seat":null,"msg":"High→B    Low→B    Jack→B    Joker→B    Game→A"},{"id":195,"seat":null,"msg":"Score — A 12, B 12"},{"id":196,"seat":1,"msg":"deals the next hand"},{"id":197,"seat":2,"msg":"passed"},{"id":198,"seat":3,"msg":"passed"},{"id":199,"seat":0,"msg":"bid 2"},{"id":200,"seat":1,"msg":"passed"},{"id":201,"seat":0,"msg":"wins the bid at 2"},{"id":202,"seat":0,"msg":"called trump","suit":"C"},{"id":203,"seat":0,"msg":"played","cards":[{"rank":14,"suit":"C"}]},{"id":204,"seat":1,"msg":"played","cards":[{"rank":12,"suit":"C"}]},{"id":205,"seat":2,"msg":"played","cards":[{"rank":10,"suit":"C"}]},{"id":206,"seat":3,"msg":"played","cards":[{"rank":8,"suit":"D"}]},{"id":207,"seat":0,"msg":"takes the trick"},{"id":208,"seat":0,"msg":"played","cards":[{"rank":14,"suit":"H"}]},{"id":209,"seat":1,"msg":"played","cards":[{"rank":13,"suit":"H"}]},{"id":210,"seat":2,"msg":"played","cards":[{"rank":13,"suit":"S"}]},{"id":211,"seat":3,"msg":"played","cards":[{"rank":10,"suit":"H"}]},{"id":212,"seat":0,"msg":"takes the trick"},{"id":213,"seat":0,"msg":"played","cards":[{"rank":8,"suit":"H"}]},{"id":214,"seat":1,"msg":"played","cards":[{"rank":9,"suit":"D"}]},{"id":215,"seat":2,"msg":"played","cards":[{"rank":10,"suit":"S"}]},{"id":216,"seat":3,"msg":"played","cards":[{"rank":11,"suit":"D"}]},{"id":217,"seat":0,"msg":"takes the trick"},{"id":218,"seat":0,"msg":"played","cards":[{"rank":9,"suit":"S"}]},{"id":219,"seat":1,"msg":"played","cards":[{"rank":12,"suit":"S"}]},{"id":220,"seat":2,"msg":"played","cards":[{"rank":8,"suit":"C"}]},{"id":221,"seat":3,"msg":"played","cards":[{"rank":11,"suit":"S"}]},{"id":222,"seat":2,"msg":"takes the trick"},{"id":223,"seat":2,"msg":"played","cards":[{"rank":13,"suit":"C"}]},{"id":224,"seat":3,"msg":"played","cards":[{"rank":12,"suit":"D"}]},{"id":225,"seat":0,"msg":"played","cards":[{"joker":true}]},{"id":226,"seat":1,"msg":"played","cards":[{"rank":13,"suit":"D"}]},{"id":227,"seat":2,"msg":"takes the trick"},{"id":228,"seat":2,"msg":"played","cards":[{"rank":9,"suit":"C"}]},{"id":229,"seat":3,"msg":"played","cards":[{"rank":14,"suit":"S"}]},{"id":230,"seat":0,"msg":"played","cards":[{"rank":11,"suit":"C"}]},{"id":231,"seat":1,"msg":"played","cards":[{"rank":10,"suit":"D"}]},{"id":232,"seat":null,"msg":"Team A bid 2 — made it"},{"id":233,"seat":null,"msg":"High→A    Low→A    Jack→A    Joker→A    Game→A"},{"id":234,"seat":null,"msg":"Score — A 18, B 12"},{"id":235,"seat":2,"msg":"deals the next hand"},{"id":236,"seat":3,"msg":"passed"},{"id":237,"seat":0,"msg":"passed"},{"id":238,"seat":1,"msg":"passed"},{"id":239,"seat":2,"msg":"bid 2"},{"id":240,"seat":2,"msg":"wins the bid at 2"},{"id":241,"seat":2,"msg":"called trump","suit":"S"},{"id":242,"seat":2,"msg":"played","cards":[{"rank":9,"suit":"C"}]},{"id":243,"seat":3,"msg":"played","cards":[{"rank":8,"suit":"C"}]},{"id":244,"seat":0,"msg":"played","cards":[{"rank":8,"suit":"D"}]},{"id":245,"seat":1,"msg":"played","cards":[{"rank":12,"suit":"C"}]},{"id":246,"seat":1,"msg":"takes the trick"},{"id":247,"seat":1,"msg":"played","cards":[{"rank":9,"suit":"D"}]},{"id":248,"seat":2,"msg":"played","cards":[{"rank":12,"suit":"D"}]},{"id":249,"seat":3,"msg":"played","cards":[{"rank":11,"suit":"H"}]},{"id":250,"seat":0,"msg":"played","cards":[{"rank":14,"suit":"D"}]},{"id":251,"seat":0,"msg":"takes the trick"},{"id":252,"seat":0,"msg":"played","cards":[{"rank":14,"suit":"H"}]},{"id":253,"seat":1,"msg":"played","cards":[{"rank":10,"suit":"S"}]},{"id":254,"seat":2,"msg":"played","cards":[{"rank":13,"suit":"S"}]},{"id":255,"seat":3,"msg":"played","cards":[{"rank":14,"suit":"S"}]},{"id":256,"seat":3,"msg":"takes the trick"},{"id":257,"seat":3,"msg":"played","cards":[{"rank":12,"suit":"S"}]},{"id":258,"seat":0,"msg":"played","cards":[{"rank":9,"suit":"S"}]},{"id":259,"seat":1,"msg":"played","cards":[{"rank":11,"suit":"S"}]},{"id":260,"seat":2,"msg":"played","cards":[{"rank":8,"suit":"S"}]},{"id":261,"seat":3,"msg":"takes the trick"},{"id":262,"seat":3,"msg":"played","cards":[{"rank":12,"suit":"H"}]},{"id":263,"seat":0,"msg":"played","cards":[{"rank":9,"suit":"H"}]},{"id":264,"seat":1,"msg":"played","cards":[{"rank":10,"suit":"H"}]},{"id":265,"seat":2,"msg":"played","cards":[{"rank":13,"suit":"H"}]},{"id":266,"seat":2,"msg":"takes the trick"},{"id":267,"seat":2,"msg":"played","cards":[{"rank":13,"suit":"C"}]}]}},"rummy":{"party":"rummy500","view":{"you":0,"players":4,"phase":"playing","target":500,"seats":[{"kind":"human","name":"Ada"},{"kind":"bot","name":"Bram"},{"kind":"bot","name":"Cleo"},{"kind":"bot","name":"Dev"}],"hostSeat":0,"scores":[0,0,0,0],"winner":null,"dealerSeat":0,"toAct":2,"turnPhase":"play","yourTurn":false,"legalMoves":[],"yourHand":[{"id":23,"rank":12,"suit":"D"},{"id":45,"rank":8,"suit":"S"},{"id":40,"rank":3,"suit":"S"},{"id":39,"rank":2,"suit":"S"},{"id":15,"rank":4,"suit":"D"},{"id":36,"rank":12,"suit":"H"},{"id":46,"rank":9,"suit":"S"}],"handCounts":[7,4,3,4],"stockCount":15,"discard":[{"id":4,"rank":6,"suit":"C"},{"id":50,"rank":13,"suit":"S"},{"id":22,"rank":11,"suit":"D"},{"id":48,"rank":11,"suit":"S"},{"id":11,"rank":13,"suit":"C"},{"id":47,"rank":10,"suit":"S"},{"id":19,"rank":8,"suit":"D"},{"id":9,"rank":11,"suit":"C"}],"melds":[{"id":0,"kind":"set","owner":2,"cards":[{"id":51,"rank":14,"suit":"S"},{"id":38,"rank":14,"suit":"H"},{"id":12,"rank":14,"suit":"C"},{"id":25,"rank":14,"suit":"D"}]},{"id":1,"kind":"set","owner":3,"cards":[{"id":16,"rank":5,"suit":"D"},{"id":29,"rank":5,"suit":"H"},{"id":3,"rank":5,"suit":"C"},{"id":42,"rank":5,"suit":"S"}]},{"id":2,"kind":"set","owner":1,"cards":[{"id":8,"rank":10,"suit":"C"},{"id":34,"rank":10,"suit":"H"},{"id":21,"rank":10,"suit":"D"}]}],"mustMeldCardId":null,"lastRound":null,"log":[{"id":1,"seat":0,"msg":"deals the first hand"},{"id":2,"seat":1,"msg":"drew from the stock"},{"id":3,"seat":1,"msg":"discarded","cards":[{"id":12,"rank":14,"suit":"C"}]},{"id":4,"seat":2,"msg":"took","cards":[{"id":12,"rank":14,"suit":"C"}],"tail":"from the discard"},{"id":5,"seat":2,"msg":"melded","cards":[{"id":51,"rank":14,"suit":"S"},{"id":38,"rank":14,"suit":"H"},{"id":12,"rank":14,"suit":"C"}]},{"id":6,"seat":2,"msg":"discarded","cards":[{"id":50,"rank":13,"suit":"S"}]},{"id":7,"seat":3,"msg":"drew from the stock"},{"id":8,"seat":3,"msg":"melded","cards":[{"id":16,"rank":5,"suit":"D"},{"id":29,"rank":5,"suit":"H"},{"id":3,"rank":5,"suit":"C"}]},{"id":9,"seat":3,"msg":"discarded","cards":[{"id":22,"rank":11,"suit":"D"}]},{"id":10,"seat":0,"msg":"drew from the stock"},{"id":11,"seat":0,"msg":"discarded","cards":[{"id":48,"rank":11,"suit":"S"}]},{"id":12,"seat":1,"msg":"drew from the stock"},{"id":13,"seat":1,"msg":"discarded","cards":[{"id":11,"rank":13,"suit":"C"}]},{"id":14,"seat":2,"msg":"drew from the stock"},{"id":15,"seat":2,"msg":"laid off","cards":[{"id":25,"rank":14,"suit":"D"}]},{"id":16,"seat":2,"msg":"laid off","cards":[{"id":42,"rank":5,"suit":"S"}]},{"id":17,"seat":2,"msg":"discarded","cards":[{"id":47,"rank":10,"suit":"S"}]},{"id":18,"seat":3,"msg":"drew from the stock"},{"id":19,"seat":3,"msg":"discarded","cards":[{"id":19,"rank":8,"suit":"D"}]},{"id":20,"seat":0,"msg":"drew from the stock"},{"id":21,"seat":0,"msg":"discarded","cards":[{"id":21,"rank":10,"suit":"D"}]},{"id":22,"seat":1,"msg":"took","cards":[{"id":21,"rank":10,"suit":"D"}],"tail":"from the discard"},{"id":23,"seat":1,"msg":"melded","cards":[{"id":8,"rank":10,"suit":"C"},{"id":34,"rank":10,"suit":"H"},{"id":21,"rank":10,"suit":"D"}]},{"id":24,"seat":1,"msg":"discarded","cards":[{"id":9,"rank":11,"suit":"C"}]},{"id":25,"seat":2,"msg":"drew from the stock"}]}},"heartspass":{"party":"hearts","view":{"you":0,"players":4,"phase":"passing","target":100,"seats":[{"kind":"human","name":"Ada"},{"kind":"bot","name":"Bram"},{"kind":"bot","name":"Cleo"},{"kind":"bot","name":"Dev"}],"hostSeat":0,"scores":[0,0,0,0],"winner":null,"handNo":0,"passOffset":1,"toAct":0,"yourTurn":true,"legalMoves":[],"yourHand":[{"id":23,"rank":12,"suit":"D"},{"id":45,"rank":8,"suit":"S"},{"id":40,"rank":3,"suit":"S"},{"id":39,"rank":2,"suit":"S"},{"id":15,"rank":4,"suit":"D"},{"id":36,"rank":12,"suit":"H"},{"id":46,"rank":9,"suit":"S"},{"id":4,"rank":6,"suit":"C"},{"id":32,"rank":8,"suit":"H"},{"id":13,"rank":2,"suit":"D"},{"id":6,"rank":8,"suit":"C"},{"id":10,"rank":12,"suit":"C"},{"id":34,"rank":10,"suit":"H"}],"handCounts":[13,13,13,13],"youPassed":false,"leader":0,"currentTrick":[],"lastTrick":null,"heartsBroken":false,"trickNo":0,"points":[0,0,0,0],"lastHand":null,"log":[{"id":1,"seat":null,"msg":"first hand — passing left"}]}},"heartsplay":{"party":"hearts","view":{"you":0,"players":4,"phase":"playing","target":100,"seats":[{"kind":"human","name":"Ada"},{"kind":"bot","name":"Bram"},{"kind":"bot","name":"Cleo"},{"kind":"bot","name":"Dev"}],"hostSeat":0,"scores":[0,0,0,0],"winner":null,"handNo":0,"passOffset":1,"toAct":0,"yourTurn":true,"legalMoves":[{"type":"play","seat":0,"card":23},{"type":"play","seat":0,"card":45},{"type":"play","seat":0,"card":40},{"type":"play","seat":0,"card":39},{"type":"play","seat":0,"card":15},{"type":"play","seat":0,"card":46},{"type":"play","seat":0,"card":13},{"type":"play","seat":0,"card":6},{"type":"play","seat":0,"card":10}],"yourHand":[{"id":23,"rank":12,"suit":"D"},{"id":45,"rank":8,"suit":"S"},{"id":40,"rank":3,"suit":"S"},{"id":39,"rank":2,"suit":"S"},{"id":15,"rank":4,"suit":"D"},{"id":46,"rank":9,"suit":"S"},{"id":13,"rank":2,"suit":"D"},{"id":6,"rank":8,"suit":"C"},{"id":10,"rank":12,"suit":"C"},{"id":37,"rank":13,"suit":"H"},{"id":30,"rank":6,"suit":"H"},{"id":29,"rank":5,"suit":"H"}],"handCounts":[12,12,12,12],"youPassed":false,"leader":0,"currentTrick":[],"lastTrick":{"cards":[{"seat":3,"card":{"id":0,"rank":2,"suit":"C"}},{"seat":0,"card":{"id":4,"rank":6,"suit":"C"}},{"seat":1,"card":{"id":2,"rank":4,"suit":"C"}},{"seat":2,"card":{"id":3,"rank":5,"suit":"C"}}],"winner":0},"heartsBroken":false,"trickNo":1,"points":[0,0,0,0],"lastHand":null,"log":[{"id":1,"seat":null,"msg":"first hand — passing left"},{"id":2,"seat":0,"msg":"passed 3 cards"},{"id":3,"seat":1,"msg":"passed 3 cards"},{"id":4,"seat":2,"msg":"passed 3 cards"},{"id":5,"seat":3,"msg":"passed 3 cards"},{"id":6,"seat":null,"msg":"cards exchanged — passing left"},{"id":7,"seat":3,"msg":"leads with the lowest club"},{"id":8,"seat":3,"msg":"played","cards":[{"rank":2,"suit":"C"}]},{"id":9,"seat":0,"msg":"played","cards":[{"rank":6,"suit":"C"}]},{"id":10,"seat":1,"msg":"played","cards":[{"rank":4,"suit":"C"}]},{"id":11,"seat":2,"msg":"played","cards":[{"rank":5,"suit":"C"}]},{"id":12,"seat":0,"msg":"takes the trick"}]}},"pj":{"party":"pegs-and-jokers","view":{"you":0,"players":4,"marbles":4,"phase":"playing","seats":[{"kind":"human","name":"Ada"},{"kind":"bot","name":"Bram"},{"kind":"bot","name":"Cleo"},{"kind":"bot","name":"Dev"}],"hostSeat":0,"toAct":0,"yourTurn":true,"yourTeam":0,"playingFor":[0],"board":{"players":4,"per_section":12,"viewW":100,"viewH":100,"center":{"x":50,"y":50},"hollow":{"x":12.5,"y":12.5,"w":75,"h":75},"ring":[{"x":11.5,"y":8},{"x":18.5,"y":8},{"x":25.5,"y":8},{"x":32.5,"y":8},{"x":39.5,"y":8},{"x":46.5,"y":8},{"x":53.5,"y":8},{"x":60.5,"y":8},{"x":67.5,"y":8},{"x":74.5,"y":8},{"x":81.5,"y":8},{"x":88.5,"y":8},{"x":92,"y":11.5},{"x":92,"y":18.5},{"x":92,"y":25.5},{"x":92,"y":32.5},{"x":92,"y":39.5},{"x":92,"y":46.5},{"x":92,"y":53.5},{"x":92,"y":60.5},{"x":92,"y":67.5},{"x":92,"y":74.5},{"x":92,"y":81.5},{"x":92,"y":88.5},{"x":88.5,"y":92},{"x":81.5,"y":92},{"x":74.5,"y":92},{"x":67.5,"y":92},{"x":60.5,"y":92},{"x":53.5,"y":92},{"x":46.5,"y":92},{"x":39.5,"y":92},{"x":32.5,"y":92},{"x":25.5,"y":92},{"x":18.5,"y":92},{"x":11.5,"y":92},{"x":8,"y":88.5},{"x":8,"y":81.5},{"x":8,"y":74.5},{"x":8,"y":67.5},{"x":8,"y":60.5},{"x":8,"y":53.5},{"x":8,"y":46.5},{"x":8,"y":39.5},{"x":8,"y":32.5},{"x":8,"y":25.5},{"x":8,"y":18.5},{"x":8,"y":11.5}],"starts":[[{"x":66.23013810990805,"y":4.2629534065817},{"x":62.642573380226494,"y":3.9639896791082365},{"x":59.05500865054492,"y":3.6650259516347723},{"x":55.46744392086336,"y":3.3660622241613085}],[{"x":95.7370465934183,"y":66.23013810990805},{"x":96.03601032089176,"y":62.642573380226494},{"x":96.33497404836524,"y":59.05500865054492},{"x":96.6339377758387,"y":55.46744392086336}],[{"x":33.769861890091946,"y":95.7370465934183},{"x":37.357426619773506,"y":96.03601032089176},{"x":40.94499134945508,"y":96.33497404836524},{"x":44.53255607913664,"y":96.6339377758387}],[{"x":4.2629534065817,"y":33.769861890091946},{"x":3.9639896791082365,"y":37.357426619773506},{"x":3.6650259516347723,"y":40.94499134945508},{"x":3.3660622241613085,"y":44.53255607913664}]],"castles":[[{"x":53.03333333333333,"y":13.600000000000001},{"x":52.56666666666667,"y":19.200000000000003},{"x":52.1,"y":24.8},{"x":51.63333333333333,"y":30.400000000000002}],[{"x":86.4,"y":53.03333333333333},{"x":80.8,"y":52.56666666666667},{"x":75.2,"y":52.1},{"x":69.6,"y":51.63333333333333}],[{"x":46.96666666666667,"y":86.4},{"x":47.43333333333333,"y":80.8},{"x":47.9,"y":75.2},{"x":48.36666666666667,"y":69.6}],[{"x":13.600000000000001,"y":46.96666666666667},{"x":19.200000000000003,"y":47.43333333333333},{"x":24.8,"y":47.9},{"x":30.400000000000002,"y":48.36666666666667}]],"exits":[7,19,31,43],"castleEntries":[6,18,30,42],"seams":[{"x":8,"y":8},{"x":92,"y":8},{"x":92,"y":92},{"x":8,"y":92}]},"pegs":[{"owner":0,"idx":0,"team":0,"loc":{"z":"castle","i":3}},{"owner":0,"idx":1,"team":0,"loc":{"z":"ring","r":7}},{"owner":0,"idx":2,"team":0,"loc":{"z":"start","i":2}},{"owner":0,"idx":3,"team":0,"loc":{"z":"start","i":3}},{"owner":1,"idx":0,"team":1,"loc":{"z":"castle","i":3}},{"owner":1,"idx":1,"team":1,"loc":{"z":"ring","r":5}},{"owner":1,"idx":2,"team":1,"loc":{"z":"start","i":2}},{"owner":1,"idx":3,"team":1,"loc":{"z":"start","i":3}},{"owner":2,"idx":0,"team":0,"loc":{"z":"castle","i":2}},{"owner":2,"idx":1,"team":0,"loc":{"z":"start","i":1}},{"owner":2,"idx":2,"team":0,"loc":{"z":"start","i":2}},{"owner":2,"idx":3,"team":0,"loc":{"z":"start","i":3}},{"owner":3,"idx":0,"team":1,"loc":{"z":"ring","r":29}},{"owner":3,"idx":1,"team":1,"loc":{"z":"castle","i":1}},{"owner":3,"idx":2,"team":1,"loc":{"z":"start","i":2}},{"owner":3,"idx":3,"team":1,"loc":{"z":"start","i":3}}],"yourHand":[{"id":26,"rank":2,"suit":"H"},{"id":21,"rank":10,"suit":"D"},{"id":84,"rank":8,"suit":"H"},{"id":5,"rank":7,"suit":"C"},{"id":59,"rank":9,"suit":"C"}],"handCounts":[5,5,5,5],"stockCount":48,"discardCount":40,"legalMoves":[{"type":"move","seat":0,"cardId":26,"marble":{"owner":0,"idx":1},"steps":2},{"type":"move","seat":0,"cardId":21,"marble":{"owner":0,"idx":1},"steps":10},{"type":"move","seat":0,"cardId":84,"marble":{"owner":0,"idx":1},"steps":8},{"type":"move","seat":0,"cardId":5,"marble":{"owner":0,"idx":1},"steps":7},{"type":"move","seat":0,"cardId":59,"marble":{"owner":0,"idx":1},"steps":9}],"homeCounts":[1,1,1,1],"winner":null,"lastBump":null,"log":[{"id":1,"seat":null,"msg":"new game — come out with an Ace, King, or Joker"},{"id":2,"seat":0,"msg":"brings a marble out","cards":[{"rank":13,"suit":"S"}]},{"id":3,"seat":1,"msg":"plays a joker","cards":[{"joker":true}]},{"id":4,"seat":null,"msg":"Team B sends a Team A marble back to start"},{"id":5,"seat":2,"msg":"forfeits — no legal play","cards":[{"rank":5,"suit":"C"}]},{"id":6,"seat":3,"msg":"brings a marble out","cards":[{"rank":14,"suit":"H"}]},{"id":7,"seat":0,"msg":"forfeits — no legal play","cards":[{"rank":6,"suit":"D"}]},{"id":8,"seat":1,"msg":"plays","cards":[{"rank":13,"suit":"C"}],"tail":"13 steps"},{"id":9,"seat":1,"msg":"marble home (1/4)"},{"id":10,"seat":2,"msg":"brings a marble out","cards":[{"rank":14,"suit":"S"}]},{"id":11,"seat":3,"msg":"plays a joker","cards":[{"joker":true}]},{"id":12,"seat":null,"msg":"Team B sends a Team A marble back to start"},{"id":13,"seat":0,"msg":"forfeits — no legal play","cards":[{"rank":3,"suit":"C"}]},{"id":14,"seat":1,"msg":"plays","cards":[{"rank":2,"suit":"D"}],"tail":"2 steps"},{"id":15,"seat":2,"msg":"forfeits — no legal play","cards":[{"rank":11,"suit":"H"}]},{"id":16,"seat":3,"msg":"plays","cards":[{"rank":13,"suit":"D"}],"tail":"13 steps"},{"id":17,"seat":3,"msg":"marble home (1/4)"},{"id":18,"seat":0,"msg":"forfeits — no legal play","cards":[{"rank":2,"suit":"C"}]},{"id":19,"seat":1,"msg":"forfeits — no legal play","cards":[{"rank":3,"suit":"D"}]},{"id":20,"seat":2,"msg":"brings a marble out","cards":[{"rank":14,"suit":"D"}]},{"id":21,"seat":3,"msg":"plays","cards":[{"rank":10,"suit":"C"}],"tail":"10 steps"},{"id":22,"seat":0,"msg":"plays a joker","cards":[{"joker":true}]},{"id":23,"seat":null,"msg":"Team A sends a Team B marble back to start"},{"id":24,"seat":1,"msg":"forfeits — no legal play","cards":[{"rank":3,"suit":"H"}]},{"id":25,"seat":2,"msg":"plays","cards":[{"rank":12,"suit":"C"}],"tail":"12 steps"},{"id":26,"seat":3,"msg":"forfeits — no legal play","cards":[{"rank":6,"suit":"H"}]},{"id":27,"seat":0,"msg":"plays","cards":[{"rank":5,"suit":"C"}],"tail":"5 steps"},{"id":28,"seat":0,"msg":"marble home (1/4)"},{"id":29,"seat":1,"msg":"forfeits — no legal play","cards":[{"rank":8,"suit":"C"}]},{"id":30,"seat":2,"msg":"plays","cards":[{"rank":10,"suit":"S"}],"tail":"10 steps"},{"id":31,"seat":3,"msg":"forfeits — no legal play","cards":[{"rank":5,"suit":"H"}]},{"id":32,"seat":0,"msg":"forfeits — no legal play","cards":[{"rank":11,"suit":"D"}]},{"id":33,"seat":1,"msg":"brings a marble out","cards":[{"rank":13,"suit":"D"}]},{"id":34,"seat":2,"msg":"plays","cards":[{"rank":8,"suit":"D"}],"tail":"8 steps"},{"id":35,"seat":3,"msg":"brings a marble out","cards":[{"rank":14,"suit":"C"}]},{"id":36,"seat":0,"msg":"forfeits — no legal play","cards":[{"rank":3,"suit":"C"}]},{"id":37,"seat":1,"msg":"plays","cards":[{"rank":12,"suit":"S"}],"tail":"12 steps"},{"id":38,"seat":2,"msg":"plays","cards":[{"rank":7,"suit":"D"}],"tail":"7 steps"},{"id":39,"seat":3,"msg":"plays","cards":[{"rank":11,"suit":"H"}],"tail":"11 steps"},{"id":40,"seat":0,"msg":"forfeits — no legal play","cards":[{"rank":4,"suit":"C"}]},{"id":41,"seat":1,"msg":"plays","cards":[{"rank":11,"suit":"S"}],"tail":"11 steps"},{"id":42,"seat":2,"msg":"plays","cards":[{"rank":7,"suit":"S"}],"tail":"7 steps"},{"id":43,"seat":3,"msg":"plays","cards":[{"rank":12,"suit":"S"}],"tail":"12 steps"},{"id":44,"seat":0,"msg":"brings a marble out","cards":[{"rank":14,"suit":"S"}]},{"id":45,"seat":1,"msg":"plays","cards":[{"rank":11,"suit":"S"}],"tail":"11 steps"},{"id":46,"seat":2,"msg":"plays","cards":[{"rank":6,"suit":"S"}],"tail":"6 steps"},{"id":47,"seat":2,"msg":"marble home (1/4)"},{"id":48,"seat":3,"msg":"plays","cards":[{"rank":11,"suit":"C"}],"tail":"11 steps"}]}},"over":{"party":"hearts","view":{"you":0,"players":4,"phase":"gameOver","target":12,"seats":[{"kind":"human","name":"Ada"},{"kind":"bot","name":"Bram"},{"kind":"bot","name":"Cleo"},{"kind":"bot","name":"Dev"}],"hostSeat":0,"scores":[1,25,0,0],"winner":2,"handNo":0,"passOffset":1,"toAct":null,"yourTurn":false,"legalMoves":[],"yourHand":[],"handCounts":[0,0,0,0],"youPassed":false,"leader":1,"currentTrick":[],"lastTrick":{"cards":[{"seat":1,"card":{"id":34,"rank":10,"suit":"H"}},{"seat":2,"card":{"id":26,"rank":2,"suit":"H"}},{"seat":3,"card":{"id":24,"rank":13,"suit":"D"}},{"seat":0,"card":{"id":45,"rank":8,"suit":"S"}}],"winner":1},"heartsBroken":true,"trickNo":13,"points":[1,25,0,0],"lastHand":{"delta":[1,25,0,0],"shooter":null},"log":[{"id":1,"seat":null,"msg":"first hand — passing left"},{"id":2,"seat":0,"msg":"passed 3 cards"},{"id":3,"seat":1,"msg":"passed 3 cards"},{"id":4,"seat":2,"msg":"passed 3 cards"},{"id":5,"seat":3,"msg":"passed 3 cards"},{"id":6,"seat":null,"msg":"cards exchanged — passing left"},{"id":7,"seat":3,"msg":"leads with the lowest club"},{"id":8,"seat":3,"msg":"played","cards":[{"rank":2,"suit":"C"}]},{"id":9,"seat":0,"msg":"played","cards":[{"rank":6,"suit":"C"}]},{"id":10,"seat":1,"msg":"played","cards":[{"rank":4,"suit":"C"}]},{"id":11,"seat":2,"msg":"played","cards":[{"rank":5,"suit":"C"}]},{"id":12,"seat":0,"msg":"takes the trick"},{"id":13,"seat":0,"msg":"played","cards":[{"rank":2,"suit":"S"}]},{"id":14,"seat":1,"msg":"played","cards":[{"rank":7,"suit":"S"}]},{"id":15,"seat":2,"msg":"played","cards":[{"rank":5,"suit":"S"}]},{"id":16,"seat":3,"msg":"played","cards":[{"rank":6,"suit":"S"}]},{"id":17,"seat":1,"msg":"takes the trick"},{"id":18,"seat":1,"msg":"played","cards":[{"rank":3,"suit":"D"}]},{"id":19,"seat":2,"msg":"played","cards":[{"rank":7,"suit":"D"}]},{"id":20,"seat":3,"msg":"played","cards":[{"rank":6,"suit":"D"}]},{"id":21,"seat":0,"msg":"played","cards":[{"rank":4,"suit":"D"}]},{"id":22,"seat":2,"msg":"takes the trick"},{"id":23,"seat":2,"msg":"played","cards":[{"rank":8,"suit":"D"}]},{"id":24,"seat":3,"msg":"played","cards":[{"rank":5,"suit":"D"}]},{"id":25,"seat":0,"msg":"played","cards":[{"rank":2,"suit":"D"}]},{"id":26,"seat":1,"msg":"played","cards":[{"rank":10,"suit":"D"}]},{"id":27,"seat":1,"msg":"takes the trick"},{"id":28,"seat":1,"msg":"played","cards":[{"rank":7,"suit":"C"}]},{"id":29,"seat":2,"msg":"played","cards":[{"rank":14,"suit":"C"}]},{"id":30,"seat":3,"msg":"played","cards":[{"rank":3,"suit":"C"}]},{"id":31,"seat":0,"msg":"played","cards":[{"rank":12,"suit":"C"}]},{"id":32,"seat":2,"msg":"takes the trick"},{"id":33,"seat":2,"msg":"played","cards":[{"rank":9,"suit":"D"}]},{"id":34,"seat":3,"msg":"played","cards":[{"rank":11,"suit":"D"}]},{"id":35,"seat":0,"msg":"played","cards":[{"rank":12,"suit":"D"}]},{"id":36,"seat":1,"msg":"played","cards":[{"rank":12,"suit":"H"}]},{"id":37,"seat":null,"msg":"hearts are broken"},{"id":38,"seat":0,"msg":"takes the trick","tail":"+1"},{"id":39,"seat":0,"msg":"played","cards":[{"rank":3,"suit":"S"}]},{"id":40,"seat":1,"msg":"played","cards":[{"rank":11,"suit":"S"}]},{"id":41,"seat":2,"msg":"played","cards":[{"rank":10,"suit":"S"}]},{"id":42,"seat":3,"msg":"played","cards":[{"rank":4,"suit":"S"}]},{"id":43,"seat":1,"msg":"takes the trick"},{"id":44,"seat":1,"msg":"played","cards":[{"rank":9,"suit":"C"}]},{"id":45,"seat":2,"msg":"played","cards":[{"rank":14,"suit":"H"}]},{"id":46,"seat":3,"msg":"played","cards":[{"rank":12,"suit":"S"}]},{"id":47,"seat":0,"msg":"played","cards":[{"rank":8,"suit":"C"}]},{"id":48,"seat":1,"msg":"takes the trick","tail":"+14"},{"id":49,"seat":1,"msg":"played","cards":[{"rank":10,"suit":"C"}]},{"id":50,"seat":2,"msg":"played","cards":[{"rank":11,"suit":"H"}]},{"id":51,"seat":3,"msg":"played","cards":[{"rank":14,"suit":"S"}]},{"id":52,"seat":0,"msg":"played","cards":[{"rank":13,"suit":"H"}]},{"id":53,"seat":1,"msg":"takes the trick","tail":"+2"},{"id":54,"seat":1,"msg":"played","cards":[{"rank":11,"suit":"C"}]},{"id":55,"seat":2,"msg":"played","cards":[{"rank":9,"suit":"H"}]},{"id":56,"seat":3,"msg":"played","cards":[{"rank":13,"suit":"S"}]},{"id":57,"seat":0,"msg":"played","cards":[{"rank":6,"suit":"H"}]},{"id":58,"seat":1,"msg":"takes the trick","tail":"+2"},{"id":59,"seat":1,"msg":"played","cards":[{"rank":13,"suit":"C"}]},{"id":60,"seat":2,"msg":"played","cards":[{"rank":7,"suit":"H"}]},{"id":61,"seat":3,"msg":"played","cards":[{"rank":4,"suit":"H"}]},{"id":62,"seat":0,"msg":"played","cards":[{"rank":5,"suit":"H"}]},{"id":63,"seat":1,"msg":"takes the trick","tail":"+3"},{"id":64,"seat":1,"msg":"played","cards":[{"rank":8,"suit":"H"}]},{"id":65,"seat":2,"msg":"played","cards":[{"rank":3,"suit":"H"}]},{"id":66,"seat":3,"msg":"played","cards":[{"rank":14,"suit":"D"}]},{"id":67,"seat":0,"msg":"played","cards":[{"rank":9,"suit":"S"}]},{"id":68,"seat":1,"msg":"takes the trick","tail":"+2"},{"id":69,"seat":1,"msg":"played","cards":[{"rank":10,"suit":"H"}]},{"id":70,"seat":2,"msg":"played","cards":[{"rank":2,"suit":"H"}]},{"id":71,"seat":3,"msg":"played","cards":[{"rank":13,"suit":"D"}]},{"id":72,"seat":0,"msg":"played","cards":[{"rank":8,"suit":"S"}]},{"id":73,"seat":1,"msg":"takes the trick","tail":"+2"},{"id":74,"seat":0,"msg":"+1 this hand"},{"id":75,"seat":1,"msg":"+25 this hand"},{"id":76,"seat":null,"msg":"scores: 1 / 25 / 0 / 0"},{"id":77,"seat":2,"msg":"wins the game — lowest score!"}]}}};
+window.__pv = (k) => {
+  if (k === "start") { S.party = null; S.view = null; S.connected = false; render(); return; }
+  const e = __VIEWS[k]; if (!e) return;
+  S.party = e.party; S.pickGame = e.party; S.room = "preview"; S.pid = "preview"; S.name = "Ada";
+  S.connected = true; S.view = e.view; S.heartsPass.clear(); S.pjCard = null; S.rummySel.clear(); S.rummyLayoff = null;
+  render();
+};
+window.__pv("hljplay");
+</script></body></html>
