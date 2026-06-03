@@ -293,11 +293,47 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* All felt children float above texture layers */
 .felt>*{position:relative;z-index:1}
 
-/* top rail of opponents */
+/* top rail of opponents (legacy / Parcheesi strip) */
 .rail.top{
   position:absolute;top:10px;left:8%;right:8%;
   display:flex;justify-content:space-around;align-items:flex-start;gap:8px;
   z-index:2;flex-wrap:nowrap;
+}
+
+/* compass-positioned pod slots */
+.pod-slot{
+  position:absolute;z-index:2;
+}
+/* top-centre */
+.pod-slot.pos-top{
+  top:10px;left:50%;transform:translateX(-50%);
+}
+/* top-left quadrant */
+.pod-slot.pos-top.pos-tl{
+  left:12%;transform:none;
+}
+.pod-slot.pos-top.pos-tl2{
+  left:30%;transform:none;
+}
+/* top-right quadrant */
+.pod-slot.pos-top.pos-tr{
+  left:auto;right:12%;transform:none;
+}
+.pod-slot.pos-top.pos-tr2{
+  left:auto;right:30%;transform:none;
+}
+/* left side — vertically centred */
+.pod-slot.pos-left{
+  left:10px;top:50%;transform:translateY(-50%);
+}
+/* right side — vertically centred */
+.pod-slot.pos-right{
+  right:10px;top:50%;transform:translateY(-50%);
+}
+/* 3-player: push left/right up toward the corners */
+.felt:has(.pod-slot.pos-left):has(.pod-slot.pos-right) .pod-slot.pos-left,
+.felt:has(.pod-slot.pos-left):has(.pod-slot.pos-right) .pod-slot.pos-right{
+  top:20%;transform:none;
 }
 
 /* opponent pod */
@@ -365,13 +401,24 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick .who{font-size:11px;color:var(--ink-soft);font-weight:600;max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trick .play.lead .who{color:var(--brass-hi)}
 
-/* Positioned trick layout — cards float toward their player's edge */
+/* Positioned trick layout — cards radiate toward their player's edge of the felt */
 .trick.positioned{position:absolute;inset:0;pointer-events:none;z-index:2}
-.trick.positioned .play{position:absolute;left:50%;top:50%;pointer-events:all;transform:translate(-50%,-50%)}
-.trick.positioned .play.pos-top{transform:translate(-50%,calc(-50% - 80px))}
-.trick.positioned .play.pos-bottom{transform:translate(-50%,calc(-50% + 80px))}
-.trick.positioned .play.pos-left{transform:translate(calc(-50% - 110px),-50%)}
-.trick.positioned .play.pos-right{transform:translate(calc(-50% + 110px),-50%)}
+.trick.positioned .play{
+  position:absolute;left:50%;top:50%;pointer-events:all;
+  transform:translate(-50%,-50%);
+}
+.trick.positioned .play.pos-top{
+  transform:translate(-50%, calc(-50% - min(22vh, 130px)));
+}
+.trick.positioned .play.pos-bottom{
+  transform:translate(-50%, calc(-50% + min(18vh, 100px)));
+}
+.trick.positioned .play.pos-left{
+  transform:translate(calc(-50% - min(28vw, 160px)), -50%);
+}
+.trick.positioned .play.pos-right{
+  transform:translate(calc(-50% + min(28vw, 160px)), -50%);
+}
 
 /* piles (Rummy) */
 .piles{display:flex;gap:22px;align-items:flex-start;justify-content:center}

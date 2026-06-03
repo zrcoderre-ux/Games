@@ -361,9 +361,46 @@ function logSheet() {
     </div>`;
 }
 
-// shared table frame: pods on the top rail, center play area, your rail at the bottom
+// shared table frame: pods distributed around the felt, center play area, your rail at the bottom
 function tableShell(v, parts) {
-  const railPods = parts.pods.join("") || `<div class="callout">Waiting for players to arrive…</div>`;
+  // pods can be [{seat,html},...] for compass layout, or legacy string[] for special cases
+  const podItems = parts.pods;
+  let feltPods;
+  if (podItems.length && typeof podItems[0] === "string") {
+    // legacy / special (e.g. pjstrip) — render in top rail
+    feltPods = `<div class="rail top deal">${podItems.join("") || `<div class="callout">Waiting for players to arrive…</div>`}</div>`;
+  } else {
+    // compass layout: distribute opponents around the table
+    const n = v.seats.length;
+    const you = v.you;
+    // Map seat offset (1..n-1) to a CSS position class
+    // Layout per player count (opponents = n-1):
+    //   2p: [top]
+    //   3p: [left, right]
+    //   4p: [left, top, right]
+    //   5p: [left, tl, tr, right]
+    //   6p: [left, tl, tl2, tr2, tr, right]
+    //   7p: [left, tl, tl2, top, tr2, tr, right]
+    //   8p: same as 7p (max supported)
+    const LAYOUTS = {
+      1: ["pos-top"],
+      2: ["pos-left", "pos-right"],
+      3: ["pos-left", "pos-top", "pos-right"],
+      4: ["pos-left", "pos-top pos-tl", "pos-top pos-tr", "pos-right"],
+      5: ["pos-left", "pos-top pos-tl", "pos-top", "pos-top pos-tr", "pos-right"],
+      6: ["pos-left", "pos-top pos-tl", "pos-top pos-tl2", "pos-top pos-tr2", "pos-top pos-tr", "pos-right"],
+      7: ["pos-left", "pos-top pos-tl", "pos-top pos-tl2", "pos-top", "pos-top pos-tr2", "pos-top pos-tr", "pos-right"],
+    };
+    const layout = LAYOUTS[n - 1] || LAYOUTS[7];
+    const slots = podItems.length
+      ? podItems.map(({ seat, html }, idx) => {
+          const cls = layout[idx] || "pos-top";
+          return `<div class="pod-slot ${cls}">${html}</div>`;
+        }).join("")
+      : `<div class="pod-slot pos-top"><div class="callout">Waiting for players to arrive…</div></div>`;
+    feltPods = slots;
+  }
+
   let self;
   if (v.you != null) {
     const myName = seatName(v, v.you);
@@ -380,8 +417,9 @@ function tableShell(v, parts) {
   return `<div class="table">
     ${appbar(v, { log: true })}
     <div class="felt">
-      <div class="rail top deal">${railPods}</div>
+      ${feltPods}
       <div class="center">${parts.center}</div>
+      ${parts.trick || ""}
     </div>
     <div class="selfwrap">${self}</div>
   </div>${logSheet()}`;
@@ -625,15 +663,15 @@ function renderHLJ(v) {
   const pods = v.seats
     .map((s, i) =>
       i === v.you
-        ? ""
-        : podHTML(v, i, {
+        ? null
+        : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             count: v.handCounts[i],
             note: v.phase === "bidding" && v.signals[i] ? v.signals[i] : null,
-          }),
+          }) },
     )
     .filter(Boolean);
 
@@ -644,19 +682,21 @@ function renderHLJ(v) {
   const teamCrest = (t) =>
     `<span class="crest score t${t === 0 ? "A" : "B"} ${myTeam === t ? "mine" : ""}"><span class="teamdot t${t === 0 ? "A" : "B"}"></span>Team ${t === 0 ? "A" : "B"} ${v.scores[t]}${myTeam === t ? " \u00b7 you" : ""}</span>`;
   const bidCrest = v.phase === "bidding" ? `<span class="crest">high bid: ${highBid}</span>` : "";
-  let trick;
+  let hljTrick;
+  let centerExtra = "";
   if (v.currentTrick.length) {
     const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-    trick = trickHTML(plays, you, v.seats.length);
+    hljTrick = trickHTML(plays, you, v.seats.length);
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
-    trick = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
+    // lastTrick has no per-card seat, so render inline in center
+    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
       .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
       .join("")}</div></div>`;
   } else {
-    trick = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
+    centerExtra = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
   }
-  const center = `<div class="crestrow">${trumpCrest}${teamCrest(0)}${teamCrest(1)}${bidCrest}</div>${trick}`;
+  const center = `<div class="crestrow">${trumpCrest}${teamCrest(0)}${teamCrest(1)}${bidCrest}</div>${centerExtra}`;
 
   // hand (fanned), dim non-legal cards while it's your turn to play
   const hand = fanHand(v.yourHand, (c) => ({
@@ -696,7 +736,7 @@ function renderHLJ(v) {
     ? `<span class="turnflag">Your turn</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, trick: hljTrick, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
@@ -769,14 +809,14 @@ function renderRummy(v) {
   const pods = v.seats
     .map((s, i) =>
       i === v.you
-        ? ""
-        : podHTML(v, i, {
+        ? null
+        : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
             count: v.handCounts[i],
             pts: v.scores[i],
             note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
-          }),
+          }) },
     )
     .filter(Boolean);
 
@@ -918,19 +958,19 @@ function renderHearts(v) {
   const pods = v.seats
     .map((s, i) =>
       i === v.you
-        ? ""
-        : podHTML(v, i, {
+        ? null
+        : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             count: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
-          }),
+          }) },
     )
     .filter(Boolean);
 
   // Center: passing prompt, or the crests + the trick (kept showing the last
   // completed trick for a beat once it's swept, so each card is visible).
-  let center;
+  let center, heartsTrick;
   if (passing) {
     const dir = passDir(v.passOffset, v.players);
     center = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
@@ -945,20 +985,17 @@ function renderHearts(v) {
     const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${broken}<span class="crest">hand ${v.handNo + 1}</span></div>`;
     const showLast = v.currentTrick.length === 0 && v.lastTrick;
     const winSeat = showLast ? v.lastTrick.winner : null;
-    let trick;
     if (v.currentTrick.length) {
       const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-      trick = trickHTML(plays, v.you, v.seats.length);
+      heartsTrick = trickHTML(plays, v.you, v.seats.length);
     } else if (showLast) {
       const plays = v.lastTrick.cards.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-      trick = trickHTML(plays, v.you, v.seats.length, { winSeat, faded: true });
-    } else {
-      trick = `<div class="callout">Lead a card to open the trick.</div>`;
+      heartsTrick = trickHTML(plays, v.you, v.seats.length, { winSeat, faded: true });
     }
     const note = showLast
       ? `<div class="callout" style="font-size:13px">Trick to ${esc(seatName(v, v.lastTrick.winner))}.</div>`
-      : "";
-    center = `${crests}${trick}${note}`;
+      : !v.currentTrick.length ? `<div class="callout">Lead a card to open the trick.</div>` : "";
+    center = `${crests}${note}`;
   }
 
   // Hand: in passing, tap to (de)select up to 3; in play, tap a glowing legal card.
@@ -989,7 +1026,7 @@ function renderHearts(v) {
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
 
-  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, trick: heartsTrick, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
 // ---------- Pegs & Jokers ----------
