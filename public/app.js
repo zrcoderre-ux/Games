@@ -361,9 +361,42 @@ function logSheet() {
     </div>`;
 }
 
-// shared table frame: pods on the top rail, center play area, your rail at the bottom
+// shared table frame: pods distributed around the felt, center play area, your rail at the bottom
 function tableShell(v, parts) {
-  const railPods = parts.pods.join("") || `<div class="callout">Waiting for players to arrive…</div>`;
+  // pods can be [{seat,html},...] for compass layout, or legacy string[] for special cases
+  const podItems = parts.pods;
+  let feltPods;
+  if (podItems.length && typeof podItems[0] === "string") {
+    // legacy / special (e.g. pjstrip) — render in top rail
+    feltPods = `<div class="rail top deal">${podItems.join("") || `<div class="callout">Waiting for players to arrive…</div>`}</div>`;
+  } else {
+    // compass layout: distribute opponents around the table
+    const n = v.seats.length;
+    const you = v.you;
+    // Map seat offset (1..n-1) to a CSS position class
+    // Layout per player count (opponents = n-1):
+    //   2p: [top]
+    //   3p: [left, right]  (NW, NE)
+    //   4p: [left, top, right]
+    //   5p: [left, top-left, top-right, right]
+    //   6p: [left, top-left, top, top-right, right]
+    const LAYOUTS = {
+      1: ["pos-top"],
+      2: ["pos-left", "pos-right"],
+      3: ["pos-left", "pos-top", "pos-right"],
+      4: ["pos-left", "pos-top pos-tl", "pos-top pos-tr", "pos-right"],
+      5: ["pos-left", "pos-top pos-tl", "pos-top", "pos-top pos-tr", "pos-right"],
+    };
+    const layout = LAYOUTS[n - 1] || LAYOUTS[5];
+    const slots = podItems.length
+      ? podItems.map(({ seat, html }, idx) => {
+          const cls = layout[idx] || "pos-top";
+          return `<div class="pod-slot ${cls}">${html}</div>`;
+        }).join("")
+      : `<div class="pod-slot pos-top"><div class="callout">Waiting for players to arrive…</div></div>`;
+    feltPods = slots;
+  }
+
   let self;
   if (v.you != null) {
     const myName = seatName(v, v.you);
@@ -380,7 +413,7 @@ function tableShell(v, parts) {
   return `<div class="table">
     ${appbar(v, { log: true })}
     <div class="felt">
-      <div class="rail top deal">${railPods}</div>
+      ${feltPods}
       <div class="center">${parts.center}</div>
     </div>
     <div class="selfwrap">${self}</div>
@@ -625,15 +658,15 @@ function renderHLJ(v) {
   const pods = v.seats
     .map((s, i) =>
       i === v.you
-        ? ""
-        : podHTML(v, i, {
+        ? null
+        : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             count: v.handCounts[i],
             note: v.phase === "bidding" && v.signals[i] ? v.signals[i] : null,
-          }),
+          }) },
     )
     .filter(Boolean);
 
@@ -769,14 +802,14 @@ function renderRummy(v) {
   const pods = v.seats
     .map((s, i) =>
       i === v.you
-        ? ""
-        : podHTML(v, i, {
+        ? null
+        : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
             count: v.handCounts[i],
             pts: v.scores[i],
             note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
-          }),
+          }) },
     )
     .filter(Boolean);
 
@@ -918,13 +951,13 @@ function renderHearts(v) {
   const pods = v.seats
     .map((s, i) =>
       i === v.you
-        ? ""
-        : podHTML(v, i, {
+        ? null
+        : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             count: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
-          }),
+          }) },
     )
     .filter(Boolean);
 

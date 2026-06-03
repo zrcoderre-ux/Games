@@ -293,11 +293,41 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* All felt children float above texture layers */
 .felt>*{position:relative;z-index:1}
 
-/* top rail of opponents */
+/* top rail of opponents (legacy / Parcheesi strip) */
 .rail.top{
   position:absolute;top:10px;left:8%;right:8%;
   display:flex;justify-content:space-around;align-items:flex-start;gap:8px;
   z-index:2;flex-wrap:nowrap;
+}
+
+/* compass-positioned pod slots */
+.pod-slot{
+  position:absolute;z-index:2;
+}
+/* top-centre */
+.pod-slot.pos-top{
+  top:10px;left:50%;transform:translateX(-50%);
+}
+/* top-left quadrant */
+.pod-slot.pos-top.pos-tl{
+  left:22%;transform:none;
+}
+/* top-right quadrant */
+.pod-slot.pos-top.pos-tr{
+  left:auto;right:22%;transform:none;
+}
+/* left side — vertically centred */
+.pod-slot.pos-left{
+  left:10px;top:50%;transform:translateY(-50%);
+}
+/* right side — vertically centred */
+.pod-slot.pos-right{
+  right:10px;top:50%;transform:translateY(-50%);
+}
+/* 3-player: push left/right up toward the corners */
+.felt:has(.pod-slot.pos-left):has(.pod-slot.pos-right) .pod-slot.pos-left,
+.felt:has(.pod-slot.pos-left):has(.pod-slot.pos-right) .pod-slot.pos-right{
+  top:20%;transform:none;
 }
 
 /* opponent pod */
