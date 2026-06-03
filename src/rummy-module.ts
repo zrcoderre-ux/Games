@@ -737,6 +737,7 @@ function aiMove(state: RummyState, seat: number): RummyMove {
 
 export const rummy500Module: Game<RummyState, RummyMove, RummyConfig, RummyView> = {
   meta: { id: "rummy-500", name: "Rummy 500", supportedPlayerCounts: [2, 3, 4, 5, 6, 7, 8] },
+  botStepMs: 400,
   seatCount: (config) => config.players,
   createGame,
   seatToAct,

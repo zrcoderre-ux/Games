@@ -20,8 +20,8 @@ type LocalMessage<Config, Move> =
   | { t: "addHuman"; seat: number; name: string }
   | { t: "clearSeat"; seat: number };
 
-// How long bots pause between moves so a human watching sees each one land.
-const BOT_STEP_MS = 1600;
+// Default delay between bot moves; individual games may override via botStepMs.
+const BOT_STEP_MS_DEFAULT = 1600;
 
 const emptySeats = (n: number): SeatInfo[] => Array.from({ length: n }, () => ({ kind: "empty", name: null }));
 
@@ -260,7 +260,7 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     if (!s || this.game.isOver(s)) return;
     const seat = this.game.seatToAct(s);
     if (seat !== null && this.seats[seat]?.kind === "bot") {
-      this.botTimer = setTimeout(() => this.botStep(), BOT_STEP_MS);
+      this.botTimer = setTimeout(() => this.botStep(), this.game.botStepMs ?? BOT_STEP_MS_DEFAULT);
     }
   }
 

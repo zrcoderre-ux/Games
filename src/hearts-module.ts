@@ -577,6 +577,7 @@ function aiMove(state: HeartsState, seat: number): HeartsMove {
 
 export const heartsModule: Game<HeartsState, HeartsMove, HeartsConfig, HeartsView> = {
   meta: { id: "hearts", name: "Hearts", supportedPlayerCounts: [3, 4, 5] },
+  botStepMs: 400,
   seatCount: (config) => config.players,
   createGame,
   seatToAct,
