@@ -1229,6 +1229,11 @@ function legalMoves2(state) {
     if (state.stock.length > 0) moves.push({ type: "drawStock", seat });
     const top = state.discard[state.discard.length - 1];
     if (top) moves.push({ type: "drawDiscard", seat, cardId: top.id });
+    if (state.discard.length > 1) {
+      const bottom = state.discard[0];
+      if (canFormMeldWith([...hand, ...state.discard], bottom) || canLayoff(state, bottom))
+        moves.push({ type: "drawDiscard", seat, cardId: bottom.id });
+    }
     return moves;
   }
   const set = findSet(hand);
