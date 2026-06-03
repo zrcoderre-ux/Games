@@ -832,26 +832,21 @@ function renderRummy(v) {
       </div>
       <div class="pts">${v.stockCount} left</div>
     </div>`;
-  // Discard pile: the previous cards peek out beneath the top card; tapping the
-  // pile opens a popup with the full list. The top card itself is the draw target.
-  const peek = v.discard.slice(-5); // a few cards fanned beneath the top
+  // Discard pile: clicking always opens the full pile modal.
+  const peek = v.discard.slice(-5);
   const stackCards = peek
     .map((c, i) => {
-      const isTop = i === peek.length - 1;
-      const off = (peek.length - 1 - i) * 7; // older cards shifted up-left
+      const off = (peek.length - 1 - i) * 7;
       const style = `position:absolute;left:${-off}px;top:${-off}px;z-index:${i}`;
-      if (isTop)
-        return cardHTML(c, { action: discardDraw ? "draw-discard" : "", id: c.id, playable: !!discardDraw, style });
-      return cardHTML(c, { style: style + ";filter:brightness(.92)" });
+      return cardHTML(c, { style: style + (i < peek.length - 1 ? ";filter:brightness(.92)" : "") });
     })
     .join("");
   const discard = `<div class="pile">
       <div class="lbl">Discard</div>
-      <div class="discardstack" data-action="open-discard" title="View the whole discard pile">
+      <div class="discardstack" data-action="open-discard" title="View discard pile" style="cursor:pointer">
         ${top ? stackCards : `<div class="card" style="opacity:.22"></div>`}
       </div>
       <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
-      ${canTakePile ? `<button class="btn sm" data-action="take-pile" data-cardid="${bottom.id}" style="margin-top:4px">Take pile</button>` : ""}
     </div>`;
   const melds = v.melds.length
     ? `<div class="melds">${v.melds
@@ -894,18 +889,28 @@ function renderRummy(v) {
   const acts = [];
   if (v.yourTurn && v.turnPhase === "draw") {
     if (canStock) acts.push(`<button class="btn" data-action="draw-stock">Draw stock</button>`);
-    if (discardDraw && top) acts.push(`<button class="btn ghost" data-action="draw-discard" data-cardid="${top.id}">Take ${top.joker ? "\u2605" : rankLabel(top.rank) + SUIT[top.suit]}</button>`);
     acts.push(sortBar);
-    acts.push(`<span class="hint">Draw to begin your turn \u2014 the top discard is always yours to take.</span>`);
+    acts.push(`<span class="hint">Draw from stock, or tap the discard pile to pick up cards.</span>`);
   } else if (inPlay) {
     const n = S.rummySel.size;
-    acts.push(`<button class="btn" data-action="meld-selected" ${canMeld ? "" : "disabled"}>Meld${n ? ` (${n})` : ""}</button>`);
-    acts.push(`<button class="btn ghost" data-action="layoff-selected" ${canLay ? "" : "disabled"}>Lay off</button>`);
-    acts.push(`<button class="btn" data-action="discard-selected" ${canDiscard ? "" : "disabled"}>Discard</button>`);
-    if (n) acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    if (canMeld) {
+      acts.push(`<button class="btn" data-action="meld-selected">Play meld (${n})</button>`);
+      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    } else if (canLay) {
+      acts.push(`<button class="btn" data-action="layoff-selected">Lay off (${n})</button>`);
+      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    } else if (canDiscard) {
+      acts.push(`<button class="btn" data-action="discard-selected">Discard</button>`);
+      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    } else if (n) {
+      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    }
     acts.push(sortBar);
     if (v.mustMeldCardId != null) acts.push(`<span class="hint">The green card must be melded or laid off before you discard.</span>`);
-    else acts.push(`<span class="hint">Select cards \u2192 Meld (3+), Lay off (tap a meld), or Discard (one). Drag to reorder.</span>`);
+    else if (canMeld) acts.push(`<span class="hint">Tap \u201cPlay meld\u201d to put these ${n} cards down.</span>`);
+    else if (canLay) acts.push(`<span class="hint">Tap \u201cLay off\u201d to add these cards to the highlighted meld.</span>`);
+    else if (n >= 3) acts.push(`<span class="hint">These cards don\u2019t form a valid meld.</span>`);
+    else acts.push(`<span class="hint">Select cards to meld or lay off, or select one to discard. Tap a meld to target it.</span>`);
   } else {
     acts.push(sortBar);
   }
@@ -918,18 +923,36 @@ function renderRummy(v) {
   app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v);
 }
 
-// Popup listing the whole discard pile, newest at the top-right.
+// Popup listing the whole discard pile. During draw phase, cards are clickable
+// when legal; non-legal deeper cards are greyed out.
 function discardModal(v) {
   if (!S.discardOpen) return "";
-  const cards = v.discard.length
-    ? v.discard.map((c, i) => `<div class="dcard ${i === v.discard.length - 1 ? "top" : ""}">${cardHTML(c, { mini: true })}</div>`).join("")
+  const lm = v.yourTurn && v.turnPhase === "draw" ? v.legalMoves : [];
+  const legalIds = new Set(lm.filter((m) => m.type === "drawDiscard").map((m) => m.cardId));
+  // Any card at index >= first legal index is legal (sweep includes everything above).
+  // A non-top card is only legal if its id is explicitly in legalIds.
+  const n = v.discard.length;
+  const cards = n
+    ? v.discard.map((c, i) => {
+        const isTop = i === n - 1;
+        const legal = legalIds.has(c.id);
+        const label = isTop ? "top" : i === 0 && n > 1 ? "bottom" : "";
+        const cardEl = legal
+          ? cardHTML(c, { mini: true, playable: true, action: "draw-discard", id: c.id })
+          : cardHTML(c, { mini: true, style: "opacity:.35" });
+        const sweepLabel = !isTop && legal ? `<span class="sweep-label">Takes ${n - i} cards</span>` : "";
+        return `<div class="dcard ${label}">${cardEl}${sweepLabel}</div>`;
+      }).join("")
     : `<div class="callout" style="font-size:13px">The discard pile is empty.</div>`;
+  const hint = legalIds.size
+    ? `<p class="sub" style="margin:8px 14px 0">Tap a card to take it and everything above it. Greyed cards can't be taken this turn.</p>`
+    : `<p class="sub" style="margin:8px 14px 0">Oldest first \u2014 top card is highlighted. Draw first to pick up.</p>`;
   return `<div class="modal-back" data-action="close-discard">
       <div class="modal" data-stop="1">
-        <div class="modalhead"><span>Discard pile \u2014 ${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</span>
+        <div class="modalhead"><span>Discard pile \u2014 ${n} card${n === 1 ? "" : "s"}</span>
           <button class="btn sm ghost" data-action="close-discard">Close</button></div>
         <div class="modalbody"><div class="dgrid">${cards}</div></div>
-        <p class="sub" style="margin:8px 14px 0">Oldest first \u2014 the highlighted card is on top.</p>
+        ${hint}
       </div>
     </div>`;
 }
@@ -1335,8 +1358,7 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "draw-stock": return send({ t: "move", move: { type: "drawStock", seat: v.you } });
-    case "draw-discard":
-    case "take-pile": return send({ t: "move", move: { type: "drawDiscard", seat: v.you, cardId: +t.dataset.cardid } });
+    case "draw-discard": S.discardOpen = false; return send({ t: "move", move: { type: "drawDiscard", seat: v.you, cardId: +t.dataset.cardid } });
     case "toggle-card": return toggleSel(+t.dataset.cardid);
     case "select-meld": S.rummyLayoff = S.rummyLayoff === +t.dataset.meldid ? null : +t.dataset.meldid; return render();
     case "meld-selected": return doMeld();

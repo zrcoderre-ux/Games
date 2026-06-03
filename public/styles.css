@@ -694,9 +694,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .modalhead{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 10px;font-family:Fraunces,serif;font-weight:600;color:var(--ink);border-bottom:1px solid rgba(150,110,60,.25)}
 .modalbody{overflow:auto;padding:14px}
 .dgrid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-.dcard{transition:transform .1s ease}
+.dcard{display:flex;flex-direction:column;align-items:center;gap:3px;transition:transform .1s ease}
 .dcard.top{transform:translateY(-2px)}
 .dcard.top .card{box-shadow:0 2px 2px rgba(0,0,0,.25),0 7px 14px -6px rgba(0,0,0,.55),0 0 0 2px var(--brass-hi)}
+.dcard.bottom .card{box-shadow:0 2px 2px rgba(0,0,0,.25),0 7px 14px -6px rgba(0,0,0,.55),0 0 0 1.5px var(--wood-hi)}
+.sweep-label{font-size:10px;color:var(--brass-hi);font-weight:700;white-space:nowrap;text-align:center}
 
 /* offline toggle on the start screen */
 .toggle{display:flex;align-items:flex-start;gap:10px;margin:14px 0 0;text-transform:none;letter-spacing:0;font-weight:600;color:var(--ink);cursor:pointer}
