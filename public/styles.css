@@ -73,16 +73,16 @@ button{font-family:inherit}
   padding:max(10px,env(safe-area-inset-top)) 10px max(14px,env(safe-area-inset-bottom));
   display:flex;flex-direction:column;
 }
-/* When table is present: lock height, center the oval, darken surround */
+/* When table is present: full-screen immersive layout */
 #app:has(.table){
   height:100dvh;overflow:hidden;padding:0;
-  justify-content:center;align-items:center;
-  gap:0;
+  background:#050e06;
 }
 #app:has(.table) .appbar{
   position:absolute;top:0;left:0;right:0;
   padding:max(8px,env(safe-area-inset-top)) 16px 8px;
   z-index:10;
+  background:linear-gradient(180deg,rgba(5,14,6,.85) 60%,transparent);
 }
 
 /* ---------- App bar ---------- */
@@ -264,56 +264,47 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .avatar .crown{position:absolute;-top:8px;top:-9px;left:50%;transform:translateX(-50%);font-size:13px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
 
 /* ============================================================
-   TABLE  (game view)
+   TABLE  (game view) — semi-circle immersive layout
    ============================================================ */
 .table{
-  /* The table is a true oval floating in the dark room */
-  position:relative;z-index:0;
-  display:flex;flex-direction:column;
-  /* Constrain to an oval — content must stay inside the felt */
-  align-self:center;
-  width:min(88vw, 960px);
-  /* Height: maintain ~1.5:1 aspect ratio (width:height) for an oval table look */
-  height:min(calc(min(88vw,960px) / 1.5), calc(100dvh - 80px));
-  min-height:280px;
-  border-radius:50%;
+  /* Fill the entire screen — the felt IS the world */
+  position:absolute;inset:0;z-index:0;
+  /* Semi-circle illusion: large radial ellipse centred well below the screen.
+     You're seated at the near (bottom) edge of a huge oval table. */
+  background:
+    radial-gradient(ellipse 200% 95% at 50% 108%,
+      var(--felt-2) 0%,
+      var(--felt-1) 28%,
+      var(--felt-0) 52%,
+      #050e06 68%),
+    #050e06;
   overflow:hidden;
   animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
-  padding:10% 8% 6%;  /* arc-shaped inset so content clears the wood rim */
-  box-sizing:border-box;
-  background:
-    radial-gradient(120% 70% at 50% 12%, rgba(255,236,190,.16), rgba(255,236,190,0) 46%),
-    radial-gradient(140% 120% at 50% 8%, var(--felt-2) 0%, var(--felt-1) 42%, var(--felt-0) 100%);
-  box-shadow:
-    inset 0 0 80px rgba(0,0,0,.45),
-    inset 0 0 0 14px var(--wood-2),
-    inset 0 0 0 16px var(--wood-edge),
-    inset 0 2px 0 18px rgba(255,255,255,.05),
-    0 20px 60px -10px rgba(0,0,0,.8),
-    0 0 0 1px rgba(0,0,0,.4);
 }
 /* felt noise */
 .table::before{
-  content:"";position:absolute;inset:0;
-  border-radius:50%;pointer-events:none;
-  background-image:var(--noise);background-size:170px;opacity:.06;mix-blend-mode:overlay;
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:var(--noise);background-size:170px;opacity:.055;mix-blend-mode:overlay;
   z-index:0;
 }
-/* wood grain */
+/* curved wood rim — a wide semi-ellipse at the bottom */
 .table::after{
-  content:"";position:absolute;inset:0;
-  border-radius:50%;pointer-events:none;
-  background:repeating-linear-gradient(90deg, rgba(0,0,0,.12) 0 2px, transparent 2px 9px);
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;mask-composite:exclude;padding:16px;opacity:.35;
+  content:"";position:absolute;pointer-events:none;
+  left:-15%;right:-15%;
+  bottom:-60%;height:80%;
+  border-radius:50%;
+  border-top:18px solid var(--wood-2);
+  box-shadow:0 -2px 0 var(--wood-edge),0 -4px 0 rgba(255,255,255,.06),inset 0 8px 30px rgba(0,0,0,.5);
+  z-index:0;
 }
 /* All direct children float above the felt layers */
 .table>*{position:relative;z-index:1}
 
-/* top rail of opponents */
+/* top rail of opponents — sits along the upper arc */
 .rail.top{
-  display:flex;justify-content:space-around;align-items:flex-start;gap:6px;
-  padding:0 8% 4px;min-height:74px;z-index:2;flex-wrap:wrap;
+  position:absolute;top:max(52px,10%);left:6%;right:6%;
+  display:flex;justify-content:space-around;align-items:flex-start;gap:8px;
+  z-index:2;flex-wrap:nowrap;
 }
 
 /* opponent pod */
@@ -353,8 +344,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* ---------- Center play area ---------- */
 .center{
-  flex:1;position:relative;z-index:1;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:12px;min-height:140px;padding:6px 0;
+  position:absolute;z-index:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;
+  /* Vertically centred between the rail and the hand — bias slightly upward */
+  top:50%;left:50%;transform:translate(-50%,-58%);
+  width:min(80vw,500px);
 }
 .callout{
   font-family:"Fraunces",serif;font-style:italic;font-size:16px;color:var(--ink);
@@ -400,13 +394,17 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .meld .card{margin-left:-22px}
 .meld .card:first-child{margin-left:0}
 
-/* ---------- Self rail (you) ---------- */
-.selfwrap{position:relative;z-index:3;margin-top:auto;display:flex;flex-direction:column;align-items:center;width:100%}
+/* ---------- Self rail (you) — anchored to screen bottom ---------- */
+.selfwrap{
+  position:absolute;bottom:0;left:0;right:0;z-index:3;
+  display:flex;flex-direction:column;align-items:center;
+  padding-bottom:max(6px,env(safe-area-inset-bottom));
+}
 .selfbar{
   display:flex;align-items:center;gap:10px;
-  background:linear-gradient(180deg,rgba(74,47,27,.92),rgba(43,28,18,.92));
-  border:1px solid rgba(205,160,90,.28);border-radius:14px;
-  padding:8px 12px;margin:0 2px 8px;width:100%;box-sizing:border-box;
+  background:linear-gradient(180deg,rgba(74,47,27,.88),rgba(43,28,18,.88));
+  border:1px solid rgba(205,160,90,.25);border-radius:12px;
+  padding:6px 12px;margin:0 8px 6px;width:calc(100% - 16px);box-sizing:border-box;
   box-shadow:inset 0 1px 0 rgba(205,160,90,.2),0 6px 16px -10px rgba(0,0,0,.6);
 }
 .selfbar .name{font-weight:700;font-size:14.5px}
@@ -419,16 +417,16 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .selfbar .waitflag{margin-left:auto;font-size:12.5px;color:var(--ink-dim)}
 
-/* hand fan */
+/* hand fan — full width at bottom, cards overlap the rim slightly */
 .hand{
   display:flex;justify-content:center;align-items:flex-end;
-  min-height:104px;padding:18px 6px 6px;position:relative;
+  min-height:110px;padding:22px 4px 4px;position:relative;
   width:100%;box-sizing:border-box;
 }
 .hand.empty{min-height:0;padding:0}
 
 /* actions */
-.actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;padding:4px 2px 2px;width:100%;box-sizing:border-box}
+.actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;padding:4px 8px 2px;width:100%;box-sizing:border-box}
 .actions .btn{flex:1 1 auto;min-width:120px;max-width:220px}
 .hint{width:100%;text-align:center;font-size:12.5px;color:var(--ink-soft);font-style:italic;font-family:"Fraunces",serif}
 
