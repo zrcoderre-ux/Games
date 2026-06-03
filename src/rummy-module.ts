@@ -585,49 +585,90 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
 // used immediately, lay down melds as it gets them (held points are at risk),
 // lay off where it can, then discard the highest-value least-connected card.
 
-// The AI builds melds from natural cards only (it never spends its wilds); this
-// keeps every move it emits legal while leaving joker play to humans.
+// The AI spends its wild jokers, but sparingly: it always prefers a meld made
+// of natural cards and only fills gaps/ends with jokers when that's what it
+// takes to lay something down. Every meld these return satisfies isSet/isRun.
+const naturalsOf = (hand: RummyCard[]): RummyCard[] => hand.filter((c) => !c.joker);
+const jokersOf = (hand: RummyCard[]): RummyCard[] => hand.filter((c) => c.joker);
+
 function findSet(hand: RummyCard[]): RummyCard[] | null {
+  const jokers = jokersOf(hand);
   const byRank = new Map<number, RummyCard[]>();
-  for (const c of hand) if (!c.joker) byRank.set(c.rank, [...(byRank.get(c.rank) ?? []), c]);
-  for (const g of byRank.values()) if (g.length >= 3) return g.slice(0, 4);
+  for (const c of naturalsOf(hand)) byRank.set(c.rank, [...(byRank.get(c.rank) ?? []), c]);
+  for (const g of byRank.values()) if (g.length >= 3) return g.slice(0, 4); // natural set first
+  // otherwise complete the largest natural group with jokers
+  let bestG: RummyCard[] | null = null;
+  for (const g of byRank.values()) if (!bestG || g.length > bestG.length) bestG = g;
+  if (bestG && bestG.length >= 1 && bestG.length + jokers.length >= 3)
+    return [...bestG, ...jokers.slice(0, 3 - bestG.length)];
   return null;
 }
 function findSetContaining(hand: RummyCard[], c: RummyCard): RummyCard[] | null {
   if (c.joker) return null;
   const g = hand.filter((x) => !x.joker && x.rank === c.rank);
-  return g.length >= 3 ? g.slice(0, 4) : null;
-}
-function findRunInSuit(suitCards: RummyCard[]): RummyCard[] | null {
-  const tryWith = (aceRank: number): RummyCard[] | null => {
-    const byRank = new Map<number, RummyCard>();
-    for (const c of suitCards) byRank.set(c.rank === 14 ? aceRank : c.rank, c);
-    let best: RummyCard[] | null = null;
-    let run: RummyCard[] = [];
-    for (let r = 1; r <= 14; r++) {
-      const card = byRank.get(r);
-      if (card) { run.push(card); if (!best || run.length > best.length) best = run.slice(); }
-      else run = [];
-    }
-    return best && best.length >= 3 ? best : null;
-  };
-  return tryWith(1) ?? tryWith(14);
-}
-const findRun = (hand: RummyCard[]): RummyCard[] | null => {
-  for (const s of SUITS) { const r = findRunInSuit(hand.filter((c) => c.suit === s)); if (r) return r; }
+  if (g.length >= 3) return g.slice(0, 4);
+  const jokers = jokersOf(hand);
+  if (g.length >= 1 && g.length + jokers.length >= 3) return [...g, ...jokers.slice(0, 3 - g.length)];
   return null;
-};
-function findRunContaining(hand: RummyCard[], c: RummyCard): RummyCard[] | null {
-  const inSuit = hand.filter((x) => x.suit === c.suit);
+}
+
+// Best run we can build in one suit, optionally spending some of `jokers`.
+// Scans every window; prefers more natural cards, then fewer jokers used.
+function bestRunInSuit(naturals: RummyCard[], jokers: RummyCard[]): RummyCard[] | null {
+  let best: RummyCard[] | null = null;
+  let bestScore = -Infinity;
   for (const aceRank of [1, 14]) {
     const byRank = new Map<number, RummyCard>();
-    for (const x of inSuit) byRank.set(x.rank === 14 ? aceRank : x.rank, x);
+    for (const c of naturals) { const r = c.rank === 14 ? aceRank : c.rank; if (!byRank.has(r)) byRank.set(r, c); }
+    if (!byRank.size) continue;
+    for (let lo = 1; lo <= 12; lo++) {
+      for (let hi = lo + 2; hi <= 14; hi++) {
+        const span = hi - lo + 1;
+        let nat = 0;
+        for (let r = lo; r <= hi; r++) if (byRank.has(r)) nat++;
+        const missing = span - nat;
+        if (nat < 1 || missing > jokers.length) continue;
+        const score = nat * 100 - missing; // favor natural cards, minimize wilds spent
+        if (score <= bestScore) continue;
+        const jk = [...jokers];
+        const cards: RummyCard[] = [];
+        for (let r = lo; r <= hi; r++) cards.push(byRank.has(r) ? byRank.get(r)! : jk.shift()!);
+        best = cards;
+        bestScore = score;
+      }
+    }
+  }
+  return best;
+}
+function findRun(hand: RummyCard[]): RummyCard[] | null {
+  const jokers = jokersOf(hand);
+  for (const s of SUITS) {
+    const r = bestRunInSuit(hand.filter((c) => c.suit === s && !c.joker), jokers);
+    if (r) return r;
+  }
+  return null;
+}
+function findRunContaining(hand: RummyCard[], c: RummyCard): RummyCard[] | null {
+  if (c.joker) return null;
+  const inSuit = hand.filter((x) => x.suit === c.suit && !x.joker);
+  const jokers = jokersOf(hand);
+  for (const aceRank of [1, 14]) {
+    const byRank = new Map<number, RummyCard>();
+    for (const x of inSuit) { const r = x.rank === 14 ? aceRank : x.rank; if (!byRank.has(r)) byRank.set(r, x); }
     const cr = c.rank === 14 ? aceRank : c.rank;
-    for (let start = cr - 2; start <= cr; start++) {
-      const seq: RummyCard[] = [];
-      let ok = true;
-      for (let k = 0; k < 3; k++) { const r = start + k; const card = byRank.get(r); if (!card) { ok = false; break; } seq.push(card); }
-      if (ok && seq.some((x) => x.id === c.id)) return seq;
+    byRank.set(cr, c); // ensure c is the card used for its rank
+    for (let lo = Math.max(1, cr - 2); lo <= cr; lo++) {
+      for (let hi = cr; hi <= Math.min(14, cr + 2); hi++) {
+        if (hi - lo + 1 < 3) continue;
+        let nat = 0;
+        for (let r = lo; r <= hi; r++) if (byRank.has(r)) nat++;
+        const missing = hi - lo + 1 - nat;
+        if (nat < 1 || missing > jokers.length) continue;
+        const jk = [...jokers];
+        const cards: RummyCard[] = [];
+        for (let r = lo; r <= hi; r++) cards.push(byRank.has(r) ? byRank.get(r)! : jk.shift()!);
+        if (cards.includes(c)) return cards;
+      }
     }
   }
   return null;
@@ -639,6 +680,7 @@ function layoffOnto(state: RummyState, m: Meld, c: RummyCard, seat: number): Rum
 }
 function worstDiscard(hand: RummyCard[]): RummyCard {
   const score = (c: RummyCard): number => {
+    if (c.joker) return -100; // a wild is far too useful to throw away
     let keep = 0;
     const mates = hand.filter((x) => x.rank === c.rank && x.id !== c.id).length;
     keep += mates >= 2 ? 8 : mates === 1 ? 3 : 0;
