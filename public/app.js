@@ -803,6 +803,8 @@ function renderRummy(v) {
   const lm = v.yourTurn ? v.legalMoves : [];
   const canStock = lm.some((m) => m.type === "drawStock");
   const discardDraw = lm.find((m) => m.type === "drawDiscard");
+  const bottom = v.discard.length ? v.discard[0] : null;
+  const canTakePile = bottom && lm.some((m) => m.type === "drawDiscard" && m.cardId === bottom.id) && v.discard.length > 1;
   const top = v.discard.length ? v.discard[v.discard.length - 1] : null;
   const inPlay = v.yourTurn && v.turnPhase === "play";
 
@@ -848,6 +850,7 @@ function renderRummy(v) {
         ${top ? stackCards : `<div class="card" style="opacity:.22"></div>`}
       </div>
       <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
+      ${canTakePile ? `<button class="btn sm" data-action="take-pile" data-cardid="${bottom.id}" style="margin-top:4px">Take pile</button>` : ""}
     </div>`;
   const melds = v.melds.length
     ? `<div class="melds">${v.melds
@@ -1332,7 +1335,8 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "draw-stock": return send({ t: "move", move: { type: "drawStock", seat: v.you } });
-    case "draw-discard": return send({ t: "move", move: { type: "drawDiscard", seat: v.you, cardId: +t.dataset.cardid } });
+    case "draw-discard":
+    case "take-pile": return send({ t: "move", move: { type: "drawDiscard", seat: v.you, cardId: +t.dataset.cardid } });
     case "toggle-card": return toggleSel(+t.dataset.cardid);
     case "select-meld": S.rummyLayoff = S.rummyLayoff === +t.dataset.meldid ? null : +t.dataset.meldid; return render();
     case "meld-selected": return doMeld();
