@@ -62,6 +62,7 @@ const S = {
   rummySel: new Set(), // selected card ids
   rummyLayoff: null, // selected meld id for layoff
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
+  rummySort: "suit", // last sort mode used; next click alternates
   discardOpen: false, // discard-pile popup open?
   dragId: null, // card id being dragged within the hand
   dropBeforeId: null, // drop target (insert before this card id; null = end)
@@ -883,10 +884,10 @@ function renderRummy(v) {
   const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards);
   const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;
 
-  // sort controls (available whenever you hold cards)
+  // sort controls (available whenever you hold cards) \u2014 single alternating button
+  const nextSort = S.rummySort === "suit" ? "rank" : "suit";
   const sortBar = v.yourHand.length
-    ? `<button class="btn ghost sm" data-action="sort-suit">Sort \u2660\u2665</button>
-       <button class="btn ghost sm" data-action="sort-rank">Sort 1\u20139</button>`
+    ? `<button class="btn ghost sm" data-action="sort-toggle">Sort ${nextSort === "suit" ? "\u2660\u2665 suit" : "1\u20139 rank"}</button>`
     : "";
 
   // actions
@@ -1300,8 +1301,7 @@ app.addEventListener("click", (e) => {
   switch (t.dataset.action) {
     case "open-discard": S.discardOpen = true; return render();
     case "close-discard": S.discardOpen = false; return render();
-    case "sort-suit": return rummySort(v.yourHand, "suit");
-    case "sort-rank": return rummySort(v.yourHand, "rank");
+    case "sort-toggle": { const m = S.rummySort === "suit" ? "rank" : "suit"; S.rummySort = m; return rummySort(v.yourHand, m); }
     case "pick-game": S.pickGame = t.dataset.game; return renderStart();
     case "toggle-offline": S.offline = !!t.checked; return renderStart();
     case "toggle-log": S.showLog = !S.showLog; return render();
