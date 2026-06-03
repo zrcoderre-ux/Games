@@ -242,6 +242,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   background:linear-gradient(160deg,var(--av-1,#d9b06a),var(--av-2,#b07f3e));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 8px -3px rgba(0,0,0,.55);
   position:relative;
+  transition:box-shadow .35s ease;
 }
 .avatar.bot{font-size:18px}
 .avatar .crown{position:absolute;-top:8px;top:-9px;left:50%;transform:translateX(-50%);font-size:13px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
@@ -345,7 +346,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* trick layout (HLJ) */
 .trick{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:flex-end}
-.trick .play{display:flex;flex-direction:column;align-items:center;gap:5px;animation:dropin .3s cubic-bezier(.2,.8,.2,1) both}
+.trick .play{display:flex;flex-direction:column;align-items:center;gap:5px;animation:dropin .5s cubic-bezier(.2,.8,.2,1) both}
 .trick .who{font-size:11px;color:var(--ink-soft);font-weight:600;max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trick .play.lead .who{color:var(--brass-hi)}
 
@@ -409,7 +410,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
     0 7px 14px -6px rgba(0,0,0,.55),
     inset 0 0 0 1px rgba(150,110,60,.3);
   color:var(--suit-blk);
-  transition:transform .14s cubic-bezier(.2,.8,.2,1), box-shadow .14s, filter .14s;
+  transition:transform .34s cubic-bezier(.2,.85,.25,1), box-shadow .24s ease, filter .24s ease;
   font-family:"Fraunces",serif;
   cursor:default;
 }
@@ -482,7 +483,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 @keyframes dropin{from{opacity:0;transform:translateY(-18px) scale(.9) rotate(-3deg)}to{opacity:1;transform:none}}
 @keyframes turnpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.12)}}
 @keyframes dealin{from{opacity:0;transform:translateY(26px) scale(.9)}to{opacity:1}}
-.deal>*{animation:dealin .4s cubic-bezier(.2,.8,.2,1) both}
+.deal>*{animation:dealin .55s cubic-bezier(.2,.8,.2,1) both}
 .deal>*:nth-child(1){animation-delay:.02s}
 .deal>*:nth-child(2){animation-delay:.05s}
 .deal>*:nth-child(3){animation-delay:.08s}
@@ -527,3 +528,71 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .meld.target{outline:2px solid var(--amber);outline-offset:2px;background:rgba(224,164,78,.12)}
 
 .pile .pts{font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:2px}
+
+/* ============================================================
+   TEAMS (High Low Jack) · last trick · move log
+   ============================================================ */
+:root{ --teamA:#e7a64e; --teamB:#5cae9c; }
+
+/* team ring on opponent avatars (active brass glow still wins) */
+.pod.tA .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 2px var(--teamA),0 3px 8px -3px rgba(0,0,0,.55)}
+.pod.tB .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 2px var(--teamB),0 3px 8px -3px rgba(0,0,0,.55)}
+
+.teamchip{position:absolute;top:-2px;left:0;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;
+  font-size:11px;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.55);border:1px solid rgba(0,0,0,.18);z-index:2}
+.teamchip.tA{background:var(--teamA);color:#3a2306}
+.teamchip.tB{background:var(--teamB);color:#0c241f}
+
+.teamdot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.teamdot.tA{background:var(--teamA)}
+.teamdot.tB{background:var(--teamB)}
+
+.teambadge{display:inline-flex;align-items:center;gap:5px;font-weight:800;font-size:11px;letter-spacing:.6px;
+  text-transform:uppercase;padding:3px 10px;border-radius:999px;box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+.teambadge.tA{background:var(--teamA);color:#3a2306}
+.teambadge.tB{background:var(--teamB);color:#0c241f}
+.me-partner{color:var(--ink-soft);font-size:12px;margin-left:8px}
+
+.crestrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.crest.score{gap:7px}
+.crest.score.mine{border-color:var(--brass-hi);box-shadow:inset 0 1px 0 rgba(205,160,90,.3),0 0 0 1px var(--brass-hi)}
+
+.trick .who.tA{color:var(--teamA)}
+.trick .who.tB{color:var(--teamB)}
+
+/* last trick (shown when current trick is empty) */
+.lasttrick{display:flex;flex-direction:column;align-items:center;gap:7px}
+.lt-label{font-family:"Fraunces",serif;font-style:italic;font-size:12.5px;color:var(--ink-soft)}
+.trick.faded{opacity:.6}
+.trick.faded .play{animation:none}
+
+/* move-log slide-up sheet */
+.logsheet{position:fixed;left:0;right:0;bottom:0;z-index:120;max-height:62vh;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,#3a2616,#221408);border-top:1px solid rgba(205,160,90,.4);
+  border-radius:18px 18px 0 0;box-shadow:0 -16px 44px -16px rgba(0,0,0,.85);
+  padding:10px max(12px,env(safe-area-inset-left)) max(14px,env(safe-area-inset-bottom));
+  animation:slideup .28s cubic-bezier(.2,.8,.2,1) both}
+.loghead{display:flex;align-items:center;justify-content:space-between;font-family:"Fraunces",serif;font-size:17px;
+  color:var(--ink);padding:2px 2px 9px;border-bottom:1px solid rgba(205,160,90,.2)}
+.loglist{overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-top:9px;-webkit-overflow-scrolling:touch}
+.logrow{font-size:13.5px;color:var(--ink);padding:7px 11px;background:rgba(0,0,0,.22);border-radius:9px;
+  border:1px solid rgba(205,160,90,.12)}
+.logrow b{color:var(--brass-hi);font-weight:700}
+.logrow i{color:var(--ink-soft);font-style:italic}
+.lc{font-weight:700;font-family:"Fraunces",serif}
+.lc.red{color:var(--suit-red)}
+@keyframes slideup{from{transform:translateY(100%)}to{transform:none}}
+
+/* ---------- Pegs & Jokers ---------- */
+.pjstrip{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:100%}
+.pjseat{display:flex;align-items:center;gap:6px;padding:4px 9px;border-radius:11px;
+  background:rgba(0,0,0,.22);border:1px solid rgba(168,119,63,.25);font-size:12px;color:var(--ink-soft)}
+.pjseat.active{border-color:var(--brass);background:rgba(205,160,90,.16);color:var(--ink)}
+.pjseat.me .nm{color:var(--ink);font-weight:600}
+.pjseat .dot{width:11px;height:11px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.4)}
+.pjseat .nm{max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pjseat .hm{font-family:Fraunces,serif;color:var(--brass-hi);font-weight:600}
+.pjwrap{width:100%;margin:2px auto 0;filter:drop-shadow(0 14px 26px rgba(0,0,0,.5))}
+.pjsvg{width:100%;height:auto;display:block;border-radius:8px}
+.pjcardslot{display:inline-block;cursor:pointer;transition:transform .08s ease}
+.pjcardslot:active{transform:translateY(1px)}

@@ -22,6 +22,22 @@ const GAMES = {
     blurb: "Bid, take trump tricks, chase the Jack.",
     range: "4 / 6 / 8 players",
   },
+  hearts: {
+    label: "Hearts",
+    players: [3, 4, 5],
+    target: 100,
+    suit: "\u2665",
+    blurb: "Dodge hearts & the Black Lady; lowest score wins.",
+    range: "3 / 4 / 5 players",
+  },
+  "pegs-and-jokers": {
+    label: "Pegs & Jokers",
+    players: [4, 6],
+    marbles: [3, 4, 5],
+    suit: "\u2660",
+    blurb: "Race your marbles home; jokers bump, sevens split.",
+    range: "4 or 6 players \u00b7 partners",
+  },
 };
 
 const app = document.getElementById("app");
@@ -39,7 +55,65 @@ const S = {
   view: null,
   rummySel: new Set(), // selected card ids
   rummyLayoff: null, // selected meld id for layoff
+  heartsPass: new Set(), // selected card ids to pass (Hearts)
+  pjCard: null, // selected card id (Pegs & Jokers)
+  pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
+  showLog: false,
 };
+
+// Pegs & Jokers peg colors, one per seat. Even seats are team A, odd are team B.
+const PJ_PEG = ["#b8413a", "#d79a3c", "#2f9069", "#3f6bb0", "#8a52a0", "#3aa0a8"];
+const shade = (hex, p) => {
+  const n = parseInt(hex.slice(1), 16), c = (v) => Math.max(0, Math.min(255, v));
+  return `#${((c((n >> 16) + p) << 16) | (c(((n >> 8) & 255) + p) << 8) | c((n & 255) + p)).toString(16).padStart(6, "0")}`;
+};
+
+// ---------- in-place DOM morphing ----------
+// We re-render whole screens as HTML strings, but patch them into the live DOM
+// node-by-node instead of replacing innerHTML. Unchanged nodes are kept, so there
+// is no flash on every server update, entrance animations don't replay, and CSS
+// transitions (card position, turn glow) actually tween between states.
+function morphNode(a, b) {
+  if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) {
+    a.replaceWith(b.cloneNode(true));
+    return;
+  }
+  if (a.nodeType === 3 || a.nodeType === 8) {
+    if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue;
+    return;
+  }
+  for (let i = a.attributes.length - 1; i >= 0; i--) {
+    const n = a.attributes[i].name;
+    if (!b.hasAttribute(n)) a.removeAttribute(n);
+  }
+  for (const at of b.attributes) {
+    if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
+  }
+  // keep form fields usable: sync value/checked unless the user is editing it now
+  if ((a.nodeName === "INPUT" || a.nodeName === "TEXTAREA" || a.nodeName === "SELECT") && a !== document.activeElement) {
+    const bv = b.getAttribute("value");
+    if (bv != null && a.value !== bv) a.value = bv;
+  }
+  morphList(a, b);
+}
+function morphList(parent, source) {
+  let a = parent.firstChild;
+  let b = source.firstChild;
+  while (b) {
+    const bnext = b.nextSibling;
+    if (!a) { parent.appendChild(b.cloneNode(true)); b = bnext; continue; }
+    const anext = a.nextSibling;
+    morphNode(a, b);
+    a = anext; b = bnext;
+  }
+  while (a) { const n = a.nextSibling; parent.removeChild(a); a = n; }
+}
+function patch(html) {
+  const tpl = document.createElement("template");
+  tpl.innerHTML = html;
+  morphList(app, tpl.content);
+}
+Object.defineProperty(app, "__set", { configurable: true, set(html) { patch(html); } });
 
 // ---------- utilities ----------
 const esc = (s) =>
@@ -108,7 +182,8 @@ function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
   const backs = Math.min(o.count || 0, 4);
   const mb = Array.from({ length: backs }, () => `<span class="mb"></span>`).join("");
-  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""}">
+  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""}">
+    ${o.team ? `<span class="teamchip t${o.team}">${o.team}</span>` : ""}
     ${o.dealer ? `<span class="dealer">D</span>` : ""}
     <div class="ministack">${mb}</div>
     ${avatarHTML(name)}
@@ -149,6 +224,21 @@ function toast(msg) {
   toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3200);
 }
 
+// ---------- move log (authoritative: rendered from view.log) ----------
+function cardText(c) {
+  if (!c) return "";
+  if (c.joker) return `<span class="lc red">\u2605</span>`;
+  return `<span class="lc ${RED.has(c.suit) ? "red" : ""}">${rankLabel(c.rank)}${SUIT[c.suit]}</span>`;
+}
+function logEntryHTML(v, e) {
+  const who = e.seat != null ? `<b>${esc(seatName(v, e.seat))}</b> ` : "";
+  const body = e.seat == null ? `<i>${esc(e.msg)}</i>` : esc(e.msg);
+  const suit = e.suit ? ` <span class="lc ${RED.has(e.suit) ? "red" : ""}">${SUIT[e.suit]}</span>` : "";
+  const cards = (e.cards || []).map((c) => cardText(c)).join(" ");
+  const tail = e.tail ? ` ${esc(e.tail)}` : "";
+  return `${who}${body}${suit}${cards ? " " + cards : ""}${tail}`;
+}
+
 // ---------- networking ----------
 function send(m) {
   if (S.ws && S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify(m));
@@ -181,14 +271,28 @@ function connect() {
 }
 
 // ---------- app bar ----------
-function appbar(v) {
+function appbar(v, opts = {}) {
   return `<div class="appbar">
     <div class="brand"><div class="glyph">P</div><span class="wordmark">${esc(GAMES[S.party].label)}</span></div>
     <div class="spacer"></div>
     <div class="roomtag">room <b>${esc(S.room)}</b></div>
+    ${opts.log ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
     <button class="btn sm ghost" data-action="copy-link">Share</button>
     <button class="btn sm ghost" data-action="leave">Leave</button>
   </div>`;
+}
+
+function logSheet() {
+  if (!S.showLog) return "";
+  const v = S.view;
+  const entries = v && v.log ? v.log : [];
+  const rows = entries.length
+    ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("")
+    : `<div class="logrow" style="color:var(--ink-dim)">No moves yet — they'll appear here as the hand plays out.</div>`;
+  return `<div class="logsheet">
+      <div class="loghead"><span>Move log</span><button class="btn sm ghost" data-action="toggle-log">Close</button></div>
+      <div class="loglist">${rows}</div>
+    </div>`;
 }
 
 // shared table frame: pods on the top rail, center play area, your rail at the bottom
@@ -207,11 +311,11 @@ function tableShell(v, parts) {
   } else {
     self = `<div class="selfbar"><div class="name">Spectating</div><div class="me-pts">${parts.selfMeta || ""}</div></div>`;
   }
-  return `${appbar(v)}<div class="table">
+  return `${appbar(v, { log: true })}<div class="table">
     <div class="rail top deal">${railPods}</div>
     <div class="center">${parts.center}</div>
     <div class="selfwrap">${self}</div>
-  </div>`;
+  </div>${logSheet()}`;
 }
 
 // ---------- render router ----------
@@ -221,11 +325,13 @@ function render() {
   const v = S.view;
   if (v.phase === "lobby") return renderLobby(v);
   if (S.party === "high-low-jack") return renderHLJ(v);
+  if (S.party === "hearts") return renderHearts(v);
+  if (S.party === "pegs-and-jokers") return renderPJ(v);
   return renderRummy(v);
 }
 
 function renderConnecting() {
-  app.innerHTML = `${appbar({})}
+  app.__set = `${appbar({})}
     <div class="stage"><div class="panel cream" style="text-align:center">
       <div class="hero"><div class="logo">\u2663</div><h2>Reaching the table…</h2>
       <p class="sub">${S.connected ? "Joined — dealing you in." : "Connecting to the room."}</p></div>
@@ -244,7 +350,7 @@ function renderStart() {
       </button>`,
     )
     .join("");
-  app.innerHTML = `
+  app.__set = `
     <div class="stage" style="justify-content:center;padding-top:6vh">
       <div class="panel cream">
         <div class="hero"><div class="logo">\u2660</div><h1>Parlor</h1><p class="tag">a cozy room for cards</p></div>
@@ -263,7 +369,8 @@ function renderStart() {
 // ---------- lobby ----------
 function renderLobby(v) {
   const isHost = v.you !== null && v.you === v.hostSeat;
-  const counts = GAMES[S.party].players;
+  const isPJ = S.party === "pegs-and-jokers";
+  const counts = isPJ ? [4] : GAMES[S.party].players;
   const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
 
   const seats = v.seats
@@ -292,19 +399,27 @@ function renderLobby(v) {
     })
     .join("");
 
+  const cfgControls = isPJ
+    ? `<label>Players</label>
+         <div class="seg">${[4, 6].map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="pj-setplayers" data-count="${c}">${c}</button>`).join("")}</div>
+         <p class="sub" style="margin:4px 0 0">${v.players === 6 ? "Two teams of three (alternating seats)." : "Two pairs (partners opposite)."}</p>
+         <label>Marbles per player</label>
+         <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div>`
+    : `<label>Players</label>
+         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>
+         <label>Play to (points)</label>
+         <input class="field" id="f-target" type="number" min="1" value="${v.target}" />`;
+
   const hostPanel = isHost
     ? `<div class="panel">
          <h2>Set up the table</h2>
-         <label>Players</label>
-         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>
-         <label>Play to (points)</label>
-         <input class="field" id="f-target" type="number" min="1" value="${v.target}" />
+         ${cfgControls}
          <p class="sub" style="margin-top:10px">Anyone can sit in an open seat. Empty seats become bots when you deal.</p>
-         <div style="margin-top:14px"><button class="btn" style="width:100%" data-action="start">Deal the cards</button></div>
+         <div style="margin-top:14px"><button class="btn" style="width:100%" data-action="start">${isPJ ? "Deal & start" : "Deal the cards"}</button></div>
        </div>`
     : `<div class="panel" style="text-align:center"><p class="sub">Waiting for the host to deal…</p></div>`;
 
-  app.innerHTML = `${appbar(v)}
+  app.__set = `${appbar(v)}
     <div class="stage">
       <div class="panel cream">
         <h2>Lobby</h2>
@@ -332,7 +447,7 @@ function scoreList(rows) {
 
 function renderGameOver(v, title, scoresHTML) {
   const isHost = v.you !== null && v.you === v.hostSeat;
-  app.innerHTML = `${appbar(v)}
+  app.__set = `${appbar(v)}
     <div class="stage">
       <div class="panel cream" style="text-align:center">
         <div class="hero"><div class="logo">\u2660</div><h1>${esc(title)}</h1><p class="sub">Good game.</p></div>
@@ -363,7 +478,9 @@ function renderHLJ(v) {
   const plays = new Set(lm.filter((m) => m.type === "play").map((m) => cardKey(m.card)));
   const highBid = v.highBid ? `${v.highBid.amount} (${esc(seatName(v, v.highBid.seat))})` : "\u2014";
 
-  // pods (everyone but you)
+  const teamLetter = (i) => (i % 2 === 0 ? "A" : "B");
+
+  // pods (everyone but you), tagged with their team
   const pods = v.seats
     .map((s, i) =>
       i === v.you
@@ -371,6 +488,7 @@ function renderHLJ(v) {
         : podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
+            team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             count: v.handCounts[i],
             note: v.phase === "bidding" && v.signals[i] ? v.signals[i] : null,
@@ -378,15 +496,26 @@ function renderHLJ(v) {
     )
     .filter(Boolean);
 
-  // center: crests + trick
+  // center: trump + team scores, then the trick (or the last completed trick)
+  const you = v.you;
+  const myTeam = you != null ? you % 2 : null;
   const trumpCrest = `<span class="crest"><span class="suit ${v.trump && RED.has(v.trump) ? "red" : "blk"}">${v.trump ? SUIT[v.trump] : "\u2014"}</span> trump</span>`;
+  const teamCrest = (t) =>
+    `<span class="crest score t${t === 0 ? "A" : "B"} ${myTeam === t ? "mine" : ""}"><span class="teamdot t${t === 0 ? "A" : "B"}"></span>Team ${t === 0 ? "A" : "B"} ${v.scores[t]}${myTeam === t ? " \u00b7 you" : ""}</span>`;
   const bidCrest = v.phase === "bidding" ? `<span class="crest">high bid: ${highBid}</span>` : "";
-  const trick = v.currentTrick.length
-    ? `<div class="trick">${v.currentTrick
-        .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true })}<span class="who">${esc(seatName(v, p.seat))}</span></div>`)
-        .join("")}</div>`
-    : `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
-  const center = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${trumpCrest}${bidCrest}</div>${trick}`;
+  let trick;
+  if (v.currentTrick.length) {
+    trick = `<div class="trick">${v.currentTrick
+      .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true })}<span class="who t${teamLetter(p.seat)}">${esc(seatName(v, p.seat))}</span></div>`)
+      .join("")}</div>`;
+  } else if (v.phase !== "bidding" && v.lastTrick) {
+    trick = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
+      .map((c) => `<div class="play">${cardHTML(c, { mini: true })}</div>`)
+      .join("")}</div></div>`;
+  } else {
+    trick = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
+  }
+  const center = `<div class="crestrow">${trumpCrest}${teamCrest(0)}${teamCrest(1)}${bidCrest}</div>${trick}`;
 
   // hand (fanned), dim non-legal cards while it's your turn to play
   const hand = fanHand(v.yourHand, (c) => ({
@@ -416,13 +545,17 @@ function renderHLJ(v) {
     );
   }
 
-  const you = v.you;
-  const selfMeta = you != null ? `Team ${you % 2 === 0 ? "A" : "B"} \u00b7 A ${v.scores[0]} \u2014 B ${v.scores[1]} \u00b7 to ${v.target}` : `play to ${v.target}`;
+  const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
+  const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
+  const selfMeta =
+    you != null
+      ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>`
+      : `play to ${v.target}`;
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.innerHTML = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
 // ---------- Rummy 500 ----------
@@ -512,10 +645,287 @@ function renderRummy(v) {
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.innerHTML = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
 // ---------- actions ----------
+// ---------- Hearts (Black Lady) ----------
+// Pass direction from the seat offset the server reports (0 = a "hold" hand).
+const passDir = (offset, players) =>
+  offset === 0 ? "hold" : offset === 1 ? "left" : offset === players - 1 ? "right" : "across";
+
+function renderHearts(v) {
+  // Prune stale pass selections (cards that left the hand after the exchange).
+  const handIds = new Set(v.yourHand.map((c) => c.id));
+  for (const id of [...S.heartsPass]) if (!handIds.has(id)) S.heartsPass.delete(id);
+
+  if (v.phase === "gameOver") {
+    const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
+    // Lowest score wins, so the title still points at v.winner (server picks the min).
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
+  }
+
+  const passing = v.phase === "passing";
+  // Hearts cards carry ids; legalMoves give the playable card ids for this turn.
+  const plays = new Set(
+    (v.yourTurn && !passing ? v.legalMoves : []).filter((m) => m.type === "play").map((m) => m.card),
+  );
+
+  // Pods (everyone but you): running total is the big number; cards left as the
+  // stack count; a small note for who's to play / points taken this hand.
+  const pods = v.seats
+    .map((s, i) =>
+      i === v.you
+        ? ""
+        : podHTML(v, i, {
+            active: i === v.toAct,
+            count: v.handCounts[i],
+            pts: v.scores[i],
+            note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
+          }),
+    )
+    .filter(Boolean);
+
+  // Center: passing prompt, or the crests + the trick (kept showing the last
+  // completed trick for a beat once it's swept, so each card is visible).
+  let center;
+  if (passing) {
+    const dir = passDir(v.passOffset, v.players);
+    center = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <span class="crest">passing <b>${dir}</b></span>
+        <span class="crest">hand ${v.handNo + 1}</span>
+      </div>
+      <div class="callout">${
+        v.youPassed ? "Your cards are away \u2014 waiting for the table." : `Choose 3 cards to pass ${dir}.`
+      }</div>`;
+  } else {
+    const broken = `<span class="crest"><span class="suit red">\u2665</span> ${v.heartsBroken ? "broken" : "not broken"}</span>`;
+    const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${broken}<span class="crest">hand ${v.handNo + 1}</span></div>`;
+    const showLast = v.currentTrick.length === 0 && v.lastTrick;
+    const cards = v.currentTrick.length ? v.currentTrick : showLast ? v.lastTrick.cards : [];
+    const trick = cards.length
+      ? `<div class="trick">${cards
+          .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true })}<span class="who">${esc(seatName(v, p.seat))}</span></div>`)
+          .join("")}</div>`
+      : `<div class="callout">Lead a card to open the trick.</div>`;
+    const note = showLast
+      ? `<div class="callout" style="font-size:13px">Trick to ${esc(seatName(v, v.lastTrick.winner))}.</div>`
+      : "";
+    center = `${crests}${trick}${note}`;
+  }
+
+  // Hand: in passing, tap to (de)select up to 3; in play, tap a glowing legal card.
+  const hand = fanHand(v.yourHand, (c) => {
+    if (passing) {
+      return { action: v.youPassed ? "" : "toggle-pass", id: c.id, sel: S.heartsPass.has(c.id), playable: !v.youPassed, dim: v.youPassed };
+    }
+    const can = plays.has(c.id);
+    return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
+  });
+
+  // Actions.
+  const acts = [];
+  if (passing && !v.youPassed) {
+    const n = S.heartsPass.size;
+    acts.push(`<button class="btn" data-action="pass-3" ${v.yourTurn && n === 3 ? "" : "disabled"}>Pass 3${n ? ` (${n})` : ""}</button>`);
+    if (n) acts.push(`<button class="btn ghost sm" data-action="clear-pass">Clear</button>`);
+    acts.push(`<span class="hint">${v.yourTurn ? "Select exactly 3 cards to pass." : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
+  } else if (passing) {
+    acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
+  } else if (v.yourTurn && plays.size) {
+    acts.push(`<span class="hint">Tap a glowing card to play.</span>`);
+  }
+
+  const you = v.you;
+  const selfMeta = you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`;
+  const selfTurn = v.yourTurn
+    ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
+
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+}
+
+// ---------- Pegs & Jokers ----------
+const pjCardLabel = (c) => (!c ? "" : c.joker ? "Joker" : `${rankLabel(c.rank)}${SUIT[c.suit]}`);
+
+function pegXY(board, peg) {
+  if (peg.loc.z === "ring") return board.ring[peg.loc.r];
+  if (peg.loc.z === "castle") return board.castles[peg.owner][peg.loc.i];
+  return board.starts[peg.owner][peg.loc.i];
+}
+
+// A painted golf tee standing in a hole: contact shadow, tapered shaft, a
+// cupped head with paint sheen and a gloss highlight. Color drives gradient
+// stops via CSS vars so one gradient serves every seat color.
+function pjTee(x, y, color, glow) {
+  const top = y - 3.6, hr = 2.15;
+  const f = (n) => n.toFixed(2);
+  return `<g style="--tc:${color};--tc-hi:${shade(color, 48)};--tc-sh:${shade(color, -42)}" ${glow ? 'filter="url(#pjglow)"' : ""}>
+    <ellipse cx="${f(x + 0.5)}" cy="${f(y + 0.6)}" rx="2.4" ry="0.85" fill="#000" opacity="0.34"/>
+    <path d="M ${f(x - 0.62)},${f(top)} L ${f(x + 0.62)},${f(top)} L ${f(x + 0.2)},${f(y + 0.2)} L ${f(x - 0.2)},${f(y + 0.2)} Z" fill="var(--tc-sh)"/>
+    <path d="M ${f(x - 0.62)},${f(top)} L ${f(x - 0.05)},${f(top)} L ${f(x - 0.08)},${f(y + 0.2)} L ${f(x - 0.2)},${f(y + 0.2)} Z" fill="var(--tc)" opacity="0.55"/>
+    <ellipse cx="${f(x)}" cy="${f(top)}" rx="${hr}" ry="${f(hr * 0.74)}" fill="url(#pjhead)" stroke="${glow ? "#fff" : "#180f08"}" stroke-width="${glow ? 0.65 : 0.32}"/>
+    <ellipse cx="${f(x)}" cy="${f(top - 0.22)}" rx="${f(hr * 0.6)}" ry="${f(hr * 0.36)}" fill="#000" opacity="0.18"/>
+    <ellipse cx="${f(x - 0.55)}" cy="${f(top - 0.5)}" rx="0.85" ry="0.5" fill="#fff" opacity="0.62"/>
+  </g>`;
+}
+
+// The dark-wood board: a grained, beveled rectangular frame assembled from
+// trapezoidal panels (slanted seams), a recessed table showing through the
+// hollow, wooden castle arms, drilled holes with depth, and golf-tee pegs.
+function pjBoardSVG(v, glow) {
+  const b = v.board;
+  const W = b.viewW, H = b.viewH, C = b.center, P = b.players;
+  const f = (n) => n.toFixed(2);
+  const hole = (h) => `<g>
+      <circle cx="${f(h.x)}" cy="${f(h.y)}" r="1.75" fill="url(#pjhole)"/>
+      <circle cx="${f(h.x - 0.18)}" cy="${f(h.y - 0.18)}" r="1.75" fill="none" stroke="var(--wood-hi)" stroke-width="0.22" opacity="0.35"/>
+    </g>`;
+  let s = `<svg class="pjsvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <linearGradient id="pjwood" x1="0" y1="0" x2="0.7" y2="1">
+        <stop offset="0%" stop-color="var(--wood-3)"/><stop offset="45%" stop-color="var(--wood-2)"/><stop offset="100%" stop-color="var(--wood-1)"/>
+      </linearGradient>
+      <radialGradient id="pjtable" cx="50%" cy="46%" r="65%">
+        <stop offset="0%" stop-color="#3c2611"/><stop offset="72%" stop-color="#241608"/><stop offset="100%" stop-color="var(--wood-0)"/>
+      </radialGradient>
+      <radialGradient id="pjhole" cx="42%" cy="38%" r="62%">
+        <stop offset="0%" stop-color="#070402"/><stop offset="65%" stop-color="#130c06"/><stop offset="100%" stop-color="#2a1a0d"/>
+      </radialGradient>
+      <linearGradient id="pjhead" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--tc-hi)"/><stop offset="52%" stop-color="var(--tc)"/><stop offset="100%" stop-color="var(--tc-sh)"/>
+      </linearGradient>
+      <linearGradient id="pjsheen" x1="0" y1="0" x2="0.4" y2="1">
+        <stop offset="0%" stop-color="#fff" stop-opacity="0.10"/><stop offset="38%" stop-color="#fff" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.22"/>
+      </linearGradient>
+      <filter id="pjgrain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.018 0.46" numOctaves="2" seed="11" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0"/>
+      </filter>
+      <filter id="pjgrainv" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.4 0.02" numOctaves="2" seed="5" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.42 0"/>
+      </filter>
+      <filter id="pjglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="url(#pjwood)"/>
+    <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="#000" filter="url(#pjgrain)" opacity="0.5" style="mix-blend-mode:multiply"/>
+    <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="url(#pjsheen)"/>
+    <rect x="0.5" y="0.5" width="${f(W - 1)}" height="${f(H - 1)}" rx="4.6" fill="none" stroke="var(--wood-edge)" stroke-width="0.7"/>`;
+  // slanted panel seams: a beveled groove crossing the wood band toward centre
+  for (const sp of b.seams) {
+    const dx = C.x - sp.x, dy = C.y - sp.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+    const ox = sp.x - ux * 8, oy = sp.y - uy * 8, ix = sp.x + ux * 5, iy = sp.y + uy * 5;
+    s += `<line x1="${f(ox)}" y1="${f(oy)}" x2="${f(ix)}" y2="${f(iy)}" stroke="#0b0805" stroke-width="0.8" opacity="0.6"/>`;
+    s += `<line x1="${f(ox + 0.55)}" y1="${f(oy)}" x2="${f(ix + 0.55)}" y2="${f(iy)}" stroke="var(--wood-hi)" stroke-width="0.3" opacity="0.32"/>`;
+  }
+  // recessed table: a dark rim (shadow of the raised frame) then the grained surface
+  const ho = b.hollow;
+  s += `<rect x="${f(ho.x - 1)}" y="${f(ho.y - 1)}" width="${f(ho.w + 2)}" height="${f(ho.h + 2)}" rx="3.6" fill="#000" opacity="0.55"/>`;
+  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="url(#pjtable)"/>`;
+  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="#000" filter="url(#pjgrainv)" opacity="0.4" style="mix-blend-mode:multiply"/>`;
+  s += `<rect x="${f(ho.x + 0.4)}" y="${f(ho.y + 0.4)}" width="${f(ho.w - 0.8)}" height="${f(ho.h - 0.8)}" rx="2.6" fill="none" stroke="#000" stroke-width="0.5" opacity="0.4"/>`;
+  // castle arms: a wooden bar from each rail entry inward to the last heaven hole
+  for (let p = 0; p < P; p++) {
+    const cm = b.ring[b.castleEntries[p]], last = b.castles[p][b.castles[p].length - 1];
+    s += `<line x1="${f(cm.x)}" y1="${f(cm.y + 0.35)}" x2="${f(last.x)}" y2="${f(last.y + 0.35)}" stroke="#000" stroke-width="4.8" stroke-linecap="round" opacity="0.3"/>`;
+    s += `<line x1="${f(cm.x)}" y1="${f(cm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="url(#pjwood)" stroke-width="4.4" stroke-linecap="round"/>`;
+    s += `<line x1="${f(cm.x)}" y1="${f(cm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="var(--wood-hi)" stroke-width="0.5" stroke-linecap="round" opacity="0.25" transform="translate(-0.4,-0.5)"/>`;
+  }
+  // centre hub
+  s += `<circle cx="${C.x}" cy="${C.y}" r="3.6" fill="url(#pjwood)" stroke="var(--wood-edge)" stroke-width="0.4"/>`;
+  s += `<circle cx="${C.x}" cy="${C.y}" r="3.6" fill="#000" filter="url(#pjgrain)" opacity="0.4" style="mix-blend-mode:multiply"/>`;
+  // holes: ring, then each player's castle + start
+  for (const h of b.ring) s += hole(h);
+  for (let p = 0; p < P; p++) { for (const h of b.castles[p]) s += hole(h); for (const h of b.starts[p]) s += hole(h); }
+  // exit collars (colored ring marking where each player joins the track)
+  for (let p = 0; p < P; p++) { const h = b.ring[b.exits[p]]; s += `<circle cx="${f(h.x)}" cy="${f(h.y)}" r="2.5" fill="none" stroke="${PJ_PEG[p]}" stroke-width="0.55" opacity="0.9"/>`; }
+  // pegs as golf tees
+  for (const peg of v.pegs) { const h = pegXY(b, peg); s += pjTee(h.x, h.y, PJ_PEG[peg.owner], glow.has(peg.owner + ":" + peg.idx)); }
+  s += `</svg>`;
+  return s;
+}
+
+function pjMoveLabel(v, m) {
+  const tag = (ref) => `peg ${ref.idx + 1}${ref.owner !== v.you ? " (partner)" : ""}`;
+  const cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+  if (m.type === "move") return `${cap(tag(m.marble))} \u2192 ahead ${m.steps}`;
+  if (m.type === "comeOut") return `Bring ${tag(m.marble)} out`;
+  if (m.type === "split7") return `Split 7: ${tag(m.a.marble)} +${m.a.steps}, ${tag(m.b.marble)} +${m.b.steps}`;
+  if (m.type === "joker") {
+    const victim = v.pegs.find((p) => p.loc.z === "ring" && p.loc.r === m.target);
+    return `Joker: send ${victim ? esc(seatName(v, victim.owner)) : "a rival"} home`;
+  }
+  return `Discard ${pjCardLabel(v.yourHand.find((c) => c.id === m.cardId))}`;
+}
+
+function renderPJ(v) {
+  if (v.phase === "gameOver") {
+    const perTeam = (v.players / 2) * v.marbles;
+    const tally = (t) => v.homeCounts.reduce((a, c, p) => a + (p % 2 === t ? c : 0), 0);
+    const seatsOf = (t) => v.seats.map((_, i) => i).filter((i) => i % 2 === t).map((i) => i + 1).join(" & ");
+    const rows = [
+      { name: `Team A \u00b7 seats ${seatsOf(0)}`, score: `${tally(0)}/${perTeam}`, win: v.winner === 0, you: v.you != null && v.you % 2 === 0 },
+      { name: `Team B \u00b7 seats ${seatsOf(1)}`, score: `${tally(1)}/${perTeam}`, win: v.winner === 1, you: v.you != null && v.you % 2 === 1 },
+    ];
+    return renderGameOver(v, v.winner == null ? "Game over" : `Team ${v.winner === 0 ? "A" : "B"} wins!`, scoreList(rows));
+  }
+
+  const yours = v.yourTurn;
+  const allForfeit = yours && v.legalMoves.length > 0 && v.legalMoves.every((m) => m.type === "forfeit");
+  // Keep a stale card selection from sticking if it's no longer in hand.
+  if (S.pjCard != null && !v.yourHand.some((c) => c.id === S.pjCard)) S.pjCard = null;
+  const candidates = !yours ? [] : allForfeit ? v.legalMoves : S.pjCard == null ? [] : v.legalMoves.filter((m) => m.cardId === S.pjCard);
+  S.pjMoves = candidates;
+
+  const glow = new Set();
+  for (const m of candidates) {
+    if (m.type === "split7") { glow.add(m.a.marble.owner + ":" + m.a.marble.idx); glow.add(m.b.marble.owner + ":" + m.b.marble.idx); }
+    else if (m.marble) glow.add(m.marble.owner + ":" + m.marble.idx);
+  }
+
+  // top rail: a strip of seats with peg color, name, and pegs-home count
+  const strip = v.seats
+    .map((s, i) => `<div class="pjseat ${i === v.toAct ? "active" : ""} ${i === v.you ? "me" : ""}">
+        <span class="dot" style="background:${PJ_PEG[i]}"></span>
+        <span class="nm">${esc(seatName(v, i))}</span><span class="hm">${v.homeCounts[i]}/${v.marbles}</span>
+      </div>`)
+    .join("");
+  const pods = [`<div class="pjstrip">${strip}</div>`];
+
+  // Authentic scale: show the whole board, as large as the viewport allows.
+  const maxW = `min(94vw, ${((v.board.viewW / v.board.viewH) * 90).toFixed(1)}vh)`;
+  const center = `<div class="pjwrap" style="max-width:${maxW}">${pjBoardSVG(v, glow)}</div>`;
+
+  // hand: tap a usable card to reveal its moves
+  const usable = new Set(v.legalMoves.filter((m) => "cardId" in m).map((m) => m.cardId));
+  const hand = v.yourHand
+    .map((c) => `<span class="pjcardslot" ${yours ? `data-action="pj-pick-card" data-cardid="${c.id}"` : ""}>${cardHTML(c, { playable: yours && usable.has(c.id), dim: yours && !usable.has(c.id), sel: S.pjCard === c.id })}</span>`)
+    .join("");
+
+  const acts = [];
+  if (yours && allForfeit) {
+    acts.push(`<span class="hint">No legal move \u2014 discard a card to pass.</span>`);
+    candidates.forEach((m, i) => acts.push(`<button class="btn ghost sm" data-action="pj-move" data-mi="${i}">Discard ${pjCardLabel(v.yourHand.find((c) => c.id === m.cardId))}</button>`));
+  } else if (yours && S.pjCard == null) {
+    acts.push(`<span class="hint">Tap a glowing card to see its moves.</span>`);
+  } else if (yours && candidates.length === 0) {
+    acts.push(`<span class="hint">No move with that card \u2014 pick another.</span>`);
+  } else if (yours) {
+    candidates.forEach((m, i) => acts.push(`<button class="btn sm" data-action="pj-move" data-mi="${i}">${pjMoveLabel(v, m)}</button>`));
+  }
+
+  const perTeam = (v.players / 2) * v.marbles;
+  const homeMine = v.you != null ? v.homeCounts.reduce((a, c, p) => a + (p % 2 === v.you % 2 ? c : 0), 0) : 0;
+  const selfMeta = v.you != null ? `Team ${v.you % 2 === 0 ? "A" : "B"} \u00b7 ${homeMine}/${perTeam} home \u00b7 first team all-home wins` : `first team all-home wins`;
+  const playingPartner = yours && v.playingFor.length && v.playingFor[0] !== v.you;
+  const selfTurn = yours
+    ? `<span class="turnflag">Your turn${playingPartner ? " \u2014 playing teammate" : ""}</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+}
+
 function doConnect() {
   const name = document.getElementById("f-name").value.trim();
   const game = document.getElementById("f-game").value;
@@ -548,6 +958,7 @@ function doLeave() {
 }
 
 function doStart() {
+  if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: S.view.players, marbles: S.view.marbles } });
   const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
   send({ t: "start", config: { players: S.view.players, target } });
 }
@@ -585,6 +996,7 @@ app.addEventListener("click", (e) => {
   const v = S.view;
   switch (t.dataset.action) {
     case "pick-game": S.pickGame = t.dataset.game; return renderStart();
+    case "toggle-log": S.showLog = !S.showLog; return render();
     case "connect": return doConnect();
     case "copy-link": return copyLink();
     case "leave": return doLeave();
@@ -614,6 +1026,30 @@ app.addEventListener("click", (e) => {
     case "layoff-selected": return doLayoff();
     case "discard-selected": return doDiscard();
     case "clear-sel": S.rummySel.clear(); S.rummyLayoff = null; return render();
+    case "toggle-pass": {
+      const id = +t.dataset.cardid;
+      if (S.heartsPass.has(id)) S.heartsPass.delete(id);
+      else if (S.heartsPass.size >= 3) return toast("You pass exactly 3 cards.");
+      else S.heartsPass.add(id);
+      return render();
+    }
+    case "pass-3": {
+      if (S.heartsPass.size !== 3) return toast("Select exactly 3 cards to pass.");
+      send({ t: "move", move: { type: "pass", seat: v.you, cards: [...S.heartsPass] } });
+      S.heartsPass.clear();
+      return;
+    }
+    case "clear-pass": S.heartsPass.clear(); return render();
+    case "play-hearts": return send({ t: "move", move: { type: "play", seat: v.you, card: +t.dataset.cardid } });
+    case "pj-setplayers": return send({ t: "setConfig", config: { players: +t.dataset.count, marbles: v.marbles } });
+    case "pj-setmarbles": return send({ t: "setConfig", config: { players: v.players, marbles: +t.dataset.m } });
+    case "pj-pick-card": S.pjCard = S.pjCard === +t.dataset.cardid ? null : +t.dataset.cardid; return render();
+    case "pj-move": {
+      const m = S.pjMoves[+t.dataset.mi];
+      if (m) send({ t: "move", move: m });
+      S.pjCard = null;
+      return;
+    }
   }
 });
 
