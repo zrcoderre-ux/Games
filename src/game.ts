@@ -20,6 +20,21 @@ export type RoomMeta = {
   inLobby: boolean;
 };
 
+// ---------- move log (generic, authoritative) ----------
+// A game appends LogEntry rows as moves are applied; the server ships them in
+// each view so every client (including reconnects) sees the same history.
+// Entries carry no player NAMES — only the actor's seat — so names are resolved
+// client-side, consistent with the rest of the UI and robust to renames.
+export type LogCard = { rank: number; suit: string } | { joker: true };
+export type LogEntry = {
+  id: number; // monotonic within a game, for stable client keys
+  seat: number | null; // the actor (client prepends their name); null = table/system event
+  msg: string; // text without names, e.g. "played", "bid 3", "takes the trick"
+  cards?: LogCard[]; // optional cards rendered inline after msg
+  suit?: string; // optional bare suit glyph (e.g. trump called)
+  tail?: string; // optional text rendered after the cards
+};
+
 // ---------- the contract ----------
 
 // Every move identifies its actor, so the server can authorize it without
@@ -92,6 +107,7 @@ export type ClientMessage<Config, Move> =
   | { t: "leave" } // give up your seat (becomes a bot if a game is running)
   | { t: "addBot"; seat: number } // host fills an empty lobby seat with an AI
   | { t: "removeBot"; seat: number } // host clears a bot from a lobby seat
+  | { t: "setConfig"; config: Config } // host resizes the lobby table / options before dealing
   | { t: "start"; config: Config } // host fills empty seats with bots and deals
   | { t: "move"; move: Move } // a game action (opaque to the server)
   | { t: "aux"; payload: unknown } // a non-turn side action (opaque to the server)

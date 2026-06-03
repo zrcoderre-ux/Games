@@ -351,7 +351,7 @@ function emptySeats(n: number): SeatInfo[] {
 }
 
 // How long to pause between bot moves, so a watching human sees each one.
-const BOT_STEP_MS = 850;
+const BOT_STEP_MS = 1400;
 
 // Fake names for bots, so the table doesn't read "Bot 1 / Bot 2".
 const BOT_NAMES = [

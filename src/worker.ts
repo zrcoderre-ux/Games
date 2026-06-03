@@ -12,11 +12,13 @@ import type { PlayerView } from "./protocol.ts";
 
 import { rummy500Module, type RummyConfig, type RummyState, type RummyMove, type RummyView } from "./rummy-module.ts";
 import { heartsModule, type HeartsConfig, type HeartsState, type HeartsMove, type HeartsView } from "./hearts-module.ts";
+import { pegsAndJokersModule, type PJConfig, type PJState, type PJMove, type PJView } from "./pj-module.ts";
 
 export interface Env {
   HighLowJack: DurableObjectNamespace<HighLowJackServer>;
   Rummy500: DurableObjectNamespace<Rummy500Server>;
   Hearts: DurableObjectNamespace<HeartsServer>;
+  PegsAndJokers: DurableObjectNamespace<PegsAndJokersServer>;
 }
 
 export class HighLowJackServer extends RoomServer<GameState, Move, HLJConfig, PlayerView, Env> {
@@ -40,9 +42,16 @@ export class HeartsServer extends RoomServer<HeartsState, HeartsMove, HeartsConf
   }
 }
 
+export class PegsAndJokersServer extends RoomServer<PJState, PJMove, PJConfig, PJView, Env> {
+  readonly game = pegsAndJokersModule;
+  protected defaultConfig(): PJConfig {
+    return { players: 4, marbles: 5 };
+  }
+}
+
 // routePartykitRequest dispatches by the party name in the URL to the matching
-// binding (/parties/highlowjack/<room>, /parties/rummy500/<room>,
-// /parties/hearts/<room>), so this stays identical as you add games.
+// binding (/parties/high-low-jack/<room>, /parties/rummy500/<room>,
+// /parties/hearts/<room>, /parties/pegs-and-jokers/<room>), so this stays identical as you add games.
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     return (await routePartykitRequest(request, env)) || new Response("Not Found", { status: 404 });

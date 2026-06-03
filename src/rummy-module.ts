@@ -22,7 +22,7 @@
 // the discard pile MUST be melded or laid off before that turn's discard.
 
 import { SUITS, type Suit } from "./engine.ts";
-import type { Game, RoomMeta } from "./game.ts";
+import type { Game, RoomMeta, LogEntry } from "./game.ts";
 
 // ---------- cards ----------
 // Every card carries a unique id so the discard pile ("take this card and all
@@ -147,6 +147,8 @@ export type RummyState = {
   lastRound: { delta: number[]; outSeat: number | null } | null;
 
   nextMeldId: number;
+  log: LogEntry[]; // authoritative move log
+  logSeq: number; // monotonic id source for log entries
 };
 
 export type RummyMove =
@@ -179,6 +181,7 @@ export type RummyView = {
   melds: { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] }[];
   mustMeldCardId: number | null; // meaningful only on your own turn
   lastRound: { delta: number[]; outSeat: number | null } | null;
+  log: LogEntry[]; // authoritative move log (public)
 };
 
 // ---------- setup / dealing ----------
@@ -231,8 +234,63 @@ function createGame(config: RummyConfig, seed: number): RummyState {
     winner: null,
     lastRound: null,
     nextMeldId: 0,
+    log: [],
+    logSeq: 0,
   };
-  return dealRound(base);
+  const dealt = dealRound(base);
+  return attachRummy(dealt, [], 0, [{ seat: dealt.dealerSeat, msg: "deals the first hand" }]);
+}
+
+// ---------- move log ----------
+
+const LOG_CAP = 120;
+
+function attachRummy(next: RummyState, prevLog: LogEntry[], prevSeq: number, parts: Omit<LogEntry, "id">[]): RummyState {
+  let seq = prevSeq;
+  const added = parts.map((p) => ({ id: ++seq, ...p }));
+  return { ...next, log: [...prevLog, ...added].slice(-LOG_CAP), logSeq: seq };
+}
+
+const findCard = (list: RummyCard[], id: number): RummyCard | undefined => list.find((c) => c.id === id);
+
+// Derive the log rows produced by one move, from the before/after states.
+function rummyEntries(prev: RummyState, next: RummyState, move: RummyMove): Omit<LogEntry, "id">[] {
+  const out: Omit<LogEntry, "id">[] = [];
+  const seat = move.seat;
+  const hand = prev.hands[seat] ?? [];
+
+  if (move.type === "drawStock") {
+    out.push({ seat, msg: "drew from the stock" });
+  } else if (move.type === "drawDiscard") {
+    const idx = prev.discard.findIndex((c) => c.id === move.cardId);
+    const taken = idx >= 0 ? prev.discard.slice(idx) : [];
+    const target = idx >= 0 ? prev.discard[idx] : undefined;
+    const extra = Math.max(0, taken.length - 1);
+    out.push({
+      seat,
+      msg: "took",
+      cards: target ? [target] : [],
+      tail: extra ? `+${extra} more from the discard` : "from the discard",
+    });
+  } else if (move.type === "meld") {
+    out.push({ seat, msg: "melded", cards: move.cards.map((id) => findCard(hand, id)).filter(Boolean) as RummyCard[] });
+  } else if (move.type === "layoff") {
+    out.push({ seat, msg: "laid off", cards: move.cards.map((id) => findCard(hand, id)).filter(Boolean) as RummyCard[] });
+  } else if (move.type === "discard") {
+    const c = findCard(hand, move.cardId);
+    out.push({ seat, msg: "discarded", cards: c ? [c] : [] });
+  }
+
+  // round end / game end
+  if (next.lastRound && next.lastRound !== prev.lastRound) {
+    const lr = next.lastRound;
+    if (lr.outSeat != null) out.push({ seat: lr.outSeat, msg: `goes out (+${lr.delta[lr.outSeat]} this round)` });
+    else out.push({ seat: null, msg: "Stock exhausted \u2014 round scored" });
+    if (next.phase === "gameOver" && next.winner !== null) out.push({ seat: next.winner, msg: "wins the game!" });
+    else if (next.dealerSeat !== prev.dealerSeat) out.push({ seat: next.dealerSeat, msg: "deals a new round" });
+  }
+
+  return out;
 }
 
 // ---------- scoring / round end ----------
@@ -300,7 +358,7 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
   return false;
 }
 
-function applyMove(state: RummyState, move: RummyMove): RummyState {
+function applyMoveCore(state: RummyState, move: RummyMove): RummyState {
   if (state.phase !== "playing") throw new Error("Game is over");
   if (seatToAct(state) !== move.seat) throw new Error("Not this seat's turn");
   if (!isLegal(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
@@ -370,6 +428,12 @@ function applyMove(state: RummyState, move: RummyMove): RummyState {
   }
 }
 
+// Public transition: apply the move, then append the resulting log rows.
+function applyMoveWithLog(state: RummyState, move: RummyMove): RummyState {
+  const next = applyMoveCore(state, move);
+  return attachRummy(next, state.log, state.logSeq, rummyEntries(state, next, move));
+}
+
 // ---------- legal-move enumeration (best-effort, for the UI / simple bots) ----------
 // Not exhaustive for melds (that space is combinatorial); the server authorizes
 // via isLegal, so a client may submit any valid meld this list didn't surface.
@@ -428,6 +492,7 @@ function redact(state: RummyState, seat: number | null, meta: RoomMeta): RummyVi
     melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: state.cardOwner[m.cards[0].id] ?? -1, cards: m.cards })),
     mustMeldCardId: yours ? state.mustMeldCardId : null,
     lastRound: state.lastRound,
+    log: state.log,
   };
 }
 
@@ -453,6 +518,7 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
     melds: [],
     mustMeldCardId: null,
     lastRound: null,
+    log: [],
   };
 }
 
@@ -567,7 +633,7 @@ export const rummy500Module: Game<RummyState, RummyMove, RummyConfig, RummyView>
   seatToAct,
   isLegal,
   legalMoves,
-  applyMove,
+  applyMove: applyMoveWithLog,
   isOver,
   redact,
   lobbyView,

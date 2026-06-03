@@ -24,6 +24,7 @@ import {
   type PlayerCount,
 } from "./engine.ts";
 import { aiMove, handConfidence } from "./ai.ts";
+import type { LogEntry } from "./game.ts";
 
 // ---------- seat occupancy ----------
 
@@ -76,6 +77,7 @@ export type PlayerView = {
   currentTrick: TrickPlay[]; // cards on the table (public)
   lastTrick: { winner: number; cards: Card[] } | null; // for animating the previous trick
   lastHand: HandResult | null; // scoring breakdown at hand end
+  log: LogEntry[]; // authoritative move log (public)
 };
 
 // Build the view a single seat is allowed to see. Whitelist fields explicitly;
@@ -114,6 +116,7 @@ export function redact(
     currentTrick: state.currentTrick,
     lastTrick,
     lastHand: state.lastHand,
+    log: (state as { log?: LogEntry[] }).log ?? [],
   };
 }
 

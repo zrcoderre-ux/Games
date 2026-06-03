@@ -29,7 +29,7 @@
 // honest and is invisible against bots, who fill any empty seat.)
 
 import { SUITS, type Suit } from "./engine.ts";
-import type { Game, RoomMeta } from "./game.ts";
+import type { Game, RoomMeta, LogEntry, LogCard } from "./game.ts";
 
 // ---------- cards ----------
 // Every card carries a unique id so the trick log, the pass selection, and the
@@ -64,6 +64,29 @@ function buildDeck(players: number): HeartsCard[] {
 }
 
 const handSize = (players: number): number => buildDeck(players).length / players;
+
+// ---------- move log ----------
+// Same pattern as hlj-module / rummy-module: append entries (with monotonic
+// ids) at the module boundary; the log lives in state so it persists across
+// hibernation and is identical for every client.
+const LOG_CAP = 120;
+const lc = (c: HeartsCard): LogCard => ({ rank: c.rank, suit: c.suit });
+
+function passDirLabel(offset: number, players: number): string {
+  if (offset === 0) return "hold \u2014 no pass";
+  if (offset === 1) return "passing left";
+  if (offset === players - 1) return "passing right";
+  return "passing across";
+}
+
+// Append entries to `prev`'s log, returning `next` carrying the extended log.
+function attach(next: HeartsState, prev: HeartsState, parts: Omit<LogEntry, "id">[]): HeartsState {
+  if (parts.length === 0) return { ...next, log: prev.log, logSeq: prev.logSeq };
+  let seq = prev.logSeq;
+  const added = parts.map((p) => ({ id: ++seq, ...p }));
+  const log = [...prev.log, ...added].slice(-LOG_CAP);
+  return { ...next, log, logSeq: seq };
+}
 
 // ---------- seeded PRNG (mulberry32) ----------
 // (Duplicated from the HLJ engine / rummy module for now; a shared rng.ts would
@@ -120,6 +143,10 @@ export type HeartsState = {
   scores: number[]; // running totals across hands
   winner: number | null;
   lastHand: { delta: number[]; shooter: number | null } | null;
+
+  // authoritative, append-only move log (rides through every { ...state } spread)
+  log: LogEntry[];
+  logSeq: number;
 };
 
 export type HeartsMove =
@@ -157,6 +184,7 @@ export type HeartsView = {
   points: number[]; // points captured this hand, per seat (public)
 
   lastHand: { delta: number[]; shooter: number | null } | null;
+  log: LogEntry[]; // public move history, shipped to every client
 };
 
 // ---------- pass direction ----------
@@ -231,8 +259,11 @@ function createGame(config: HeartsConfig, seed: number): HeartsState {
     scores: Array(config.players).fill(0),
     winner: null,
     lastHand: null,
+    log: [],
+    logSeq: 0,
   };
-  return dealHand(base);
+  const dealt = dealHand(base);
+  return attach(dealt, dealt, [{ seat: null, msg: `first hand \u2014 ${passDirLabel(dealt.passOffset, dealt.players)}` }]);
 }
 
 // ---------- legality ----------
@@ -333,10 +364,13 @@ function applyMove(state: HeartsState, move: HeartsMove): HeartsState {
   if (seatToAct(state) !== move.seat) throw new Error("Not this seat's turn");
   if (!isLegal(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
 
+  const ent: Omit<LogEntry, "id">[] = [];
+
   if (move.type === "pass") {
     const selected = state.selected.map((sel, s) => (s === move.seat ? move.cards.slice() : sel));
     const everyone = selected.every((sel) => sel !== null);
-    if (!everyone) return { ...state, selected };
+    ent.push({ seat: move.seat, msg: "passed 3 cards" }); // which cards stay hidden until the exchange
+    if (!everyone) return attach({ ...state, selected }, state, ent);
 
     // All seats chose — exchange simultaneously, then begin play.
     const offset = state.passOffset;
@@ -347,13 +381,14 @@ function applyMove(state: HeartsState, move: HeartsMove): HeartsState {
       const giver = (s - offset + N) % N; // whoever passes toward seat s
       hands[s].push(...given[giver]);
     }
-    return {
-      ...state,
-      hands,
-      selected: Array.from({ length: N }, () => null),
-      phase: "playing",
-      leader: lowestClubSeat(hands),
-    };
+    const leader = lowestClubSeat(hands);
+    ent.push({ seat: null, msg: `cards exchanged \u2014 ${passDirLabel(offset, N)}` });
+    ent.push({ seat: leader, msg: "leads with the lowest club" });
+    return attach(
+      { ...state, hands, selected: Array.from({ length: N }, () => null), phase: "playing", leader },
+      state,
+      ent,
+    );
   }
 
   // play
@@ -362,10 +397,12 @@ function applyMove(state: HeartsState, move: HeartsMove): HeartsState {
   const hands = state.hands.map((h, s) => (s === seat ? h.filter((c) => c.id !== move.card) : h));
   const currentTrick = [...state.currentTrick, { seat, card }];
   const heartsBroken = state.heartsBroken || isHeart(card);
+  ent.push({ seat, msg: "played", cards: [lc(card)] });
+  if (!state.heartsBroken && isHeart(card)) ent.push({ seat: null, msg: "hearts are broken" });
 
   // Trick still in progress.
   if (currentTrick.length < state.players) {
-    return { ...state, hands, currentTrick, heartsBroken };
+    return attach({ ...state, hands, currentTrick, heartsBroken }, state, ent);
   }
 
   // Trick complete — award it, keep it for display, advance.
@@ -373,6 +410,7 @@ function applyMove(state: HeartsState, move: HeartsMove): HeartsState {
   const won = currentTrick.reduce((a, p) => a + cardPoints(p.card), 0);
   const points = state.points.map((v, s) => (s === winner ? v + won : v));
   const trickNo = state.trickNo + 1;
+  ent.push({ seat: winner, msg: "takes the trick", tail: won > 0 ? `+${won}` : undefined });
   const ns: HeartsState = {
     ...state,
     hands,
@@ -383,7 +421,25 @@ function applyMove(state: HeartsState, move: HeartsMove): HeartsState {
     trickNo,
     points,
   };
-  return trickNo === handSize(state.players) ? endHand(ns) : ns; // last trick scores the hand
+
+  if (trickNo !== handSize(state.players)) return attach(ns, state, ent); // mid-hand
+
+  // Last trick of the hand — score it and log the outcome.
+  const scored = endHand(ns);
+  const moon = ns.points.findIndex((p) => p === 26);
+  if (moon >= 0) {
+    ent.push({ seat: moon, msg: "shoots the moon! \u2014 everyone else +26" });
+  } else {
+    const delta = scored.lastHand ? scored.lastHand.delta : ns.points;
+    for (let s = 0; s < ns.players; s++) if (delta[s] > 0) ent.push({ seat: s, msg: `+${delta[s]} this hand` });
+  }
+  ent.push({ seat: null, msg: `scores: ${scored.scores.join(" / ")}` });
+  if (scored.phase === "gameOver" && scored.winner !== null) {
+    ent.push({ seat: scored.winner, msg: "wins the game \u2014 lowest score!" });
+  } else {
+    ent.push({ seat: null, msg: `next hand \u2014 ${passDirLabel(scored.passOffset, scored.players)}` });
+  }
+  return attach(scored, state, ent);
 }
 
 // ---------- legal-move enumeration (for UI / simple bots) ----------
@@ -426,6 +482,7 @@ function redact(state: HeartsState, seat: number | null, meta: RoomMeta): Hearts
     trickNo: state.trickNo,
     points: state.points,
     lastHand: state.lastHand,
+    log: state.log,
   };
 }
 
@@ -454,6 +511,7 @@ function lobbyView(config: HeartsConfig, seat: number | null, meta: RoomMeta): H
     trickNo: 0,
     points: Array(config.players).fill(0),
     lastHand: null,
+    log: [],
   };
 }
 
