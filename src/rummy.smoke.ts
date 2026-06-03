@@ -14,9 +14,19 @@ assert(__test.isSet([C(0,9,"H"),C(1,9,"H"),C(2,9,"S")]), "double-deck set may re
 assert(__test.isSet([C(0,9,"H"),C(1,9,"S"),C(2,9,"D"),C(3,9,"C"),C(4,9,"H")]), "5-card set valid with two decks");
 assert(!__test.isSet([C(0,9,"H"),C(1,8,"S"),C(2,9,"D")]), "mixed ranks not a set");
 assert(__test.cardValue(C(0,14,"S")) === 15 && __test.cardValue(C(0,13,"S")) === 10 && __test.cardValue(C(0,5,"S")) === 5, "values");
-assert(__test.buildDeck().length === 52, "single deck = 52");
-assert(__test.buildDeck(2).length === 104, "double deck = 104");
-assert(new Set(__test.buildDeck(2).map((c) => c.id)).size === 104, "double-deck ids all unique");
+assert(__test.buildDeck().length === 54, "single deck = 52 + 2 jokers");
+assert(__test.buildDeck(2).length === 108, "double deck = 104 + 4 jokers");
+assert(new Set(__test.buildDeck(2).map((c) => c.id)).size === 108, "double-deck ids all unique");
+assert(__test.buildDeck().filter((c) => c.joker).length === 2, "single deck has 2 jokers");
+
+// ---- wild-card (joker) checks ----
+const J = (id) => ({ id, rank: 0, suit: "S", joker: true });
+assert(__test.isRun([C(0,5,"H"),J(1),C(2,7,"H")]), "joker fills run gap 5-_-7");
+assert(__test.isRun([C(0,5,"H"),C(1,6,"H"),J(2)]), "joker extends run end 5-6-_");
+assert(__test.isSet([C(0,9,"H"),C(1,9,"S"),J(2)]), "joker completes a set");
+assert(!__test.isRun([J(0),J(1),J(2)]), "all-joker is not a run");
+assert(!__test.isSet([J(0),J(1),J(2)]), "all-joker is not a set");
+assert(__test.cardValue(J(0)) === 15, "joker worth 15 in hand");
 
 const totalCards = (s) =>
   s.hands.reduce((a, h) => a + h.length, 0) +
@@ -24,7 +34,7 @@ const totalCards = (s) =>
   s.melds.reduce((a, m) => a + m.cards.length, 0);
 
 function playGame(players, seed) {
-  const expected = players <= 4 ? 52 : 104;
+  const expected = players <= 4 ? 54 : 108;
   let s = G.createGame({ players, target: 500 }, seed);
   let moves = 0, rounds = 1;
   while (!G.isOver(s)) {

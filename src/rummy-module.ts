@@ -29,17 +29,21 @@ import type { Game, RoomMeta, LogEntry } from "./game.ts";
 // above it"), table melds, and per-card scoring ownership are unambiguous. This
 // also makes a future double-deck (5-8 players) a non-event.
 
-export type RummyCard = { id: number; rank: number; suit: Suit }; // rank 2..14, A = 14
+export type RummyCard = { id: number; rank: number; suit: Suit; joker?: boolean }; // rank 2..14, A = 14; jokers are wild
 
-const cardValue = (c: RummyCard): number => (c.rank === 14 ? 15 : c.rank >= 10 ? 10 : c.rank);
+// A joker is worth 15 in hand (like an Ace) when caught at round end.
+const cardValue = (c: RummyCard): number => (c.joker ? 15 : c.rank === 14 ? 15 : c.rank >= 10 ? 10 : c.rank);
 
-// One standard deck per `decks`; ids stay unique across decks so a double deck
-// (5-8 players) has two distinguishable copies of every card.
+// One standard deck per `decks`, each with 2 wild jokers (54 cards/deck). ids
+// stay unique across decks so a double deck (5-8 players) has two
+// distinguishable copies of every card.
 function buildDeck(decks = 1): RummyCard[] {
   const deck: RummyCard[] = [];
   let id = 0;
-  for (let d = 0; d < decks; d++)
+  for (let d = 0; d < decks; d++) {
     for (const suit of SUITS) for (let rank = 2; rank <= 14; rank++) deck.push({ id: id++, rank, suit });
+    for (let j = 0; j < 2; j++) deck.push({ id: id++, rank: 0, suit: "S", joker: true });
+  }
   return deck;
 }
 
@@ -72,25 +76,64 @@ function shuffle<T>(items: T[], seed: number): { shuffled: T[]; nextSeed: number
 // ---------- meld validity ----------
 
 // A run treats an Ace as low (A-2-3) OR high (Q-K-A), never wrapping (K-A-2).
+// Jokers are wild: they fill internal gaps and extend either end. A run must
+// still contain at least one natural card.
 function isRun(cards: RummyCard[]): boolean {
   if (cards.length < 3) return false;
-  const suit = cards[0].suit;
-  if (!cards.every((c) => c.suit === suit)) return false;
+  const naturals = cards.filter((c) => !c.joker);
+  const jokers = cards.length - naturals.length;
+  if (naturals.length === 0) return false;
+  const suit = naturals[0].suit;
+  if (!naturals.every((c) => c.suit === suit)) return false;
   for (const aceRank of [1, 14]) {
-    const ranks = cards.map((c) => (c.rank === 14 ? aceRank : c.rank)).sort((a, b) => a - b);
-    if (new Set(ranks).size !== ranks.length) continue;
-    let ok = true;
-    for (let i = 1; i < ranks.length; i++) if (ranks[i] !== ranks[i - 1] + 1) { ok = false; break; }
-    if (ok) return true;
+    const ranks = naturals.map((c) => (c.rank === 14 ? aceRank : c.rank)).sort((a, b) => a - b);
+    if (new Set(ranks).size !== ranks.length) continue; // a duplicate rank can't sit in one run
+    const low = ranks[0], high = ranks[ranks.length - 1];
+    if (low < 1 || high > 14) continue;
+    const gaps = high - low + 1 - ranks.length; // interior slots a joker must fill
+    if (gaps < 0 || gaps > jokers) continue;
+    const extra = jokers - gaps; // leftover jokers extend the ends
+    if (high - low + 1 + extra > 14) continue; // can't grow past a 14-rank span
+    if ((low - 1) + (14 - high) < extra) continue; // not enough room at the ends
+    return true;
   }
   return false;
 }
 
-// A set is 3+ cards of the same rank. No distinct-suit / size-4 cap: with two
-// decks a set can repeat a suit and run to more than four cards, and the
-// physical card pool (plus the duplicate-id guard in isLegal) bounds it.
+// A set is 3+ cards of the same rank, jokers wild. No distinct-suit / size-4
+// cap: with two decks a set can repeat a suit and run to more than four cards,
+// and the physical card pool (plus the duplicate-id guard in isLegal) bounds
+// it. A set must contain at least one natural card.
 function isSet(cards: RummyCard[]): boolean {
-  return cards.length >= 3 && cards.every((c) => c.rank === cards[0].rank);
+  if (cards.length < 3) return false;
+  const naturals = cards.filter((c) => !c.joker);
+  if (naturals.length === 0) return false;
+  return naturals.every((c) => c.rank === naturals[0].rank);
+}
+
+// Order a run's cards low->high, slotting jokers into the gaps/ends they fill,
+// so a melded run always reads in sequence regardless of play order.
+function orderRunCards(cards: RummyCard[]): RummyCard[] {
+  const naturals = cards.filter((c) => !c.joker);
+  const jokers = cards.filter((c) => c.joker);
+  for (const aceRank of [1, 14]) {
+    const eff = naturals.map((c) => ({ c, r: c.rank === 14 ? aceRank : c.rank })).sort((a, b) => a.r - b.r);
+    const ranks = eff.map((x) => x.r);
+    if (new Set(ranks).size !== ranks.length) continue;
+    const low = ranks[0], high = ranks[ranks.length - 1];
+    const gaps = high - low + 1 - ranks.length;
+    if (gaps < 0 || gaps > jokers.length) continue;
+    const extra = jokers.length - gaps;
+    const after = Math.min(extra, 14 - high);
+    const before = extra - after;
+    if (before > low - 1) continue;
+    const byRank = new Map(eff.map((x) => [x.r, x.c]));
+    const jk = [...jokers];
+    const out: RummyCard[] = [];
+    for (let r = low - before; r <= high + after; r++) out.push(byRank.get(r) ?? jk.shift()!);
+    if (out.length === cards.length && jk.length === 0) return out;
+  }
+  return cards;
 }
 
 const validMeld = (cards: RummyCard[]): boolean => isSet(cards) || isRun(cards);
@@ -98,21 +141,27 @@ const validMeld = (cards: RummyCard[]): boolean => isSet(cards) || isRun(cards);
 // Can `target` be the bottom card of an immediate meld, given a pool of cards
 // available this turn (used to validate a discard-pile draw)?
 function canRunWith(pool: RummyCard[], target: RummyCard): boolean {
-  const inSuit = pool.filter((c) => c.suit === target.suit);
+  if (target.joker) return false;
+  const inSuit = pool.filter((c) => c.suit === target.suit && !c.joker);
+  const jokers = pool.filter((c) => c.joker).length;
   for (const aceRank of [1, 14]) {
     const ranks = new Set(inSuit.map((c) => (c.rank === 14 ? aceRank : c.rank)));
     const tr = target.rank === 14 ? aceRank : target.rank;
+    ranks.add(tr);
     for (let start = tr - 2; start <= tr; start++) {
-      let ok = true;
-      for (let k = 0; k < 3; k++) { const r = start + k; if (r < 1 || r > 14 || !ranks.has(r)) { ok = false; break; } }
-      if (ok) return true;
+      let ok = true, need = 0;
+      for (let k = 0; k < 3; k++) { const r = start + k; if (r < 1 || r > 14) { ok = false; break; } if (!ranks.has(r)) need++; }
+      if (ok && need <= jokers) return true;
     }
   }
   return false;
 }
 
 function canFormMeldWith(pool: RummyCard[], target: RummyCard): boolean {
-  if (pool.filter((c) => c.rank === target.rank).length >= 3) return true;
+  if (target.joker) return false;
+  const sameRank = pool.filter((c) => !c.joker && c.rank === target.rank).length;
+  const jokers = pool.filter((c) => c.joker).length;
+  if (sameRank >= 1 && sameRank + jokers >= 3) return true;
   return canRunWith(pool, target);
 }
 
@@ -329,9 +378,12 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
       if (state.turnPhase !== "draw") return false;
       const idx = state.discard.findIndex((c) => c.id === move.cardId);
       if (idx < 0) return false;
+      // The top card may always be taken, even if it can't be played this turn.
+      if (idx === state.discard.length - 1) return true;
+      // Taking deeper sweeps everything above too; the bottom card taken must be
+      // immediately meldable/layable (with hand + everything taken).
       const taken = state.discard.slice(idx);
       const target = state.discard[idx];
-      // The taken card must be immediately meldable (with hand + everything taken).
       return canFormMeldWith([...hand, ...taken], target) || canLayoff(state, target);
     }
     case "meld": {
@@ -382,13 +434,16 @@ function applyMoveCore(state: RummyState, move: RummyMove): RummyState {
         discard: state.discard.slice(0, idx),
         hands: handsWith([...state.hands[seat], ...taken]),
         turnPhase: "play",
-        mustMeldCardId: move.cardId,
+        // Taking just the top card carries no obligation; sweeping deeper means
+        // the bottom card must be melded/laid off before discarding.
+        mustMeldCardId: taken.length > 1 ? move.cardId : null,
       };
     }
     case "meld": {
       const objs = move.cards.map((id) => state.hands[seat].find((c) => c.id === id)!);
       const newHand = state.hands[seat].filter((c) => !move.cards.includes(c.id));
-      const meld: Meld = { id: state.nextMeldId, kind: isSet(objs) ? "set" : "run", cards: objs };
+      const kind = isSet(objs) ? "set" : "run";
+      const meld: Meld = { id: state.nextMeldId, kind, cards: kind === "run" ? orderRunCards(objs) : objs };
       const cardOwner = { ...state.cardOwner };
       for (const id of move.cards) cardOwner[id] = seat;
       const ns: RummyState = {
@@ -404,7 +459,11 @@ function applyMoveCore(state: RummyState, move: RummyMove): RummyState {
     case "layoff": {
       const objs = move.cards.map((id) => state.hands[seat].find((c) => c.id === id)!);
       const newHand = state.hands[seat].filter((c) => !move.cards.includes(c.id));
-      const melds = state.melds.map((m) => (m.id === move.meldId ? { ...m, cards: [...m.cards, ...objs] } : m));
+      const melds = state.melds.map((m) =>
+        m.id === move.meldId
+          ? { ...m, cards: m.kind === "run" ? orderRunCards([...m.cards, ...objs]) : [...m.cards, ...objs] }
+          : m,
+      );
       const cardOwner = { ...state.cardOwner };
       for (const id of move.cards) cardOwner[id] = seat;
       const ns: RummyState = { ...state, hands: handsWith(newHand), melds, cardOwner, mustMeldCardId: clears(move.cards) };
@@ -447,8 +506,7 @@ function legalMoves(state: RummyState): RummyMove[] {
   if (state.turnPhase === "draw") {
     if (state.stock.length > 0) moves.push({ type: "drawStock", seat });
     const top = state.discard[state.discard.length - 1];
-    if (top && (canFormMeldWith([...hand, top], top) || canLayoff(state, top)))
-      moves.push({ type: "drawDiscard", seat, cardId: top.id });
+    if (top) moves.push({ type: "drawDiscard", seat, cardId: top.id }); // top is always takeable
     return moves;
   }
 
@@ -527,14 +585,17 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
 // used immediately, lay down melds as it gets them (held points are at risk),
 // lay off where it can, then discard the highest-value least-connected card.
 
+// The AI builds melds from natural cards only (it never spends its wilds); this
+// keeps every move it emits legal while leaving joker play to humans.
 function findSet(hand: RummyCard[]): RummyCard[] | null {
   const byRank = new Map<number, RummyCard[]>();
-  for (const c of hand) byRank.set(c.rank, [...(byRank.get(c.rank) ?? []), c]);
+  for (const c of hand) if (!c.joker) byRank.set(c.rank, [...(byRank.get(c.rank) ?? []), c]);
   for (const g of byRank.values()) if (g.length >= 3) return g.slice(0, 4);
   return null;
 }
 function findSetContaining(hand: RummyCard[], c: RummyCard): RummyCard[] | null {
-  const g = hand.filter((x) => x.rank === c.rank);
+  if (c.joker) return null;
+  const g = hand.filter((x) => !x.joker && x.rank === c.rank);
   return g.length >= 3 ? g.slice(0, 4) : null;
 }
 function findRunInSuit(suitCards: RummyCard[]): RummyCard[] | null {
@@ -642,4 +703,4 @@ export const rummy500Module: Game<RummyState, RummyMove, RummyConfig, RummyView>
 };
 
 // Exposed for unit tests / tuning.
-export const __test = { isRun, isSet, cardValue, buildDeck };
+export const __test = { isRun, isSet, cardValue, buildDeck, orderRunCards };
