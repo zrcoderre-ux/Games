@@ -367,12 +367,12 @@ function tableShell(v, parts) {
   let self;
   if (v.you != null) {
     const myName = seatName(v, v.you);
-    self = `<div class="selfbar">
+    self = `<div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
+      <div class="selfbar">
         ${avatarHTML(myName, { host: v.you === v.hostSeat })}
         <div><div class="name">${esc(myName)}</div><div class="me-pts">${parts.selfMeta || ""}</div></div>
         ${parts.selfTurn || ""}
       </div>
-      <div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
       <div class="actions">${parts.actions || `<span class="hint">Watching the table…</span>`}</div>`;
   } else {
     self = `<div class="selfbar"><div class="name">Spectating</div><div class="me-pts">${parts.selfMeta || ""}</div></div>`;
