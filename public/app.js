@@ -837,6 +837,29 @@ function resolveJokers(meld) {
   return cards.map(() => null);
 }
 
+// Can card `c` join the current selection and still potentially form a valid meld/layoff?
+function rCompatible(sel, c, layMeld) {
+  if (c.joker) return true;
+  if (!sel.length) return true;
+  if (layMeld) return rCanLayoff(layMeld, [...sel, c]);
+  const naturals = sel.filter((s) => !s.joker);
+  if (!naturals.length) return true; // only jokers selected so far
+  const jokerCount = sel.filter((s) => s.joker).length;
+  // Set: same rank, no duplicate suit
+  const setRank = naturals[0].rank;
+  if (naturals.every((s) => s.rank === setRank) && c.rank === setRank && !sel.some((s) => s.suit === c.suit))
+    return true;
+  // Run: same suit, rank fits in range with available jokers as gap-fill
+  const runSuit = naturals[0].suit;
+  if (naturals.every((s) => s.suit === runSuit) && c.suit === runSuit) {
+    const allRanks = [...naturals.map((s) => s.rank), c.rank].sort((a, b) => a - b);
+    const lo = allRanks[0], hi = allRanks[allRanks.length - 1];
+    const gaps = hi - lo + 1 - allRanks.length;
+    if (gaps >= 0 && gaps <= jokerCount) return true;
+  }
+  return false;
+}
+
 function renderRummy(v) {
   // prune stale selections (cards no longer in hand)
   const handIds = new Set(v.yourHand.map((c) => c.id));
@@ -869,12 +892,12 @@ function renderRummy(v) {
     )
     .filter(Boolean);
 
-  // center: stock + discard piles, then melds on the felt
-  const stock = `<div class="pile">
+  // center: stock + discard piles (mini), then melds on the felt
+  const stock = `<div class="pile mini-pile">
       <div class="lbl">Stock</div>
       <div class="stockwrap" ${canStock ? `data-action="draw-stock" style="cursor:pointer"` : ""}>
-        ${v.stockCount > 1 ? cardHTML({}, { back: true, style: "position:absolute;top:3px;left:3px;opacity:.6" }) : ""}
-        ${v.stockCount > 0 ? cardHTML({}, { back: true }) : `<div class="card" style="opacity:.22"></div>`}
+        ${v.stockCount > 1 ? cardHTML({}, { back: true, mini: true, style: "position:absolute;top:2px;left:2px;opacity:.6" }) : ""}
+        ${v.stockCount > 0 ? cardHTML({}, { back: true, mini: true }) : `<div class="card mini" style="opacity:.22"></div>`}
       </div>
       <div class="pts">${v.stockCount} left</div>
     </div>`;
@@ -882,15 +905,15 @@ function renderRummy(v) {
   const peek = v.discard.slice(-5);
   const stackCards = peek
     .map((c, i) => {
-      const off = (peek.length - 1 - i) * 7;
+      const off = (peek.length - 1 - i) * 4;
       const style = `position:absolute;left:${-off}px;top:${-off}px;z-index:${i}`;
-      return cardHTML(c, { style: style + (i < peek.length - 1 ? ";filter:brightness(.92)" : "") });
+      return cardHTML(c, { mini: true, style: style + (i < peek.length - 1 ? ";filter:brightness(.92)" : "") });
     })
     .join("");
-  const discard = `<div class="pile">
+  const discard = `<div class="pile mini-pile">
       <div class="lbl">Discard</div>
       <div class="discardstack" data-action="open-discard" title="View discard pile" style="cursor:pointer">
-        ${top ? stackCards : `<div class="card" style="opacity:.22"></div>`}
+        ${top ? stackCards : `<div class="card mini" style="opacity:.22"></div>`}
       </div>
       <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
     </div>`;
@@ -906,22 +929,33 @@ function renderRummy(v) {
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
   const center = `<div class="piles">${stock}${discard}</div>${melds}`;
 
-  // hand (fanned, in the player's chosen order), highlight the must-meld card,
-  // dim when not your play turn; cards are draggable to reorder.
+  // hand: selected cards float to a row above the fan; unselected cards are fanned.
+  // Cards incompatible with the current selection are dimmed.
   const ordered = rummyOrdered(v.yourHand);
-  const hand = fanHand(ordered, (c) => ({
+  const selCards = ordered.filter((c) => S.rummySel.has(c.id));
+  const fanCards = ordered.filter((c) => !S.rummySel.has(c.id));
+  const layMeld = v.melds.find((m) => m.id === S.rummyLayoff);
+
+  // Determine which unselected cards are compatible with the current selection
+  const compatibleIds = inPlay && selCards.length
+    ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld)).map((c) => c.id))
+    : null; // null = no filtering
+
+  const selRow = selCards.length
+    ? `<div class="selrow">${selCards.map((c) => cardHTML(c, {
+        action: "toggle-card", id: c.id, sel: true,
+        must: c.id === v.mustMeldCardId,
+      })).join("")}</div>`
+    : "";
+  const fan = fanHand(fanCards, (c) => ({
     action: "toggle-card",
     id: c.id,
     draggable: true,
-    sel: S.rummySel.has(c.id),
     must: c.id === v.mustMeldCardId,
     playable: inPlay,
-    dim: !inPlay && !S.rummySel.has(c.id),
+    dim: inPlay && compatibleIds != null && !compatibleIds.has(c.id),
   }));
-
-  // selected card objects, for client-side legality of the action buttons
-  const selCards = ordered.filter((c) => S.rummySel.has(c.id));
-  const layMeld = v.melds.find((m) => m.id === S.rummyLayoff);
+  const hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
   const canMeld = selCards.length >= 3 && rValidMeld(selCards);
   const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards);
   const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;
