@@ -401,13 +401,24 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick .who{font-size:11px;color:var(--ink-soft);font-weight:600;max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trick .play.lead .who{color:var(--brass-hi)}
 
-/* Positioned trick layout — cards float toward their player's edge */
+/* Positioned trick layout — cards radiate toward their player's edge of the felt */
 .trick.positioned{position:absolute;inset:0;pointer-events:none;z-index:2}
-.trick.positioned .play{position:absolute;left:50%;top:50%;pointer-events:all;transform:translate(-50%,-50%)}
-.trick.positioned .play.pos-top{transform:translate(-50%,calc(-50% - 80px))}
-.trick.positioned .play.pos-bottom{transform:translate(-50%,calc(-50% + 80px))}
-.trick.positioned .play.pos-left{transform:translate(calc(-50% - 110px),-50%)}
-.trick.positioned .play.pos-right{transform:translate(calc(-50% + 110px),-50%)}
+.trick.positioned .play{
+  position:absolute;left:50%;top:50%;pointer-events:all;
+  transform:translate(-50%,-50%);
+}
+.trick.positioned .play.pos-top{
+  transform:translate(-50%, calc(-50% - min(22vh, 130px)));
+}
+.trick.positioned .play.pos-bottom{
+  transform:translate(-50%, calc(-50% + min(18vh, 100px)));
+}
+.trick.positioned .play.pos-left{
+  transform:translate(calc(-50% - min(28vw, 160px)), -50%);
+}
+.trick.positioned .play.pos-right{
+  transform:translate(calc(-50% + min(28vw, 160px)), -50%);
+}
 
 /* piles (Rummy) */
 .piles{display:flex;gap:22px;align-items:flex-start;justify-content:center}

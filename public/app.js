@@ -419,6 +419,7 @@ function tableShell(v, parts) {
     <div class="felt">
       ${feltPods}
       <div class="center">${parts.center}</div>
+      ${parts.trick || ""}
     </div>
     <div class="selfwrap">${self}</div>
   </div>${logSheet()}`;
@@ -681,19 +682,21 @@ function renderHLJ(v) {
   const teamCrest = (t) =>
     `<span class="crest score t${t === 0 ? "A" : "B"} ${myTeam === t ? "mine" : ""}"><span class="teamdot t${t === 0 ? "A" : "B"}"></span>Team ${t === 0 ? "A" : "B"} ${v.scores[t]}${myTeam === t ? " \u00b7 you" : ""}</span>`;
   const bidCrest = v.phase === "bidding" ? `<span class="crest">high bid: ${highBid}</span>` : "";
-  let trick;
+  let hljTrick;
+  let centerExtra = "";
   if (v.currentTrick.length) {
     const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-    trick = trickHTML(plays, you, v.seats.length);
+    hljTrick = trickHTML(plays, you, v.seats.length);
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
-    trick = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
+    // lastTrick has no per-card seat, so render inline in center
+    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
       .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
       .join("")}</div></div>`;
   } else {
-    trick = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
+    centerExtra = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
   }
-  const center = `<div class="crestrow">${trumpCrest}${teamCrest(0)}${teamCrest(1)}${bidCrest}</div>${trick}`;
+  const center = `<div class="crestrow">${trumpCrest}${teamCrest(0)}${teamCrest(1)}${bidCrest}</div>${centerExtra}`;
 
   // hand (fanned), dim non-legal cards while it's your turn to play
   const hand = fanHand(v.yourHand, (c) => ({
@@ -733,7 +736,7 @@ function renderHLJ(v) {
     ? `<span class="turnflag">Your turn</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, trick: hljTrick, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
@@ -967,7 +970,7 @@ function renderHearts(v) {
 
   // Center: passing prompt, or the crests + the trick (kept showing the last
   // completed trick for a beat once it's swept, so each card is visible).
-  let center;
+  let center, heartsTrick;
   if (passing) {
     const dir = passDir(v.passOffset, v.players);
     center = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
@@ -982,20 +985,17 @@ function renderHearts(v) {
     const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${broken}<span class="crest">hand ${v.handNo + 1}</span></div>`;
     const showLast = v.currentTrick.length === 0 && v.lastTrick;
     const winSeat = showLast ? v.lastTrick.winner : null;
-    let trick;
     if (v.currentTrick.length) {
       const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-      trick = trickHTML(plays, v.you, v.seats.length);
+      heartsTrick = trickHTML(plays, v.you, v.seats.length);
     } else if (showLast) {
       const plays = v.lastTrick.cards.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-      trick = trickHTML(plays, v.you, v.seats.length, { winSeat, faded: true });
-    } else {
-      trick = `<div class="callout">Lead a card to open the trick.</div>`;
+      heartsTrick = trickHTML(plays, v.you, v.seats.length, { winSeat, faded: true });
     }
     const note = showLast
       ? `<div class="callout" style="font-size:13px">Trick to ${esc(seatName(v, v.lastTrick.winner))}.</div>`
-      : "";
-    center = `${crests}${trick}${note}`;
+      : !v.currentTrick.length ? `<div class="callout">Lead a card to open the trick.</div>` : "";
+    center = `${crests}${note}`;
   }
 
   // Hand: in passing, tap to (de)select up to 3; in play, tap a glowing legal card.
@@ -1026,7 +1026,7 @@ function renderHearts(v) {
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
 
-  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, trick: heartsTrick, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
 // ---------- Pegs & Jokers ----------
