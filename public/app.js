@@ -927,15 +927,16 @@ function renderRummy(v) {
 // when legal; non-legal deeper cards are greyed out.
 function discardModal(v) {
   if (!S.discardOpen) return "";
-  const lm = v.yourTurn && v.turnPhase === "draw" ? v.legalMoves : [];
-  const legalIds = new Set(lm.filter((m) => m.type === "drawDiscard").map((m) => m.cardId));
-  // Any card at index >= first legal index is legal (sweep includes everything above).
-  // A non-top card is only legal if its id is explicitly in legalIds.
+  const canDraw = v.yourTurn && v.turnPhase === "draw";
+  const lm = canDraw ? v.legalMoves : [];
+  // Deeper-card legal ids (from generateMoves); top card is ALWAYS legal when canDraw.
+  const deepLegalIds = new Set(lm.filter((m) => m.type === "drawDiscard").map((m) => m.cardId));
   const n = v.discard.length;
   const cards = n
     ? v.discard.map((c, i) => {
         const isTop = i === n - 1;
-        const legal = legalIds.has(c.id);
+        // Top card is always takeable; deeper cards only if engine says so.
+        const legal = canDraw && (isTop || deepLegalIds.has(c.id));
         const label = isTop ? "top" : i === 0 && n > 1 ? "bottom" : "";
         const cardEl = legal
           ? cardHTML(c, { mini: true, playable: true, action: "draw-discard", id: c.id })
@@ -944,9 +945,9 @@ function discardModal(v) {
         return `<div class="dcard ${label}">${cardEl}${sweepLabel}</div>`;
       }).join("")
     : `<div class="callout" style="font-size:13px">The discard pile is empty.</div>`;
-  const hint = legalIds.size
+  const hint = canDraw
     ? `<p class="sub" style="margin:8px 14px 0">Tap a card to take it and everything above it. Greyed cards can't be taken this turn.</p>`
-    : `<p class="sub" style="margin:8px 14px 0">Oldest first \u2014 top card is highlighted. Draw first to pick up.</p>`;
+    : `<p class="sub" style="margin:8px 14px 0">Oldest first \u2014 top card is highlighted.</p>`;
   return `<div class="modal-back" data-action="close-discard">
       <div class="modal" data-stop="1">
         <div class="modalhead"><span>Discard pile \u2014 ${n} card${n === 1 ? "" : "s"}</span>
