@@ -562,6 +562,25 @@ function renderGameOver(v, title, scoresHTML) {
 // Which card in a completed High Low Jack trick won it (port of engine
 // trickWinner): highest trump — joker is the lowest trump — else highest of the
 // led suit. Returns the index into the play-order cards array.
+// Build a spatially-positioned trick div: each card floats toward its player's edge.
+// `plays`  – [{card, seat, name?}]
+// `you`    – viewer's seat index (null = spectator → all top)
+// `n`      – total seat count
+// options  – winSeat: seat whose card gets .win; faded: dim the whole trick
+function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
+  const posClass = (seat) => {
+    if (you == null) return "pos-top";
+    const off = (seat - you + n) % n;
+    if (off === 0) return "pos-bottom";
+    if (off === Math.floor(n / 2)) return "pos-top";
+    return off < n / 2 ? "pos-left" : "pos-right";
+  };
+  const inner = plays.map((p, idx) =>
+    `<div class="play ${posClass(p.seat)}${idx === 0 ? " lead" : ""}">${cardHTML(p.card, { mini: true, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
+  ).join("");
+  return `<div class="trick positioned${faded ? " faded" : ""}">${inner}</div>`;
+}
+
 function hljWinIdx(cards, trump) {
   if (!cards || !cards.length) return -1;
   const tval = (c) => (c.joker ? 0 : c.suit === trump ? c.rank : null);
@@ -624,9 +643,8 @@ function renderHLJ(v) {
   const bidCrest = v.phase === "bidding" ? `<span class="crest">high bid: ${highBid}</span>` : "";
   let trick;
   if (v.currentTrick.length) {
-    trick = `<div class="trick">${v.currentTrick
-      .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true })}<span class="who t${teamLetter(p.seat)}">${esc(seatName(v, p.seat))}</span></div>`)
-      .join("")}</div>`;
+    const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+    trick = trickHTML(plays, you, v.seats.length);
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     trick = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
@@ -923,13 +941,17 @@ function renderHearts(v) {
     const broken = `<span class="crest"><span class="suit red">\u2665</span> ${v.heartsBroken ? "broken" : "not broken"}</span>`;
     const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${broken}<span class="crest">hand ${v.handNo + 1}</span></div>`;
     const showLast = v.currentTrick.length === 0 && v.lastTrick;
-    const cards = v.currentTrick.length ? v.currentTrick : showLast ? v.lastTrick.cards : [];
     const winSeat = showLast ? v.lastTrick.winner : null;
-    const trick = cards.length
-      ? `<div class="trick">${cards
-          .map((p, idx) => `<div class="play ${idx === 0 ? "lead" : ""}">${cardHTML(p.card, { mini: true, win: p.seat === winSeat })}<span class="who">${esc(seatName(v, p.seat))}</span></div>`)
-          .join("")}</div>`
-      : `<div class="callout">Lead a card to open the trick.</div>`;
+    let trick;
+    if (v.currentTrick.length) {
+      const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+      trick = trickHTML(plays, v.you, v.seats.length);
+    } else if (showLast) {
+      const plays = v.lastTrick.cards.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+      trick = trickHTML(plays, v.you, v.seats.length, { winSeat, faded: true });
+    } else {
+      trick = `<div class="callout">Lead a card to open the trick.</div>`;
+    }
     const note = showLast
       ? `<div class="callout" style="font-size:13px">Trick to ${esc(seatName(v, v.lastTrick.winner))}.</div>`
       : "";
