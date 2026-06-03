@@ -426,6 +426,7 @@ function tableShell(v, parts) {
       ${feltPods}
       <div class="center">${parts.center}</div>
       ${parts.trick || ""}
+      ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
     </div>
     <div class="selfwrap">${self}</div>
   </div>${logSheet()}`;
@@ -927,7 +928,7 @@ function renderRummy(v) {
         })
         .join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
-  const center = `<div class="piles">${stock}${discard}</div>${melds}`;
+  const center = `<div class="piles">${stock}${discard}</div>`;
 
   // hand: selected cards float to a row above the fan; unselected cards are fanned.
   // Cards incompatible with the current selection are dimmed.
@@ -1001,7 +1002,7 @@ function renderRummy(v) {
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v);
+  app.__set = tableShell(v, { pods, center, feltBottom: melds, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v);
 }
 
 // Popup listing the whole discard pile. During draw phase, cards are clickable

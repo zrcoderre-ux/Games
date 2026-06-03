@@ -428,7 +428,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .pile .stockwrap .deep{position:absolute;top:2px;left:2px;opacity:.6}
 /* mini piles use the mini card size as their base */
 .mini-pile .stockwrap{min-width:var(--mini-w,46px);min-height:calc(var(--mini-w,46px)*1.4)}
-.melds{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:100%;margin-top:2px}
+/* bottom strip of the felt — melds in Rummy */
+.felt-bottom{
+  position:absolute;bottom:10px;left:6%;right:6%;z-index:2;
+  display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:flex-end;
+}
+.melds{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:100%}
 .meld{
   display:flex;background:rgba(0,0,0,.18);padding:6px;border-radius:11px;
   border:1px solid rgba(205,160,90,.18);
