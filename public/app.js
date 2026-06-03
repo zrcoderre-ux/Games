@@ -154,7 +154,12 @@ function cardHTML(c, o = {}) {
   if (o.win) cls.push("win");
   if (c.joker) {
     cls.push("red");
-    return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl"><b>\u2605</b></span><span class="pip">\u2605</span><span class="corner br"><b>\u2605</b></span></div>`;
+    if (o.jokerAs) cls.push("joker-wild");
+    const badge = o.jokerAs
+      ? `<span class="joker-as-badge ${RED.has(o.jokerAs.suit) ? "red" : ""}">${rankLabel(o.jokerAs.rank)}${SUIT[o.jokerAs.suit]}</span>`
+      : "";
+    const action = o.jokerAs ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
+    return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl"><b>\u2605</b></span><span class="pip">\u2605</span><span class="corner br"><b>\u2605</b></span>${badge}</div>`;
   }
   if (RED.has(c.suit)) cls.push("red");
   const r = rankLabel(c.rank);
@@ -421,6 +426,7 @@ function tableShell(v, parts) {
       ${feltPods}
       <div class="center">${parts.center}</div>
       ${parts.trick || ""}
+      ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
     </div>
     <div class="selfwrap">${self}</div>
   </div>${logSheet()}`;
@@ -791,6 +797,70 @@ function rummySort(hand, mode) {
 }
 
 // ---------- Rummy 500 ----------
+
+// Mirror of orderRunCards from rummy-module — returns parallel array of
+// resolved {rank,suit} for each card (null for natural cards).
+function resolveJokers(meld) {
+  const cards = meld.cards;
+  if (meld.kind === "set") {
+    const naturalRank = cards.find((c) => !c.joker)?.rank;
+    if (naturalRank == null) return cards.map(() => null);
+    const usedSuits = new Set(cards.filter((c) => !c.joker).map((c) => c.suit));
+    const freeSuits = ["S", "H", "C", "D"].filter((s) => !usedSuits.has(s));
+    let si = 0;
+    return cards.map((c) => c.joker ? { rank: naturalRank, suit: freeSuits[si++] ?? "S" } : null);
+  }
+  // run: mirror orderRunCards logic
+  const naturals = cards.filter((c) => !c.joker);
+  const jokers = cards.filter((c) => c.joker);
+  if (!naturals.length) return cards.map(() => null);
+  for (const aceRank of [1, 14]) {
+    const eff = naturals.map((c) => ({ c, r: c.rank === 14 ? aceRank : c.rank })).sort((a, b) => a.r - b.r);
+    const ranks = eff.map((x) => x.r);
+    if (new Set(ranks).size !== ranks.length) continue;
+    const low = ranks[0], high = ranks[ranks.length - 1];
+    const gaps = high - low + 1 - ranks.length;
+    if (gaps < 0 || gaps > jokers.length) continue;
+    const extra = jokers.length - gaps;
+    const after = Math.min(extra, 14 - high);
+    const before = extra - after;
+    if (before > low - 1) continue;
+    const suit = naturals[0].suit; // runs are same suit
+    const byRank = new Map(eff.map((x) => [x.r, x.c]));
+    const jkAssign = [];
+    for (let r = low - before; r <= high + after; r++) if (!byRank.has(r)) jkAssign.push(r);
+    let ji = 0;
+    // Map original jokers to their assigned ranks in order they appear in cards[]
+    const jokerRanks = new Map();
+    for (const jk of jokers) jokerRanks.set(jk, jkAssign[ji++]);
+    return cards.map((c) => c.joker ? { rank: jokerRanks.get(c) ?? 0, suit } : null);
+  }
+  return cards.map(() => null);
+}
+
+// Can card `c` join the current selection and still potentially form a valid meld/layoff?
+function rCompatible(sel, c, layMeld) {
+  if (c.joker) return true;
+  if (!sel.length) return true;
+  if (layMeld) return rCanLayoff(layMeld, [...sel, c]);
+  const naturals = sel.filter((s) => !s.joker);
+  if (!naturals.length) return true; // only jokers selected so far
+  const jokerCount = sel.filter((s) => s.joker).length;
+  // Set: same rank, no duplicate suit
+  const setRank = naturals[0].rank;
+  if (naturals.every((s) => s.rank === setRank) && c.rank === setRank && !sel.some((s) => s.suit === c.suit))
+    return true;
+  // Run: same suit, rank fits in range with available jokers as gap-fill
+  const runSuit = naturals[0].suit;
+  if (naturals.every((s) => s.suit === runSuit) && c.suit === runSuit) {
+    const allRanks = [...naturals.map((s) => s.rank), c.rank].sort((a, b) => a - b);
+    const lo = allRanks[0], hi = allRanks[allRanks.length - 1];
+    const gaps = hi - lo + 1 - allRanks.length;
+    if (gaps >= 0 && gaps <= jokerCount) return true;
+  }
+  return false;
+}
+
 function renderRummy(v) {
   // prune stale selections (cards no longer in hand)
   const handIds = new Set(v.yourHand.map((c) => c.id));
@@ -823,12 +893,12 @@ function renderRummy(v) {
     )
     .filter(Boolean);
 
-  // center: stock + discard piles, then melds on the felt
-  const stock = `<div class="pile">
+  // center: stock + discard piles (mini), then melds on the felt
+  const stock = `<div class="pile mini-pile">
       <div class="lbl">Stock</div>
       <div class="stockwrap" ${canStock ? `data-action="draw-stock" style="cursor:pointer"` : ""}>
-        ${v.stockCount > 1 ? cardHTML({}, { back: true, style: "position:absolute;top:3px;left:3px;opacity:.6" }) : ""}
-        ${v.stockCount > 0 ? cardHTML({}, { back: true }) : `<div class="card" style="opacity:.22"></div>`}
+        ${v.stockCount > 1 ? cardHTML({}, { back: true, mini: true, style: "position:absolute;top:2px;left:2px;opacity:.6" }) : ""}
+        ${v.stockCount > 0 ? cardHTML({}, { back: true, mini: true }) : `<div class="card mini" style="opacity:.22"></div>`}
       </div>
       <div class="pts">${v.stockCount} left</div>
     </div>`;
@@ -836,15 +906,15 @@ function renderRummy(v) {
   const peek = v.discard.slice(-5);
   const stackCards = peek
     .map((c, i) => {
-      const off = (peek.length - 1 - i) * 7;
+      const off = (peek.length - 1 - i) * 4;
       const style = `position:absolute;left:${-off}px;top:${-off}px;z-index:${i}`;
-      return cardHTML(c, { style: style + (i < peek.length - 1 ? ";filter:brightness(.92)" : "") });
+      return cardHTML(c, { mini: true, style: style + (i < peek.length - 1 ? ";filter:brightness(.92)" : "") });
     })
     .join("");
-  const discard = `<div class="pile">
+  const discard = `<div class="pile mini-pile">
       <div class="lbl">Discard</div>
       <div class="discardstack" data-action="open-discard" title="View discard pile" style="cursor:pointer">
-        ${top ? stackCards : `<div class="card" style="opacity:.22"></div>`}
+        ${top ? stackCards : `<div class="card mini" style="opacity:.22"></div>`}
       </div>
       <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
     </div>`;
@@ -852,29 +922,41 @@ function renderRummy(v) {
     ? `<div class="melds">${v.melds
         .map((m) => {
           const active = S.rummyLayoff === m.id;
-          const cards = m.cards.map((c) => cardHTML(c, { mini: true })).join("");
+          const jokerRes = resolveJokers(m);
+          const cards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined })).join("");
           return `<div class="meld ${inPlay ? "tappable" : ""} ${active ? "target" : ""}" ${inPlay ? `data-action="select-meld" data-meldid="${m.id}"` : ""}><div class="row">${cards}</div><span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         })
         .join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
-  const center = `<div class="piles">${stock}${discard}</div>${melds}`;
+  const center = `<div class="piles">${stock}${discard}</div>`;
 
-  // hand (fanned, in the player's chosen order), highlight the must-meld card,
-  // dim when not your play turn; cards are draggable to reorder.
+  // hand: selected cards float to a row above the fan; unselected cards are fanned.
+  // Cards incompatible with the current selection are dimmed.
   const ordered = rummyOrdered(v.yourHand);
-  const hand = fanHand(ordered, (c) => ({
+  const selCards = ordered.filter((c) => S.rummySel.has(c.id));
+  const fanCards = ordered.filter((c) => !S.rummySel.has(c.id));
+  const layMeld = v.melds.find((m) => m.id === S.rummyLayoff);
+
+  // Determine which unselected cards are compatible with the current selection
+  const compatibleIds = inPlay && selCards.length
+    ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld)).map((c) => c.id))
+    : null; // null = no filtering
+
+  const selRow = selCards.length
+    ? `<div class="selrow">${selCards.map((c) => cardHTML(c, {
+        action: "toggle-card", id: c.id, sel: true,
+        must: c.id === v.mustMeldCardId,
+      })).join("")}</div>`
+    : "";
+  const fan = fanHand(fanCards, (c) => ({
     action: "toggle-card",
     id: c.id,
     draggable: true,
-    sel: S.rummySel.has(c.id),
     must: c.id === v.mustMeldCardId,
     playable: inPlay,
-    dim: !inPlay && !S.rummySel.has(c.id),
+    dim: inPlay && compatibleIds != null && !compatibleIds.has(c.id),
   }));
-
-  // selected card objects, for client-side legality of the action buttons
-  const selCards = ordered.filter((c) => S.rummySel.has(c.id));
-  const layMeld = v.melds.find((m) => m.id === S.rummyLayoff);
+  const hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
   const canMeld = selCards.length >= 3 && rValidMeld(selCards);
   const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards);
   const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;
@@ -920,22 +1002,23 @@ function renderRummy(v) {
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v);
+  app.__set = tableShell(v, { pods, center, feltBottom: melds, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v);
 }
 
 // Popup listing the whole discard pile. During draw phase, cards are clickable
 // when legal; non-legal deeper cards are greyed out.
 function discardModal(v) {
   if (!S.discardOpen) return "";
-  const lm = v.yourTurn && v.turnPhase === "draw" ? v.legalMoves : [];
-  const legalIds = new Set(lm.filter((m) => m.type === "drawDiscard").map((m) => m.cardId));
-  // Any card at index >= first legal index is legal (sweep includes everything above).
-  // A non-top card is only legal if its id is explicitly in legalIds.
+  const canDraw = v.yourTurn && v.turnPhase === "draw";
+  const lm = canDraw ? v.legalMoves : [];
+  // Deeper-card legal ids (from generateMoves); top card is ALWAYS legal when canDraw.
+  const deepLegalIds = new Set(lm.filter((m) => m.type === "drawDiscard").map((m) => m.cardId));
   const n = v.discard.length;
   const cards = n
     ? v.discard.map((c, i) => {
         const isTop = i === n - 1;
-        const legal = legalIds.has(c.id);
+        // Top card is always takeable; deeper cards only if engine says so.
+        const legal = canDraw && (isTop || deepLegalIds.has(c.id));
         const label = isTop ? "top" : i === 0 && n > 1 ? "bottom" : "";
         const cardEl = legal
           ? cardHTML(c, { mini: true, playable: true, action: "draw-discard", id: c.id })
@@ -944,9 +1027,9 @@ function discardModal(v) {
         return `<div class="dcard ${label}">${cardEl}${sweepLabel}</div>`;
       }).join("")
     : `<div class="callout" style="font-size:13px">The discard pile is empty.</div>`;
-  const hint = legalIds.size
+  const hint = canDraw
     ? `<p class="sub" style="margin:8px 14px 0">Tap a card to take it and everything above it. Greyed cards can't be taken this turn.</p>`
-    : `<p class="sub" style="margin:8px 14px 0">Oldest first \u2014 top card is highlighted. Draw first to pick up.</p>`;
+    : `<p class="sub" style="margin:8px 14px 0">Oldest first \u2014 top card is highlighted.</p>`;
   return `<div class="modal-back" data-action="close-discard">
       <div class="modal" data-stop="1">
         <div class="modalhead"><span>Discard pile \u2014 ${n} card${n === 1 ? "" : "s"}</span>
@@ -1359,6 +1442,11 @@ app.addEventListener("click", (e) => {
     }
     case "draw-stock": return send({ t: "move", move: { type: "drawStock", seat: v.you } });
     case "draw-discard": S.discardOpen = false; return send({ t: "move", move: { type: "drawDiscard", seat: v.you, cardId: +t.dataset.cardid } });
+    case "reveal-joker": {
+      t.classList.add("joker-pulse");
+      setTimeout(() => t.classList.remove("joker-pulse"), 700);
+      return;
+    }
     case "toggle-card": return toggleSel(+t.dataset.cardid);
     case "select-meld": S.rummyLayoff = S.rummyLayoff === +t.dataset.meldid ? null : +t.dataset.meldid; return render();
     case "meld-selected": return doMeld();

@@ -421,12 +421,19 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 
 /* piles (Rummy) */
-.piles{display:flex;gap:22px;align-items:flex-start;justify-content:center}
-.pile{display:flex;flex-direction:column;align-items:center;gap:6px}
+.piles{display:flex;gap:16px;align-items:flex-start;justify-content:center}
+.pile{display:flex;flex-direction:column;align-items:center;gap:4px}
 .pile .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);font-weight:700}
 .pile .stockwrap{position:relative}
-.pile .stockwrap .deep{position:absolute;top:3px;left:3px;opacity:.6}
-.melds{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:100%;margin-top:2px}
+.pile .stockwrap .deep{position:absolute;top:2px;left:2px;opacity:.6}
+/* mini piles use the mini card size as their base */
+.mini-pile .stockwrap{min-width:var(--mini-w,46px);min-height:calc(var(--mini-w,46px)*1.4)}
+/* bottom strip of the felt — melds in Rummy */
+.felt-bottom{
+  position:absolute;bottom:10px;left:6%;right:6%;z-index:2;
+  display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:flex-end;
+}
+.melds{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:100%}
 .meld{
   display:flex;background:rgba(0,0,0,.18);padding:6px;border-radius:11px;
   border:1px solid rgba(205,160,90,.18);
@@ -458,13 +465,26 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .selfbar .waitflag{margin-left:auto;font-size:12.5px;color:var(--ink-dim)}
 
-/* hand fan — full width at bottom, cards overlap the rim slightly */
+/* hand: column layout — selrow above fan-inner */
 .hand{
-  display:flex;justify-content:center;align-items:flex-end;
-  min-height:110px;padding:22px 4px 4px;position:relative;
-  width:100%;box-sizing:border-box;
+  display:flex;flex-direction:column;align-items:center;
+  padding:4px 4px 0;width:100%;box-sizing:border-box;
 }
 .hand.empty{min-height:0;padding:0}
+
+/* selected cards — full-size row above the fan */
+.selrow{
+  display:flex;gap:10px;justify-content:center;align-items:flex-end;
+  padding:4px 8px 6px;flex-wrap:wrap;
+}
+.selrow .card{flex-shrink:0;animation:dropin .25s cubic-bezier(.2,.8,.2,1) both}
+
+/* fan container — preserves existing fan positioning */
+.fan-inner{
+  display:flex;justify-content:center;align-items:flex-end;
+  min-height:100px;padding:18px 4px 4px;position:relative;
+  width:100%;box-sizing:border-box;
+}
 
 /* actions */
 .actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;padding:4px 8px 2px;width:100%;box-sizing:border-box}
@@ -527,21 +547,20 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   background:radial-gradient(circle at 50% 50%, rgba(231,196,133,.3), transparent 60%);
 }
 
-/* interaction states (hand) */
-.hand .card{cursor:pointer}
-.hand .card.playable:hover,.hand .card.playable:focus{
+/* interaction states (hand / fan) */
+.fan-inner .card{cursor:pointer}
+.fan-inner .card.playable:hover,.fan-inner .card.playable:focus{
   transform:translateY(-22px) rotate(0deg) scale(1.04)!important;
   box-shadow:0 18px 30px -10px rgba(0,0,0,.7),0 0 0 2px var(--brass-hi),inset 0 0 0 1px rgba(150,110,60,.3)!important;
   z-index:60!important;
 }
-.hand .card.sel{
-  transform:translateY(-20px) rotate(0deg)!important;
-  box-shadow:0 16px 26px -10px rgba(0,0,0,.7),0 0 0 2px var(--amber),0 0 14px rgba(224,164,78,.5),inset 0 0 0 1px rgba(150,110,60,.3)!important;
-  z-index:55!important;
-}
-.hand .card.playable{box-shadow:0 2px 2px rgba(0,0,0,.25),0 8px 16px -6px rgba(0,0,0,.55),0 0 0 1.5px rgba(231,196,133,.55),inset 0 0 0 1px rgba(150,110,60,.3)}
-.hand .card.dim{filter:brightness(.82) saturate(.85)}
-.hand .card.must{box-shadow:0 2px 2px rgba(0,0,0,.25),0 8px 16px -6px rgba(0,0,0,.55),0 0 0 2px var(--ok),inset 0 0 0 1px rgba(150,110,60,.3)}
+.fan-inner .card.playable{box-shadow:0 2px 2px rgba(0,0,0,.25),0 8px 16px -6px rgba(0,0,0,.55),0 0 0 1.5px rgba(231,196,133,.55),inset 0 0 0 1px rgba(150,110,60,.3)}
+.fan-inner .card.dim{filter:brightness(.45) saturate(.5)}
+.fan-inner .card.must{box-shadow:0 2px 2px rgba(0,0,0,.25),0 8px 16px -6px rgba(0,0,0,.55),0 0 0 2px var(--ok),inset 0 0 0 1px rgba(150,110,60,.3)}
+/* selected cards in the row above */
+.selrow .card{cursor:pointer;box-shadow:0 16px 26px -10px rgba(0,0,0,.7),0 0 0 2px var(--amber),0 0 14px rgba(224,164,78,.5)}
+.selrow .card.must{box-shadow:0 16px 26px -10px rgba(0,0,0,.7),0 0 0 2px var(--ok),0 0 14px rgba(80,200,130,.4)}
+.selrow .card:hover{box-shadow:0 16px 26px -10px rgba(0,0,0,.7),0 0 0 2px var(--ember),0 0 14px rgba(200,80,80,.4)}
 
 /* ---------- toast ---------- */
 .toast{
@@ -559,6 +578,23 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 @keyframes dropin{from{opacity:0;transform:translateY(-18px) scale(.9) rotate(-3deg)}to{opacity:1;transform:none}}
 @keyframes turnpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.12)}}
 @keyframes dealin{from{opacity:0;transform:translateY(26px) scale(.9)}to{opacity:1}}
+@keyframes jokerpulse{0%{transform:scale(1)}30%{transform:scale(1.22)}60%{transform:scale(.96)}100%{transform:scale(1)}}
+@keyframes badgeshow{0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}60%{transform:translate(-50%,-50%) scale(1.1)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+
+/* joker-as badge on melded jokers */
+.card.joker-wild{cursor:pointer;position:relative}
+.joker-as-badge{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(6,9,16,.82);border:1px solid var(--brass-hi);
+  border-radius:6px;padding:2px 5px;
+  font-size:11px;font-weight:700;font-family:monospace;
+  color:var(--cream);pointer-events:none;white-space:nowrap;
+  opacity:.72;transition:opacity .15s;
+}
+.joker-as-badge.red{color:var(--suit-red)}
+.card.joker-wild:hover .joker-as-badge{opacity:1}
+.card.joker-pulse{animation:jokerpulse .7s cubic-bezier(.2,.8,.2,1) both}
+.card.joker-pulse .joker-as-badge{animation:badgeshow .4s cubic-bezier(.2,.8,.2,1) both;opacity:1}
 /* trick-winning card: a brief lift + golden flash */
 @keyframes wincard{
   0%{transform:translateY(0) scale(1);box-shadow:0 2px 2px rgba(0,0,0,.25),0 7px 14px -6px rgba(0,0,0,.55),inset 0 0 0 1px rgba(150,110,60,.3)}
@@ -581,7 +617,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* ---------- responsive niceties ---------- */
 @media (min-width:560px){
   .card{--w:70px}
-  .hand{min-height:118px}
+  .fan-inner{min-height:118px}
 }
 @media (max-width:360px){
   .card{--w:56px}
@@ -685,8 +721,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .discardstack:hover .card:last-child{transform:translateY(-3px)}
 
 /* hand drag-to-reorder */
-.hand .card[draggable="true"]{cursor:grab}
-.hand .card.dragging{opacity:.45;cursor:grabbing}
+.fan-inner .card[draggable="true"]{cursor:grab}
+.fan-inner .card.dragging{opacity:.45;cursor:grabbing}
 
 /* modal popup (discard pile list) */
 .modal-back{position:fixed;inset:0;background:rgba(5,8,16,.72);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:50;animation:rise .2s ease both;padding:18px}
