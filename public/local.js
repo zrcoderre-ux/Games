@@ -381,6 +381,7 @@ function createGame(players, seed, target = 21) {
     currentTrick: [],
     tricksWon: [],
     lastHand: null,
+    dealtHands: null,
     bidHistory: [],
     profiles: Array.from({ length: players }, emptyProfile)
   };
@@ -401,6 +402,7 @@ function deal(state) {
     seed: nextSeed,
     phase: "bidding",
     hands,
+    dealtHands: hands.map((h) => [...h]),
     kitty,
     trump: null,
     bidTurn: firstBidder,
@@ -604,7 +606,8 @@ function scoreHand(state) {
     pointsByTeam,
     made,
     deltaByTeam,
-    detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam }
+    detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam },
+    dealtHands: state.dealtHands ?? []
   };
   const autoWin = bid === 6 && made && preScore >= 0;
   let winner = null;
@@ -973,6 +976,7 @@ function redact(state, seat, meta) {
     lastTrick,
     lastHand: state.lastHand,
     lastKitty: state.lastHand ? state.kitty : null,
+    lastDealtHands: state.lastHand ? state.lastHand.dealtHands : null,
     log: state.log ?? []
   };
 }

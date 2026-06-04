@@ -79,6 +79,7 @@ export type PlayerView = {
   lastTrick: { winner: number; cards: Card[] } | null; // for animating the previous trick
   lastHand: HandResult | null; // scoring breakdown at hand end
   lastKitty: Card[] | null; // kitty revealed after the hand completes
+  lastDealtHands: Card[][] | null; // each player's starting hand, revealed after hand
   log: LogEntry[]; // authoritative move log (public)
 };
 
@@ -120,6 +121,7 @@ export function redact(
     lastTrick,
     lastHand: state.lastHand,
     lastKitty: state.lastHand ? state.kitty : null,
+    lastDealtHands: state.lastHand ? state.lastHand.dealtHands : null,
     log: (state as { log?: LogEntry[] }).log ?? [],
   };
 }

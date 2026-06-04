@@ -461,9 +461,25 @@ function logSheet() {
   // --- Log tab ---
   const logBody = () => {
     const entries = v && v.log ? v.log : [];
+    // Append dealt-hand rows at the end of the log list (they appear at bottom = start of hand)
+    // Only revealed once the hand is over (lastDealtHands is set)
+    let dealtRows = "";
+    if (S.party === "high-low-jack" && v && v.lastDealtHands) {
+      const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
+      dealtRows = v.lastDealtHands.map((hand, seat) => {
+        const name = esc(seatName(v, seat));
+        const sorted = [...hand].sort((a, b) =>
+          (a.joker ? 1 : 0) - (b.joker ? 1 : 0) ||
+          (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
+          a.rank - b.rank
+        );
+        const cards = sorted.map(c => cardHTML(c, { mini: true })).join("");
+        return `<div class="logrow hlj-dealt-row"><span class="hlj-dealt-name">${name}</span><div class="hlj-dealt-cards">${cards}</div></div>`;
+      }).join("");
+    }
     const rows = entries.length
-      ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("")
-      : `<div class="logrow" style="color:var(--ink-dim)">No moves yet.</div>`;
+      ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("") + dealtRows
+      : dealtRows || `<div class="logrow" style="color:var(--ink-dim)">No moves yet.</div>`;
     return `<div class="loglist">${rows}</div>`;
   };
 
