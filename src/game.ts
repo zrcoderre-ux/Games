@@ -18,6 +18,8 @@ export type RoomMeta = {
   hostSeat: number | null;
   players: number;
   inLobby: boolean;
+  botReplacement: boolean;       // auto-replace disconnected players after 60 s
+  disconnectedSeats: number[];   // seats where the human has closed their connection
 };
 
 // ---------- move log (generic, authoritative) ----------
@@ -114,7 +116,9 @@ export type ClientMessage<Config, Move> =
   | { t: "start"; config: Config } // host fills empty seats with bots and deals
   | { t: "move"; move: Move } // a game action (opaque to the server)
   | { t: "aux"; payload: unknown } // a non-turn side action (opaque to the server)
-  | { t: "newGame" }; // after game over, reset to the lobby
+  | { t: "newGame" } // after game over, reset to the lobby
+  | { t: "setBotReplacement"; enabled: boolean } // host toggles auto bot-replacement
+  | { t: "replaceSeat"; seat: number }; // host immediately replaces a disconnected player
 
 export type ServerMessage<View> =
   | { t: "view"; view: View }

@@ -119,12 +119,12 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
 
   isOver: (s) => s.phase === "gameOver",
 
-  redact: (s, seat, meta) => redact(s, seat, { seats: meta.seats, hostSeat: meta.hostSeat }),
+  redact: (s, seat, meta) => redact(s, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats }),
 
   lobbyView: (config, seat, meta) => {
     const g = engineCreateGame(config.players, 1, config.target);
     const blanked = { ...g, hands: g.hands.map(() => []), kitty: [], phase: "bidding" as const };
-    return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, phase: "lobby" });
+    return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats, phase: "lobby" });
   },
 
   aiMove: (s, seat) => aiMove(s, seat),

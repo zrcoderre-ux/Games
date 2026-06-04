@@ -216,6 +216,8 @@ export type RummyView = {
   target: number;
   seats: RoomMeta["seats"];
   hostSeat: number | null;
+  botReplacement: boolean;
+  disconnectedSeats: number[];
   scores: number[];
   winner: number | null;
   dealerSeat: number;
@@ -579,6 +581,8 @@ function redact(state: RummyState, seat: number | null, meta: RoomMeta): RummyVi
     target: state.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     scores: state.scores,
     winner: state.winner,
     dealerSeat: state.dealerSeat,
@@ -605,6 +609,8 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
     target: config.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     scores: Array(config.players).fill(0),
     winner: null,
     dealerSeat: 0,

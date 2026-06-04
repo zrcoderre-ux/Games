@@ -204,16 +204,23 @@ function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
   const backs = Math.min(o.count || 0, 4);
   const mb = Array.from({ length: backs }, () => `<span class="mb"></span>`).join("");
-  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""}">
+  const isDisconnected = v.disconnectedSeats && v.disconnectedSeats.includes(i);
+  const isHost = v.you === v.hostSeat && v.you !== null;
+  const replaceBtn = isDisconnected && isHost && !S.offline
+    ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
+    : "";
+  const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
+  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""}">
     ${o.team ? `<span class="teamchip t${o.team}">${o.team}</span>` : ""}
     ${o.dealer ? `<span class="dealer">D</span>` : ""}
     <div class="ministack">${mb}${avatarHTML(name)}</div>
     <div class="pod-info">
-      <span class="name">${esc(name)}</span>
+      <span class="name">${esc(name)}${disconnectedBadge}</span>
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
       <span class="count">${o.count}</span>
     </div>
     ${o.note ? `<div class="note">${esc(o.note)}</div>` : ""}
+    ${replaceBtn}
   </div>`;
 }
 
@@ -606,10 +613,18 @@ function renderLobby(v) {
          <label>Play to (points)</label>
          <input class="field" id="f-target" type="number" min="1" value="${v.target}" />`;
 
+  const botReplacementToggle = !S.offline
+    ? `<label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer">
+         <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} style="width:16px;height:16px" />
+         <span>Auto-replace disconnected players with bots <span class="sub">(1-min delay)</span></span>
+       </label>`
+    : "";
+
   const hostPanel = isHost
     ? `<div class="panel">
          <h2>Set up the table</h2>
          ${cfgControls}
+         ${botReplacementToggle}
          <p class="sub" style="margin-top:10px">Anyone can sit in an open seat. Empty seats become bots when you deal.</p>
          <div style="margin-top:14px"><button class="btn" style="width:100%" data-action="start">${isPJ ? "Deal & start" : "Deal the cards"}</button></div>
        </div>`
@@ -1584,6 +1599,8 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "clearseat": return send({ t: "clearSeat", seat: +t.dataset.seat });
+    case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
+    case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
     case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
     case "setcount": {
       const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;

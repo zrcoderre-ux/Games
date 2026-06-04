@@ -162,6 +162,8 @@ export type HeartsView = {
   target: number;
   seats: RoomMeta["seats"];
   hostSeat: number | null;
+  botReplacement: boolean;
+  disconnectedSeats: number[];
 
   scores: number[];
   winner: number | null;
@@ -465,6 +467,8 @@ function redact(state: HeartsState, seat: number | null, meta: RoomMeta): Hearts
     target: state.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     scores: state.scores,
     winner: state.winner,
     handNo: state.handNo,

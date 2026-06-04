@@ -25,6 +25,9 @@ type Room<State, Config> = {
   seats: SeatInfo[];
   pidSeats: Record<string, number>; // stable pid -> seat, for reconnects
   hostSeat: number | null;
+  botReplacement: boolean;                // auto-replace disconnected humans after 60 s
+  pendingBotSeats: Record<number, number>; // seat → epoch-ms when bot takes over
+  disconnectedSeats: Record<number, true>; // seats with a closed WebSocket
 };
 
 export abstract class RoomServer<
@@ -47,6 +50,10 @@ export abstract class RoomServer<
   async onStart() {
     const saved = await this.ctx.storage.get<Room<State, Config>>("room");
     this.room = saved ?? this.freshLobby();
+    // Backward compat: rooms saved before bot-replacement fields were added.
+    if (!this.room.pendingBotSeats) this.room.pendingBotSeats = {};
+    if (!this.room.disconnectedSeats) this.room.disconnectedSeats = {};
+    if (this.room.botReplacement === undefined) this.room.botReplacement = false;
   }
 
   private freshLobby(): Room<State, Config> {
@@ -57,6 +64,9 @@ export abstract class RoomServer<
       seats: emptySeats(this.game.seatCount(config)),
       pidSeats: {},
       hostSeat: null,
+      botReplacement: false,
+      pendingBotSeats: {},
+      disconnectedSeats: {},
     };
   }
 
@@ -80,9 +90,11 @@ export abstract class RoomServer<
         case "removeBot": return await this.handleRemoveBot(conn, msg.seat);
         case "setConfig": return await this.handleSetConfig(conn, msg.config);
         case "start":   return await this.handleStart(conn, msg.config);
-        case "move":    return await this.handleMove(conn, msg.move);
-        case "aux":     return await this.handleAux(conn, msg.payload);
-        case "newGame": return await this.handleNewGame(conn);
+        case "move":              return await this.handleMove(conn, msg.move);
+        case "aux":               return await this.handleAux(conn, msg.payload);
+        case "newGame":           return await this.handleNewGame(conn);
+        case "setBotReplacement": return await this.handleSetBotReplacement(conn, msg.enabled);
+        case "replaceSeat":       return await this.handleReplaceSeat(conn, msg.seat);
       }
     } catch (err) {
       this.send(conn, { t: "error", message: err instanceof Error ? err.message : "Error" });
@@ -93,14 +105,19 @@ export abstract class RoomServer<
     const seat = conn.state?.seat;
     if (seat === null || seat === undefined || !this.room.seats[seat]) return;
     if (this.inProgress()) {
-      // Only replace with a bot if other human players are still connected.
-      // Solo-vs-bots games simply pause until the human reconnects.
       const otherHumans = this.room.seats.filter((s, i) => i !== seat && s.kind === "human").length;
       if (otherHumans > 0) {
-        this.room.seats[seat] = { kind: "bot", name: this.room.seats[seat].name };
+        // Mark as disconnected so the host can see and act.
+        this.room.disconnectedSeats[seat] = true;
+        if (this.room.botReplacement) {
+          // Auto-replace after 60 s; human can still reconnect and reclaim before then.
+          this.room.pendingBotSeats[seat] = Date.now() + BOT_REPLACE_DELAY_MS;
+          await this.scheduleNextAlarm();
+        }
         await this.persist();
-        await this.resolveBotsAndBroadcast();
+        this.broadcastViews();
       }
+      // else: sole human — game pauses until they reconnect; no bot takeover.
     } else {
       this.room.seats[seat] = { kind: "empty", name: null };
       await this.persist();
@@ -114,6 +131,9 @@ export abstract class RoomServer<
     let seat = this.room.pidSeats[pid] ?? null;
     if (seat !== null) {
       this.room.seats[seat] = { kind: "human", name }; // reconnect: reclaim seat
+      // Cancel any scheduled or pending bot replacement for this seat.
+      delete this.room.pendingBotSeats[seat];
+      delete this.room.disconnectedSeats[seat];
     } else if (!this.room.state) {
       const empty = this.room.seats.findIndex((s) => s.kind === "empty");
       if (empty !== -1) {
@@ -153,6 +173,8 @@ export abstract class RoomServer<
     } else {
       this.room.seats[st.seat] = { kind: "empty", name: null };
     }
+    delete this.room.pendingBotSeats[st.seat];
+    delete this.room.disconnectedSeats[st.seat];
     delete this.room.pidSeats[st.pid];
     conn.setState({ ...st, seat: null });
     await this.persist();
@@ -271,10 +293,34 @@ export abstract class RoomServer<
     if (this.inProgress()) throw new Error("Game still in progress");
     if (conn.state?.seat !== this.room.hostSeat) throw new Error("Only the host can start a new game");
     this.room.state = null;
+    this.room.pendingBotSeats = {};
+    this.room.disconnectedSeats = {};
     // Return bots to empty seats so humans can re-seat in the lobby.
     this.room.seats = this.room.seats.map((s) => (s.kind === "bot" ? { kind: "empty", name: null } : s));
     await this.persist();
     this.broadcastViews();
+  }
+
+  private async handleSetBotReplacement(conn: Connection<ConnState>, enabled: boolean) {
+    this.requireHost(conn);
+    this.room.botReplacement = enabled;
+    if (!enabled) {
+      // Cancel any scheduled replacements.
+      this.room.pendingBotSeats = {};
+    }
+    await this.persist();
+    this.broadcastViews();
+  }
+
+  private async handleReplaceSeat(conn: Connection<ConnState>, seat: number) {
+    if (conn.state?.seat !== this.room.hostSeat) throw new Error("Only the host can replace a seat");
+    if (!this.inProgress()) throw new Error("No game in progress");
+    if (!this.room.disconnectedSeats[seat]) throw new Error("That player is not disconnected");
+    this.room.seats[seat] = { kind: "bot", name: this.room.seats[seat].name };
+    delete this.room.pendingBotSeats[seat];
+    delete this.room.disconnectedSeats[seat];
+    await this.persist();
+    await this.resolveBotsAndBroadcast();
   }
 
   // ---------- bots + broadcast ----------
@@ -287,41 +333,74 @@ export abstract class RoomServer<
     return this.room.seats[seat]?.kind === "bot";
   }
 
-  // After any state change: show the current position immediately, then let the
-  // bots act ONE move at a time on a timer (see onAlarm) so a human watching
-  // sees each card played in order instead of the whole sequence at once.
+  // After any state change: broadcast the new view, then let bots/timers act.
   private async resolveBotsAndBroadcast() {
     this.broadcastViews();
-    await this.scheduleBotStep();
+    await this.scheduleNextAlarm();
   }
 
-  // Schedule the next bot move a short beat from now, if the seat to act is a bot.
-  private async scheduleBotStep() {
-    const s = this.room.state;
-    if (!s || this.game.isOver(s)) return;
-    const seat = this.game.seatToAct(s);
-    if (seat !== null && this.isBot(seat)) await this.ctx.storage.setAlarm(Date.now() + BOT_STEP_MS);
-  }
-
-  // Fired by the runtime on our scheduled alarm. PartyServer runs initialization
-  // (onStart) before this, so this.room is loaded, and it works across
-  // hibernation. Plays exactly one bot move, broadcasts, then reschedules if the
-  // next seat is also a bot.
-  async onAlarm() {
-    const s = this.room.state;
-    if (!s || this.game.isOver(s)) return;
-    const seat = this.game.seatToAct(s);
-    if (seat === null || !this.isBot(seat)) return; // a human reclaimed the turn
-    let ns: State = s;
-    if (this.game.aux?.botAux) {
-      const a = this.game.aux.botAux(ns, seat);
-      if (a != null) ns = this.game.aux.apply(ns, seat, a);
+  // Single alarm slot covers both pending bot-replacements and bot move steps.
+  private async scheduleNextAlarm() {
+    let next: number | null = null;
+    for (const t of Object.values(this.room.pendingBotSeats)) {
+      next = next === null ? t : Math.min(next, t);
     }
-    ns = this.game.applyMove(ns, this.game.aiMove(ns, seat));
-    this.room.state = ns;
-    await this.persist();
-    this.broadcastViews();
-    await this.scheduleBotStep();
+    const s = this.room.state;
+    if (s && !this.game.isOver(s)) {
+      const seat = this.game.seatToAct(s);
+      if (seat !== null && this.isBot(seat)) {
+        const botTime = Date.now() + (this.game.botStepMs ?? BOT_STEP_MS);
+        next = next === null ? botTime : Math.min(next, botTime);
+      }
+    }
+    if (next !== null) await this.ctx.storage.setAlarm(next);
+  }
+
+  // Fired by the runtime on our scheduled alarm. Handles two cases in order:
+  //   1. Any pending bot replacements whose delay has expired.
+  //   2. A single bot move for the seat currently to act.
+  async onAlarm() {
+    const now = Date.now();
+
+    // 1. Flush expired bot-replacement timers.
+    let replacedAny = false;
+    for (const [seatStr, t] of Object.entries(this.room.pendingBotSeats)) {
+      if (now >= t) {
+        const seat = +seatStr;
+        if (this.room.seats[seat]?.kind === "human") {
+          this.room.seats[seat] = { kind: "bot", name: this.room.seats[seat].name };
+          replacedAny = true;
+        }
+        delete this.room.pendingBotSeats[seat];
+        delete this.room.disconnectedSeats[seat];
+      }
+    }
+
+    // 2. Bot move step.
+    const s = this.room.state;
+    if (s && !this.game.isOver(s)) {
+      const seat = this.game.seatToAct(s);
+      if (seat !== null && this.isBot(seat)) {
+        let ns: State = s;
+        if (this.game.aux?.botAux) {
+          const a = this.game.aux.botAux(ns, seat);
+          if (a != null) ns = this.game.aux.apply(ns, seat, a);
+        }
+        ns = this.game.applyMove(ns, this.game.aiMove(ns, seat));
+        this.room.state = ns;
+        await this.persist();
+        this.broadcastViews();
+        await this.scheduleNextAlarm();
+        return;
+      }
+    }
+
+    if (replacedAny) {
+      await this.persist();
+      await this.resolveBotsAndBroadcast();
+    } else {
+      await this.scheduleNextAlarm();
+    }
   }
 
   private meta(): RoomMeta {
@@ -330,6 +409,8 @@ export abstract class RoomServer<
       hostSeat: this.room.hostSeat,
       players: this.room.seats.length,
       inLobby: this.room.state === null,
+      botReplacement: this.room.botReplacement,
+      disconnectedSeats: Object.keys(this.room.disconnectedSeats).map(Number),
     };
   }
 
@@ -360,6 +441,7 @@ function emptySeats(n: number): SeatInfo[] {
 // How long to pause between bot moves, so a watching human sees each one.
 // A relaxed pace lets each draw, meld, and discard register before the next.
 const BOT_STEP_MS = 2400;
+const BOT_REPLACE_DELAY_MS = 60_000; // 1 minute grace period before auto bot-replacement
 
 // Fake names for bots, so the table doesn't read "Bot 1 / Bot 2".
 const BOT_NAMES = [

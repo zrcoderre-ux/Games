@@ -865,11 +865,11 @@ var hljModule = {
     return attach(next, s.log, s.logSeq, hljEntries(s, next, move));
   },
   isOver: (s) => s.phase === "gameOver",
-  redact: (s, seat, meta) => redact(s, seat, { seats: meta.seats, hostSeat: meta.hostSeat }),
+  redact: (s, seat, meta) => redact(s, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats }),
   lobbyView: (config, seat, meta) => {
     const g = createGame(config.players, 1, config.target);
     const blanked = { ...g, hands: g.hands.map(() => []), kitty: [], phase: "bidding" };
-    return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, phase: "lobby" });
+    return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats, phase: "lobby" });
   },
   aiMove: (s, seat) => aiMove(s, seat),
   // Hand signals: a non-turn side action that must preserve the log untouched.
@@ -1287,6 +1287,8 @@ function redact2(state, seat, meta) {
     target: state.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     scores: state.scores,
     winner: state.winner,
     dealerSeat: state.dealerSeat,
@@ -1312,6 +1314,8 @@ function lobbyView(config, seat, meta) {
     target: config.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     scores: Array(config.players).fill(0),
     winner: null,
     dealerSeat: 0,
@@ -1758,6 +1762,8 @@ function redact3(state, seat, meta) {
     target: state.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     scores: state.scores,
     winner: state.winner,
     handNo: state.handNo,
@@ -2223,6 +2229,8 @@ function redact4(state, seat, meta) {
     phase: state.phase,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     toAct,
     yourTurn: yours,
     yourTeam: seat !== null ? teamOf2(seat) : null,
@@ -2248,6 +2256,8 @@ function lobbyView3(config, seat, meta) {
     phase: "lobby",
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     toAct: null,
     yourTurn: false,
     yourTeam: seat !== null ? teamOf2(seat) : null,
