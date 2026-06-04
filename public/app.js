@@ -984,7 +984,8 @@ function renderRummy(v) {
           return `<div class="meld ${inPlay?"tappable":""} ${active ? "target" : ""}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         }).join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
-  const center = `<div class="piles">${stock}${discard}</div>`;
+  // Piles hide during the play phase so the meld area can expand into that space.
+  const center = inPlay ? "" : `<div class="piles">${stock}${discard}</div>`;
 
   // hand: selected cards float to a row above the fan; unselected cards are fanned.
   // Cards incompatible with the current selection are dimmed.
