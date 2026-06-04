@@ -911,6 +911,26 @@ function bestDiscard(state: RummyState, hand: RummyCard[], seat: number, persona
   return [...hand].sort((a, b) => score(b) - score(a))[0];
 }
 
+// Speculative top-card value: should we take the top discard even without an
+// immediate meld? Returns a score; > 0 means "yes, it's worth it".
+//
+// Model: connectivity to current hand creates expected future meld value;
+// holding cost is discounted by earlyDiscount (aggressive bots treat most of
+// the round as early, conservative bots never accept much holding cost).
+function speculativeTopValue(hand: RummyCard[], top: RummyCard, state: RummyState, personality: AiPersonality): number {
+  if (top.joker) return 40; // always worth a speculative grab
+  const progress = roundProgress(state);
+  // How much future meld opportunity is left? Discount fades as stock empties.
+  const futureDiscount = personality.earlyDiscount * (1 - progress);
+  // Connectivity to current hand
+  const sameRank = hand.filter((c) => !c.joker && c.rank === top.rank).length;
+  const adjInSuit = hand.filter((c) => !c.joker && c.suit === top.suit && Math.abs(c.rank - top.rank) <= 2).length;
+  const connectivity = sameRank * 10 + adjInSuit * 5;
+  // Effective holding risk: point loss if card never melds, discounted by future opportunity
+  const holdingCost = cardValue(top) * (1 - futureDiscount);
+  return connectivity - holdingCost;
+}
+
 // Find all complete melds in `hand`, returning them in play order (largest first
 // by point value, so we empty hand and maximize scored points).
 function allMeldsInHand(hand: RummyCard[]): RummyCard[][] {
@@ -943,6 +963,14 @@ function aiMove(state: RummyState, seat: number): RummyMove {
     // Always take the top card if it immediately enables a meld or layoff.
     if (top && (canFormMeldWith([...hand, top], top) || canLayoff(state, top)))
       return { type: "drawDiscard", seat, cardId: top.id };
+
+    // Speculative top-card grab: take it even without an immediate use when the
+    // expected value is positive (connectivity outweighs holding risk).
+    // Only in non-endgame; when opponents are close to going out, load up nothing.
+    if (!opponentLow && top) {
+      const specScore = speculativeTopValue(hand, top, state, personality);
+      if (specScore > 0) return { type: "drawDiscard", seat, cardId: top.id };
+    }
 
     // Evaluate deep pile pickups across the full pile (no arbitrary depth cap).
     // In endgame, only aggressive bots still consider deep pickups — a conservative
