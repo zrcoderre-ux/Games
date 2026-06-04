@@ -650,21 +650,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .meld.tappable{cursor:pointer;transition:transform .12s}
 .meld.tappable:hover{transform:translateY(-2px)}
 
-/* run display */
-.run-full,.run-compact{display:flex;align-items:flex-end;gap:0}
-.run-full .card{margin-left:-14px}
-.run-full .card:first-child{margin-left:0}
-.run-compact .card{margin-left:0}
-.run-full.tappable,.run-compact.tappable{cursor:pointer}
-
-/* +N / − toggle button for run middle cards */
-.meld-toggle{
-  background:rgba(180,210,255,.12);border:1px solid rgba(180,210,255,.22);
-  border-radius:6px;color:var(--ink-soft);font-size:10px;font-weight:700;
-  padding:2px 6px;cursor:pointer;align-self:center;flex-shrink:0;margin:0 3px;
-  transition:background .12s,color .12s;
-}
-.meld-toggle:hover{background:rgba(180,210,255,.22);color:var(--ink)}
+/* run display — all cards shown, densely stacked */
+.run-dense{display:flex;align-items:flex-end;gap:0}
+.run-dense .card{margin-left:-30px}
+.run-dense .card:first-child{margin-left:0}
+.run-dense .card .corner{display:none}
+.run-dense .card:first-child .corner.tl{display:block}
+.run-dense .card:last-child .corner.tl{display:block}
+.run-dense.tappable{cursor:pointer}
 
 /* set: single merged card with corner suit pips */
 .set-merged{
