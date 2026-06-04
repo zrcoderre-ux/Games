@@ -1266,10 +1266,13 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* pass-and-play hand-off screen */
 .passwrap{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:22px;
-  background:radial-gradient(140% 90% at 50% -10%, #1a2848 0%, var(--wood-1) 45%, var(--wood-0) 100%)}
-.passcard{width:100%;max-width:380px;text-align:center;background:linear-gradient(170deg,#3a2616,#2a1a0f);
-  border:1px solid rgba(205,160,90,.3);border-radius:var(--radius);padding:30px 24px;
-  box-shadow:var(--shadow-soft),inset 0 1px 0 rgba(205,160,90,.18);animation:rise .35s cubic-bezier(.2,.8,.2,1) both}
+  background:var(--felt-0);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='%231a4a2e'/%3E%3Cpath d='M0 10L10 0L20 10L10 20Z' fill='none' stroke='%23163d26' stroke-width='0.9' opacity='0.8'/%3E%3C/svg%3E");
+}
+.passcard{width:100%;max-width:380px;text-align:center;
+  background:rgba(0,0,0,.38);
+  border:1px solid rgba(205,160,90,.25);border-radius:var(--radius);padding:30px 24px;
+  box-shadow:var(--shadow-soft),inset 0 1px 0 rgba(205,160,90,.12);animation:rise .35s cubic-bezier(.2,.8,.2,1) both}
 .passlogo{font-size:64px;line-height:1;color:var(--brass-hi);margin-bottom:10px;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
 .passlabel{color:var(--ink-soft);font-size:13px;letter-spacing:.6px;text-transform:uppercase;margin:0}
 .passname{font-family:"Fraunces",serif;font-size:30px;color:var(--brass-hi);margin:4px 0 8px}
