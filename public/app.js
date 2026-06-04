@@ -718,15 +718,14 @@ function renderLobby(v) {
     const you = i === v.you;
     const isEmpty = s.kind === "empty";
     const reserved = !you && isHost && S.hotseats[i];
-    const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
     const tc = isTeamGame ? (i % 2 === 0 ? "tA" : "tB") : "";
 
+    // Action: only a ✕ to remove a reserved or bot seat
     let action = "";
     if (reserved) {
       action = `<button class="lby-act danger" data-action="clear-hotseat" data-seat="${i}">✕</button>`;
-    } else if (isEmpty && isHost) {
-      action = `<button class="lby-act add" data-action="addbot" data-seat="${i}">+ Bot</button>`;
     } else if (s.kind === "bot" && isHost) {
+      const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
       const diffPicker = isRummyLobby
         ? `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`
         : "";
@@ -735,27 +734,23 @@ function renderLobby(v) {
       action = `<button class="lby-act danger" data-action="clearseat" data-seat="${i}">✕</button>`;
     }
 
-    const displayName = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open seat" : esc(s.name || "Player");
+    // Tapping an empty seat (as host, not your own) reserves it for pass & play
+    const seatClick = isEmpty && isHost && !you ? ` data-action="reserve-hotseat" data-seat="${i}" style="cursor:pointer"` : "";
+
+    const displayName = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open" : esc(s.name || "Player");
     const initials = reserved ? S.hotseats[i].charAt(0).toUpperCase()
       : !isEmpty ? (s.name || "?").charAt(0).toUpperCase()
-      : (i + 1).toString();
-
+      : "";
     const avClass = isEmpty ? "empty" : reserved ? "local" : you ? "you" : s.kind === "bot" ? "bot" : "human";
-    const avIcon = s.kind === "bot" && !reserved ? "♟" : initials;
+    const avIcon = isEmpty ? "+" : s.kind === "bot" && !reserved ? "B" : initials;
 
-    let roleLabel = "open";
-    if (reserved) roleLabel = "pass &amp; play";
-    else if (!isEmpty) roleLabel = s.kind === "bot" ? "computer" : you ? "you" : i === v.hostSeat ? "host" : "player";
+    let roleLabel = isEmpty ? "tap to add" : reserved ? "pass &amp; play" : s.kind === "bot" ? "bot" : you ? "you" : i === v.hostSeat ? "host" : "player";
 
-    const hostBadge = i === v.hostSeat && !isEmpty && !you ? `<span class="lby-badge host">host</span>` : "";
-    const youBadge  = you ? `<span class="lby-badge you">you</span>` : "";
-    const localBadge = reserved ? `<span class="lby-badge local">local</span>` : "";
-
-    return `<div class="lby-seat ${isEmpty ? "empty" : ""} ${you ? "me" : ""} ${tc}">
+    return `<div class="lby-seat ${isEmpty ? "empty" : ""} ${you ? "me" : ""} ${tc}"${seatClick}>
       <div class="lby-av ${avClass}">${avIcon}</div>
       <div class="lby-seat-info">
         <div class="lby-seat-name">${displayName}</div>
-        <div class="lby-seat-role">${roleLabel}${hostBadge}${youBadge}${localBadge}</div>
+        <div class="lby-seat-role">${roleLabel}</div>
       </div>
       ${action ? `<div class="lby-seat-action">${action}</div>` : ""}
     </div>`;
@@ -780,12 +775,6 @@ function renderLobby(v) {
     seatsHTML = `<div class="lby-seat-list">${v.seats.map((s, i) => renderSeat(s, i)).join("")}</div>`;
   }
 
-  // Pass & Play — section-level button uses first empty seat
-  const emptySeats = v.seats.map((s,i)=>({s,i})).filter(({s,i})=> s.kind==="empty" && i!==v.you);
-  const passPlayBtn = isHost && emptySeats.length > 0
-    ? `<button class="lby-passplay-btn" data-action="reserve-hotseat" data-seat="${emptySeats[0].i}">+ Add Pass &amp; Play Player</button>`
-    : "";
-
   // Config controls (host only)
   const cfgControls = isPJ
     ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
@@ -793,6 +782,9 @@ function renderLobby(v) {
          <p class="sub" style="margin:2px 0 10px 72px">${v.players === 6 ? "Two teams of three." : "Two pairs, partners opposite."}</p>
          <div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
          <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
+    : isHLJ
+    ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
+         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>`
     : `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
          <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>
        <div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
@@ -830,7 +822,6 @@ function renderLobby(v) {
         <div class="lby-title">${esc(GAMES[S.party].label)}</div>
         ${shareRow}
         ${seatsHTML}
-        ${passPlayBtn}
         ${cfgSection}
         ${dealBtn}
       </div>
@@ -1877,12 +1868,12 @@ function doStart() {
     try { S.ws?.close(); } catch {}
     S.connected = false;
     S.view = null;
-    const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party]?.target;
+    const target = S.party === "high-low-jack" ? 21 : (parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party]?.target);
     connectLocal(v.seats, { target, marbles: v.marbles, botDifficulty: v.botDifficulty });
     return;
   }
   if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: v.players, marbles: v.marbles } });
-  const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
+  const target = S.party === "high-low-jack" ? 21 : (parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target);
   send({ t: "start", config: { players: v.players, target, botDifficulty: v.botDifficulty } });
 }
 
