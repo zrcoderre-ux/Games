@@ -166,11 +166,10 @@ function cardHTML(c, o = {}) {
   const r = rankLabel(c.rank);
   const s = SUIT[c.suit];
   const corner = `<b>${r}</b><i>${s}</i>`;
-  const court = c.rank >= 11 && c.rank <= 13;
-  const center = court
-    ? `<span class="court">${r}<span style="font-size:.55em;margin-left:1px">${s}</span></span>`
-    : `<span class="pip">${s}</span>`;
-  return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span>${center}<span class="corner br">${corner}</span></div>`;
+  if (o.mini) {
+    return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span></div>`;
+  }
+  return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span><span class="pip">${s}</span><span class="corner br">${corner}</span></div>`;
 }
 
 function seatName(v, i) {
