@@ -404,7 +404,7 @@ function logSheet() {
           cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true })
         ).join("");
         const kind = m.kind === "set" ? "Set" : "Run";
-        return `<div class="meld-log-row"><span class="meld-kind">${kind}</span><div class="meld-log-cards">${cards}</div></div>`;
+        return `<div class="meld-log-row" data-action="open-meld" data-meldid="${m.id}"><span class="meld-kind">${kind}</span><div class="meld-log-cards">${cards}</div></div>`;
       }).join("");
       return `<div class="meld-log-player"><div class="meld-log-name">${name}</div>${meldRows}</div>`;
     }).join("");
