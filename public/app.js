@@ -932,8 +932,17 @@ function renderHLJ(v) {
     centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
       .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
       .join("")}</div></div>`;
+  } else if (v.phase === "bidding") {
+    // Show bid history on the table as mini chips
+    const bidLog = Array.isArray(v.bidHistory) ? v.bidHistory : [];
+    const bidItems = bidLog.map(b => {
+      const name = esc(seatName(v, b.seat));
+      if (b.type === "pass") return `<span class="hlj-table-bid passed">${name}: Pass</span>`;
+      return `<span class="hlj-table-bid">${name}: <b>${b.amount}</b></span>`;
+    }).join("");
+    centerExtra = `<div class="hlj-table-bids">${bidItems || '<span class="callout-sm">Bidding&hellip;</span>'}</div>`;
   } else {
-    centerExtra = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
+    centerExtra = `<div class="callout">Lead a card to open the trick.</div>`;
   }
   const center = centerExtra;
 
@@ -950,33 +959,28 @@ function renderHLJ(v) {
     key: cardKey(c),
   }))}</div>`;
 
-  // Bid slider \u2014 shown only on your bidding turn
+  // Poker chip bid buttons -- shown only on your bidding turn
   const minBid = bids.length ? bids[0].amount : 2;
-  const maxBid = 6;
   const curHighAmt = v.highBid ? v.highBid.amount : null;
-  const sliderVal = bids.length ? bids[0].amount : minBid; // default to minimum legal bid
   const bidSlider = v.yourTurn && bids.length
     ? `<div class="hlj-bid-row">
-        <span class="hlj-bid-label">Bid: <b id="hlj-bid-display">${sliderVal}</b></span>
-        <input class="hlj-slider" type="range" id="hlj-bid-slider" min="${minBid}" max="${maxBid}" value="${sliderVal}"
-          oninput="document.getElementById('hlj-bid-display').textContent=this.value" />
-        <div class="hlj-bid-pips">${Array.from({length: maxBid - 1}, (_, i) => {
-          const n = i + 2;
-          const isCur = curHighAmt === n;
-          return `<span class="${isCur ? "pip-cur" : ""}">${isCur ? `${n}\u2605` : n}</span>`;
-        }).join("")}</div>
-        <div style="display:flex;gap:8px;justify-content:center">
-          <button class="btn" data-action="hlj-bid-confirm">Bid</button>
-          ${canPass ? `<button class="btn ghost" data-action="move-pass">Pass</button>` : ""}
+        <div class="hlj-chips">
+          ${[2,3,4,5,6].map(n => {
+            const legal = n >= minBid;
+            const isCur = curHighAmt === n;
+            return `<button class="hlj-chip${isCur ? " claimed" : ""}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${!legal ? "disabled" : ""}>${n}</button>`;
+          }).join("")}
         </div>
+        ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
       </div>`
-    : (v.yourTurn && canPass && !bids.length ? `<button class="btn ghost sm" data-action="move-pass">Pass</button>` : "");
+    : (v.yourTurn && canPass && !bids.length ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : "");
 
-  // Signal slider \u2014 shown during bidding when you have a seat
+  // Signal -- only shown for players who have bid (not passed)
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
   const sigIdx = curSignal ? signalLevels.indexOf(curSignal) : -1;
-  const signalControl = v.phase === "bidding" && v.you != null
+  const youHaveBid = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "bid");
+  const signalControl = v.phase === "bidding" && v.you != null && youHaveBid
     ? `<div class="hlj-signal-row">
         <span class="hlj-signal-label">Signal partner</span>
         <div class="hlj-signal-seg">
