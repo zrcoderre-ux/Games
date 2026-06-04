@@ -644,14 +644,9 @@ function renderStart() {
 
         <label class="felt-label">Room Code</label>
         <input class="felt-input" id="f-room" value="${esc(S.room || "")}"
-          placeholder="blank = new room" autocomplete="off" ${S.offline ? "disabled" : ""} />
+          placeholder="blank = new room" autocomplete="off" />
 
-        <label class="felt-toggle">
-          <input type="checkbox" id="f-offline" ${S.offline ? "checked" : ""} data-action="toggle-offline" />
-          <span>Play offline vs bots</span>
-        </label>
-
-        <button class="felt-cta" data-action="connect">${S.offline ? "Play offline" : "Take a Seat"}</button>
+        <button class="felt-cta" data-action="connect">Take a Seat</button>
 
         <div class="felt-theme-row">${themePickerHTML()}</div>
       </div>
@@ -1644,18 +1639,12 @@ function doConnect() {
   let room = document.getElementById("f-room").value.trim();
   if (!name) return toast("Enter a name first.");
   if (!GAMES[game]) return toast("Pick a game.");
-  S.offline = !!document.getElementById("f-offline")?.checked;
   S.name = name;
   S.party = game;
   localStorage.setItem("cg_name", name);
-  if (S.offline) {
-    S.room = "solo";
-    history.replaceState(null, "", `/?game=${game}`);
-  } else {
-    if (!room) room = Math.random().toString(36).slice(2, 7);
-    S.room = room;
-    history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
-  }
+  if (!room) room = Math.random().toString(36).slice(2, 7);
+  S.room = room;
+  history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
   connect();
 }
 
@@ -1680,13 +1669,22 @@ function doLeave() {
 }
 
 function doStart() {
-  // The setup person holds the device, so seat 0 is already "revealed" — others
-  // get the privacy hand-off as the turn reaches them.
   S.revealedSeat = 0;
   S.awaitingPass = false;
-  if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: S.view.players, marbles: S.view.marbles } });
+  const v = S.view;
+  // If the only human is the host, no server needed — switch to local play.
+  const nonHostHumans = v.seats.filter((s, i) => s.kind === "human" && i !== v.you).length;
+  if (nonHostHumans === 0) {
+    S.intentionalClose = true;
+    try { S.ws?.close(); } catch {}
+    S.connected = false;
+    S.view = null;
+    connectLocal();
+    return;
+  }
+  if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: v.players, marbles: v.marbles } });
   const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-  send({ t: "start", config: { players: S.view.players, target, botDifficulty: S.view.botDifficulty } });
+  send({ t: "start", config: { players: v.players, target, botDifficulty: v.botDifficulty } });
 }
 
 function toggleSel(id) {
@@ -1727,7 +1725,6 @@ app.addEventListener("click", (e) => {
     case "close-discard": S.discardOpen = false; return render();
     case "sort-toggle": { const m = S.rummySort === "suit" ? "rank" : "suit"; S.rummySort = m; return rummySort(v.yourHand, m); }
     case "pick-game": S.pickGame = t.dataset.game; return renderStart();
-    case "toggle-offline": S.offline = !!t.checked; return renderStart();
     case "set-theme": {
       S.theme = t.dataset.t;
       localStorage.setItem("cg_theme", S.theme);
