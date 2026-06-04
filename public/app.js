@@ -951,8 +951,14 @@ function renderHLJ(v) {
     ? `<span class="trump-watermark ${RED.has(v.trump) ? "red" : ""}">${SUIT[v.trump]}</span>`
     : "";
 
-  // hand (fanned), dim non-legal cards while it's your turn to play
-  const hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => ({
+  // hand (fanned), sorted by suit then rank, dim non-legal cards while it's your turn to play
+  const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
+  const sortedHand = [...v.yourHand].sort((a, b) =>
+    (a.joker ? 1 : 0) - (b.joker ? 1 : 0) ||
+    (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
+    a.rank - b.rank
+  );
+  const hand = `<div class="fan-inner">${fanHand(sortedHand, (c) => ({
     playable: plays.has(cardKey(c)),
     dim: plays.size > 0 && !plays.has(cardKey(c)),
     action: plays.has(cardKey(c)) ? "play-card" : "",
