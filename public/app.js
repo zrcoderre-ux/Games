@@ -1328,22 +1328,31 @@ function renderHearts(v) {
     center = `${crests}${note}`;
   }
 
-  // Hand: in passing, tap to (de)select up to 3; in play, tap a glowing legal card.
-  const hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => {
-    if (passing) {
-      return { action: v.youPassed ? "" : "toggle-pass", id: c.id, sel: S.heartsPass.has(c.id), playable: !v.youPassed, dim: v.youPassed };
-    }
-    const can = plays.has(c.id);
-    return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
-  })}</div>`;
+  // Hand: in passing, selected cards lift into a selrow above the fan (Rummy-style).
+  let hand;
+  if (passing && !v.youPassed) {
+    const selCards = v.yourHand.filter((c) => S.heartsPass.has(c.id));
+    const fanCards = v.yourHand.filter((c) => !S.heartsPass.has(c.id));
+    const selRow = selCards.length
+      ? `<div class="selrow">${selCards.map((c) => cardHTML(c, { action: "toggle-pass", id: c.id, sel: true })).join("")}</div>`
+      : "";
+    const full = S.heartsPass.size >= 3;
+    const fan = fanHand(fanCards, (c) => ({ action: full ? "" : "toggle-pass", id: c.id, playable: !full, dim: full }));
+    hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
+  } else {
+    hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => {
+      if (passing) return { id: c.id, dim: true };
+      const can = plays.has(c.id);
+      return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
+    })}</div>`;
+  }
 
   // Actions.
   const acts = [];
   if (passing && !v.youPassed) {
     const n = S.heartsPass.size;
-    acts.push(`<button class="btn" data-action="pass-3" ${v.yourTurn && n === 3 ? "" : "disabled"}>Pass 3${n ? ` (${n})` : ""}</button>`);
-    if (n) acts.push(`<button class="btn ghost sm" data-action="clear-pass">Clear</button>`);
-    acts.push(`<span class="hint">${v.yourTurn ? "Select exactly 3 cards to pass." : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
+    acts.push(`<button class="btn" data-action="pass-3" ${v.yourTurn && n === 3 ? "" : "disabled"}>Pass 3${n ? ` (${n}/3)` : ""}</button>`);
+    acts.push(`<span class="hint">${n === 3 ? "Tap a selected card to swap it out." : v.yourTurn ? `Select ${3 - n} more card${3 - n === 1 ? "" : "s"} to pass.` : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
   } else if (passing) {
     acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
   } else if (v.yourTurn && plays.size) {
