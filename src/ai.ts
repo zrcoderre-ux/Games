@@ -65,12 +65,12 @@ function suitValue(hand: Card[], suit: Suit, players: number): number {
   if (hasJoker) score += Math.min(1.6, 0.3 + 0.25 * (n - 1));
   else score += Math.min(0.8, 0.15 * highCount);
 
-  // Low (captured rule) — correlates with trump control; a touch more if you
-  // hold the lowest possible trump and can time it.
-  score += Math.min(0.7, 0.12 * n + (has(lowest) ? 0.15 : 0));
+  // Low (captured rule). The Ace forces Low to surface (opponents holding the
+  // lowest trump must follow and expose it). King also threatens to force Low.
+  score += Math.min(0.7, 0.12 * n + (has(lowest) ? 0.15 : 0) + (has(14) ? 0.65 : has(13) ? 0.25 : 0));
 
-  // Game (most pips) — tens are gold; control helps sweep them in.
-  score += Math.min(1.0, 0.1 * n + 0.15 * tens);
+  // Game (most pips) — tens are gold; Ace guarantees at least one pip trick.
+  score += Math.min(1.0, 0.1 * n + 0.15 * tens + (has(14) ? 0.50 : 0));
 
   // Sheer bulk of trumps is control.
   score += 0.1 * Math.max(0, n - 3);
@@ -167,7 +167,7 @@ const competeProb = (myConf: number, theirConf: number): number => {
 function decideBid(state: GameState, seat: number, rng: () => number): Move {
   const hand = state.hands[seat];
   const best = bestSuit(hand, state.players);
-  const willing = clamp(Math.floor(best.score - BID_SAFETY), 0, 6);
+  const willing = clamp(Math.round(best.score - BID_SAFETY), 0, 6);
   const myConf = confFromScore(best.score);
 
   const isDealer = seat === state.dealerSeat;
