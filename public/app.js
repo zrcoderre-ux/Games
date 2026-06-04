@@ -1015,7 +1015,7 @@ function renderHLJ(v) {
     : "";
 
   // Your chip buttons, rendered on the felt when it's your bidding turn
-  const feltBidPanel = v.phase === "bidding" && v.yourTurn && bids.length
+  const feltBidPanel = v.phase === "bidding" && v.yourTurn && (bids.length || canPass)
     ? `<div class="hlj-felt-bid">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
@@ -1023,12 +1023,10 @@ function renderHLJ(v) {
             const isCur = curHighAmt === n;
             return `<button class="hlj-chip${isCur ? " claimed" : ""}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${!legal ? "disabled" : ""}>${n}</button>`;
           }).join("")}
+          ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
         </div>
-        ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
       </div>`
-    : (v.phase === "bidding" && v.yourTurn && canPass && !bids.length
-        ? `<div class="hlj-felt-bid"><button class="hlj-pass-btn" data-action="move-pass">Pass</button></div>`
-        : "");
+    : "";
   const bidSlider = "";  // removed from selfExtra
 
   // Signal -- only shown for players who have bid (not passed)
