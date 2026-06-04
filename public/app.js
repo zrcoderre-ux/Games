@@ -165,14 +165,42 @@ function cardHTML(c, o = {}) {
       : "";
     const action = o.jokerAs && !o.inMeld ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
     const corner = `<b>J</b><i>kr</i>`;
+    const jokerHat = `
+      <line x1="22" y1="42" x2="10" y2="16" stroke="#c89030" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="10" cy="12" r="6" fill="#c89030"/><circle cx="10" cy="12" r="3.5" fill="#e8b050"/>
+      <line x1="40" y1="42" x2="40" y2="7" stroke="#5b1a8a" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="40" cy="3" r="6" fill="#5b1a8a"/><circle cx="40" cy="3" r="3.5" fill="#8a40c0"/>
+      <line x1="58" y1="42" x2="70" y2="16" stroke="#c89030" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="70" cy="12" r="6" fill="#c89030"/><circle cx="70" cy="12" r="3.5" fill="#e8b050"/>
+      <path d="M8 44 Q40 37 72 44 L72 51 Q40 44 8 51Z" fill="#3a0a60"/>`;
+    const jokerFace = `
+      <ellipse cx="40" cy="72" rx="20" ry="21" fill="#f5e8d0"/>
+      <ellipse cx="32" cy="67" rx="3.8" ry="3.2" fill="#1a0a30"/>
+      <ellipse cx="48" cy="67" rx="3.8" ry="3.2" fill="#1a0a30"/>
+      <path d="M30 78 Q40 87 50 78" stroke="#6a2010" stroke-width="2" fill="none" stroke-linecap="round"/>`;
     if (o.mini) {
-      return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl"><b>J</b></span><span class="joker-hat">\ud83c\udccf</span>${badge}</div>`;
+      const svg = `<svg class="joker-svg" viewBox="0 0 80 95" xmlns="http://www.w3.org/2000/svg">${jokerHat}${jokerFace}</svg>`;
+      return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl"><b>J</b></span><span class="joker-art">${svg}</span>${badge}</div>`;
     }
+    const jokerDetail = `
+      <path d="M26 47 L30 50.5 L26 54 L22 50.5Z" fill="#c89030"/>
+      <path d="M40 47 L44 50.5 L40 54 L36 50.5Z" fill="#c89030"/>
+      <path d="M54 47 L58 50.5 L54 54 L50 50.5Z" fill="#c89030"/>
+      <path d="M28 61 Q32 58 36 61" stroke="#1a0a30" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <path d="M44 61 Q48 58 52 61" stroke="#1a0a30" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <circle cx="33.5" cy="65.8" r="1.2" fill="white"/>
+      <circle cx="49.5" cy="65.8" r="1.2" fill="white"/>
+      <path d="M26 72 L30 68 L34 72 L30 76Z" fill="rgba(91,26,138,.15)"/>
+      <path d="M46 72 L50 68 L54 72 L50 76Z" fill="rgba(200,144,48,.2)"/>
+      <path d="M20 95 L27 88 L34 95 L27 102Z" fill="#5b1a8a"/>
+      <path d="M34 95 L40 88 L46 95 L40 102Z" fill="#c89030"/>
+      <path d="M46 95 L53 88 L60 95 L53 102Z" fill="#5b1a8a"/>
+      <path d="M27 102 L34 95 L40 102 L34 109Z" fill="#c89030"/>
+      <path d="M40 102 L46 95 L53 102 L46 109Z" fill="#5b1a8a"/>`;
+    const svg = `<svg class="joker-svg" viewBox="0 0 80 113" xmlns="http://www.w3.org/2000/svg">${jokerHat}${jokerFace}${jokerDetail}</svg>`;
     return `<div class="${cls.join(" ")}"${st}${action}>
       <span class="corner tl">${corner}</span>
-      <span class="joker-star itl">\u2605</span><span class="joker-star itr">\u2605</span>
-      <span class="joker-art"><span class="joker-hat-big">\ud83c\udccf</span><span class="joker-label">Joker</span></span>
-      <span class="joker-star ibl">\u2605</span><span class="joker-star ibr">\u2605</span>
+      <span class="joker-art">${svg}</span>
       <span class="corner br">${corner}</span>
       ${badge}
     </div>`;

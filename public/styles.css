@@ -529,40 +529,23 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* Joker card */
 .card.joker{
-  background:#1e1245;
-  color:#f0d87a;
+  background:#fff;
+  color:#5b1a8a;
   box-shadow:
-    0 2px 2px rgba(0,0,0,.35),
-    0 7px 14px -6px rgba(0,0,0,.65),
-    inset 0 0 0 1px rgba(240,216,122,.4);
+    0 2px 2px rgba(0,0,0,.25),
+    0 7px 14px -6px rgba(0,0,0,.5),
+    inset 0 0 0 1px rgba(91,26,138,.22);
 }
-.card.joker .corner{color:#f0d87a}
+.card.joker .corner{color:#5b1a8a}
 .card.joker .corner b{font-size:calc(var(--w)*.32);letter-spacing:-.01em}
-.card.joker .corner i{font-size:calc(var(--w)*.17);color:rgba(240,216,122,.75);letter-spacing:.5px}
-/* mini: just the emoji, no subtitle pip */
+.card.joker .corner i{font-size:calc(var(--w)*.17);color:rgba(91,26,138,.6);letter-spacing:.5px}
 .card.joker.mini .corner i{display:none}
-.joker-hat{
-  position:absolute;inset:0;display:grid;place-items:center;
-  font-size:calc(var(--w)*.48);pointer-events:none;
-}
-/* full-size art */
 .joker-art{
-  position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:4px;pointer-events:none;
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;
 }
-.joker-hat-big{font-size:calc(var(--w)*.58);line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
-.joker-label{
-  font-size:calc(var(--w)*.135);font-weight:700;letter-spacing:.18em;
-  color:rgba(240,216,122,.75);text-transform:uppercase;
-}
-/* four inner-corner stars, visible only on full-size */
-.joker-star{
-  position:absolute;font-size:calc(var(--w)*.13);color:rgba(240,216,122,.35);pointer-events:none;
-}
-.joker-star.itl{top:calc(var(--w)*.28);left:calc(var(--w)*.13)}
-.joker-star.itr{top:calc(var(--w)*.28);right:calc(var(--w)*.13)}
-.joker-star.ibl{bottom:calc(var(--w)*.28);left:calc(var(--w)*.13)}
-.joker-star.ibr{bottom:calc(var(--w)*.28);right:calc(var(--w)*.13)}
+.joker-art .joker-svg{width:calc(var(--w)*.8);height:auto}
+.card.joker.mini .joker-art .joker-svg{width:calc(var(--w)*.75)}
 .card .corner{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:.86;font-weight:700}
 .card .corner b{font-size:calc(var(--w)*.28);font-weight:700}
 .card .corner i{font-size:calc(var(--w)*.2);font-style:normal;margin-top:1px}
