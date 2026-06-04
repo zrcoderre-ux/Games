@@ -159,7 +159,7 @@ function cardHTML(c, o = {}) {
     const badge = o.jokerAs
       ? `<span class="joker-as-badge ${RED.has(o.jokerAs.suit) ? "red" : ""}">${rankLabel(o.jokerAs.rank)}${SUIT[o.jokerAs.suit]}</span>`
       : "";
-    const action = o.jokerAs ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
+    const action = o.jokerAs && !o.inMeld ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
     return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl"><b>\u2605</b></span><span class="pip">\u2605</span><span class="corner br"><b>\u2605</b></span>${badge}</div>`;
   }
   if (RED.has(c.suit)) cls.push("red");
@@ -938,26 +938,26 @@ function renderRummy(v) {
               suits.includes(s) ? `<span class="${cls}${RED.has(s)?" red":""}">${SUIT[s]}</span>` : ""
             ).join("");
             const jkBadge = jk ? `<span class="set-jk">★×${jk}</span>` : "";
-            inner = `<div class="card mini set-merged${inPlay?" tappable":""}" ${meldAttrs}>${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
+            inner = `<div class="card mini set-merged${inPlay?" tappable":""}">${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
           } else {
             // Run: show endpoints; hide middle cards behind a +N toggle
             const expanded = S.rummyExpanded.has(m.id);
             const n = m.cards.length;
             if (!expanded && n > 3) {
-              const first = cardHTML(m.cards[0], { mini: true, jokerAs: jokerRes[0] ?? undefined });
-              const last  = cardHTML(m.cards[n-1], { mini: true, jokerAs: jokerRes[n-1] ?? undefined });
-              inner = `<div class="run-compact${inPlay?" tappable":""}" ${meldAttrs}>
+              const first = cardHTML(m.cards[0], { mini: true, jokerAs: jokerRes[0] ?? undefined, inMeld: true });
+              const last  = cardHTML(m.cards[n-1], { mini: true, jokerAs: jokerRes[n-1] ?? undefined, inMeld: true });
+              inner = `<div class="run-compact${inPlay?" tappable":""}">
                 ${first}
                 <button class="meld-toggle" data-action="toggle-run" data-meldid="${m.id}">+${n-2}</button>
                 ${last}
               </div>`;
             } else {
-              const allCards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined })).join("");
+              const allCards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true })).join("");
               const collapseBtn = n > 3 ? `<button class="meld-toggle" data-action="toggle-run" data-meldid="${m.id}">−</button>` : "";
-              inner = `<div class="run-full${inPlay?" tappable":""}" ${meldAttrs}>${allCards}${collapseBtn}</div>`;
+              inner = `<div class="run-full${inPlay?" tappable":""}">${allCards}${collapseBtn}</div>`;
             }
           }
-          return `<div class="meld ${active ? "target" : ""}">${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
+          return `<div class="meld ${inPlay?"tappable":""} ${active ? "target" : ""}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         }).join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
   const center = `<div class="piles">${stock}${discard}</div>`;
