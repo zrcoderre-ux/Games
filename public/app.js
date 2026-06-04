@@ -932,8 +932,7 @@ function renderHLJ(v) {
             dealer: i === v.dealerSeat,
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
-            count: v.handCounts[i],
-            note: null, // bid strength signals hidden for now
+            count: null, // all hands same size in HLJ
           }) },
     )
     .filter(Boolean);
@@ -1291,7 +1290,7 @@ function renderRummy(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
-            count: v.handCounts[i],
+            count: null, // all hands same size in Hearts
             pts: v.scores[i],
             note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
           }) },
