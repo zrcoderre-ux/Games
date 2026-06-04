@@ -340,6 +340,19 @@ function trickWinner(plays, trump) {
   ).seat;
 }
 var teamOf = (seat) => seat % 2;
+function emptyProfile() {
+  return {
+    handsPlayed: 0,
+    signalRecord: {
+      weak: { bid: 0, made: 0 },
+      medium: { bid: 0, made: 0 },
+      strong: { bid: 0, made: 0 }
+    },
+    bidsWon: 0,
+    bidsMade: 0,
+    totalTeamPoints: 0
+  };
+}
 function createGame(players, seed, target = 21) {
   if (!SUPPORTED_PLAYERS.includes(players)) {
     throw new Error(`Unsupported player count: ${players}`);
@@ -365,7 +378,8 @@ function createGame(players, seed, target = 21) {
     trickIndex: 0,
     currentTrick: [],
     tricksWon: [],
-    lastHand: null
+    lastHand: null,
+    profiles: Array.from({ length: players }, emptyProfile)
   };
   return deal(base);
 }
@@ -595,13 +609,35 @@ function scoreHand(state) {
     else if (bidderOut) winner = bidderTeam;
     else if (otherOut) winner = other;
   }
+  const profiles = state.profiles.map((prof, seat) => {
+    const p = {
+      ...prof,
+      signalRecord: {
+        weak: { ...prof.signalRecord.weak },
+        medium: { ...prof.signalRecord.medium },
+        strong: { ...prof.signalRecord.strong }
+      },
+      handsPlayed: prof.handsPlayed + 1,
+      totalTeamPoints: prof.totalTeamPoints + pointsByTeam[teamOf(seat)]
+    };
+    const sig = state.signals[seat];
+    const level = sig ?? "medium";
+    if (seat === bidderSeat) {
+      p.bidsWon++;
+      if (made) p.bidsMade++;
+      p.signalRecord[level].bid++;
+      if (made) p.signalRecord[level].made++;
+    }
+    return p;
+  });
   if (winner !== null) {
-    return { ...state, scores, phase: "gameOver", winner, lastHand: result };
+    return { ...state, scores, phase: "gameOver", winner, lastHand: result, profiles };
   }
   const next = {
     ...state,
     scores,
     lastHand: result,
+    profiles,
     dealerSeat: (state.dealerSeat + 1) % state.players
   };
   return deal(next);
@@ -753,6 +789,22 @@ function stateRng(state, seat) {
 }
 var confFromScore = (score) => score >= 3 ? 2 : score >= 1.5 ? 1 : 0;
 var signalToNum = (sig) => sig === "strong" ? 2 : sig === "weak" ? 0 : 1;
+function signalReliability(prof, level) {
+  const rec = prof.signalRecord[level];
+  return rec.bid >= 3 ? rec.made / rec.bid : null;
+}
+function calibratedSignal(sig, prof) {
+  const raw = signalToNum(sig);
+  const level = sig ?? "medium";
+  const rel = signalReliability(prof, level);
+  if (rel === null) return raw;
+  const expected = level === "strong" ? 0.7 : level === "medium" ? 0.5 : 0.2;
+  const delta = rel - expected;
+  return clamp(raw + delta * 2, 0, 2);
+}
+function aggressionIndex(prof) {
+  return prof.handsPlayed >= 3 ? prof.bidsWon / prof.handsPlayed : 0.5;
+}
 var competeProb = (myConf, theirConf, stretchProb) => {
   const gap = myConf - theirConf;
   return gap <= 0 ? stretchProb * 0.6 : gap === 1 ? stretchProb + 0.1 : stretchProb + 0.3;
@@ -771,11 +823,13 @@ function decideBid(state, seat, rng, p) {
   if (willing >= needed) return { type: "bid", seat, amount: needed };
   if (high !== null && needed <= willing + 1) {
     const sameTeam = teamOf(high.seat) === teamOf(seat);
-    const theirConf = signalToNum(state.signals[high.seat]);
+    const holderProf = state.profiles[high.seat];
+    const theirConf = calibratedSignal(state.signals[high.seat], holderProf);
     if (!sameTeam && myConf >= theirConf) {
-      if (rng() < competeProb(myConf, theirConf, p.stretchProb))
+      const aggBonus = Math.max(0, aggressionIndex(holderProf) - 0.4) * 0.3;
+      if (rng() < competeProb(myConf, theirConf, p.stretchProb + aggBonus))
         return { type: "bid", seat, amount: needed };
-    } else if (sameTeam && myConf === 2 && theirConf === 0) {
+    } else if (sameTeam && myConf === 2 && theirConf <= 0.5) {
       if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
     }
   }
@@ -830,9 +884,9 @@ function decidePlay(state, seat, p) {
   const winners = cards.filter(wouldWin);
   if (partnerWinning) {
     const partnerSeat = seat % 2 === 0 ? 1 : 0;
-    const partnerSignal = signalToNum(state.signals[partnerSeat]);
+    const partnerCalibrated = calibratedSignal(state.signals[partnerSeat], state.profiles[partnerSeat]);
     const winVal = trumpValue(winnerCard, trump);
-    const partnerStrong = winVal !== null ? winVal === boss || winVal >= 12 || partnerSignal >= p.loadSignalThreshold : partnerSignal >= p.loadSignalThreshold;
+    const partnerStrong = winVal !== null ? winVal === boss || winVal >= 12 || partnerCalibrated >= p.loadSignalThreshold : partnerCalibrated >= p.loadSignalThreshold;
     const safe = cards.filter((c) => !wouldWin(c));
     const pool = safe.length ? safe : cards;
     if (partnerStrong || isLast) {
@@ -841,7 +895,7 @@ function decidePlay(state, seat, p) {
     return asMove(bestDiscard(pool, trump, low, p, myTeamAhead));
   }
   if (winners.length && trickHasValue) {
-    const opponentConf = state.signals.map((s, i) => teamOf(i) !== myTeam ? signalToNum(s) : -1).reduce((a, b) => Math.max(a, b), -1);
+    const opponentConf = state.signals.map((s, i) => teamOf(i) !== myTeam ? calibratedSignal(s, state.profiles[i]) : -1).reduce((a, b) => Math.max(a, b), -1);
     if (opponentConf >= 2 && winners.every((c) => !isTrump(c, trump))) {
       return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
     }

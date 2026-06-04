@@ -25,6 +25,7 @@ import {
   type Card,
   type Suit,
   type HandSignal,
+  type PlayerProfile,
 } from "./engine.ts";
 
 // ---------- personality ----------
@@ -254,6 +255,41 @@ function stateRng(state: GameState, seat: number): () => number {
 
 const confFromScore = (score: number): number => (score >= 3.0 ? 2 : score >= 1.5 ? 1 : 0);
 const signalToNum = (sig: HandSignal | null): number => (sig === "strong" ? 2 : sig === "weak" ? 0 : 1);
+
+// ---------- profile-based signal calibration ----------
+
+// Reliability score for a signal level: fraction of times the player bid and
+// made it when they emitted that signal. Returns null if no data yet.
+function signalReliability(prof: PlayerProfile, level: "weak" | "medium" | "strong"): number | null {
+  const rec = prof.signalRecord[level];
+  return rec.bid >= 3 ? rec.made / rec.bid : null;
+}
+
+// Calibrated signal strength [0..2]. Adjusts the raw signal up/down based on
+// how reliable this player's signals have proven to be:
+//   - "strong" from a player who rarely makes good on it → deflated toward 1
+//   - "weak" from a player who always sandbags → inflated toward 1
+// Falls back to the raw signal when there's not enough data.
+function calibratedSignal(sig: HandSignal | null, prof: PlayerProfile): number {
+  const raw = signalToNum(sig);
+  const level = sig ?? "medium";
+  const rel = signalReliability(prof, level);
+  if (rel === null) return raw; // not enough history
+
+  // Adjust: expected reliability for strong=0.7, medium=0.5, weak=0.2.
+  const expected = level === "strong" ? 0.7 : level === "medium" ? 0.5 : 0.2;
+  const delta = rel - expected; // positive = more reliable than expected
+  // Each 0.1 delta moves the signal by 0.2 points, clamped to [0,2].
+  return clamp(raw + delta * 2, 0, 2);
+}
+
+// Aggression index [0..1]: how often the player wins bids relative to hands
+// played. High aggression means they grab the auction often, which is relevant
+// for deciding whether to contest or yield.
+function aggressionIndex(prof: PlayerProfile): number {
+  return prof.handsPlayed >= 3 ? prof.bidsWon / prof.handsPlayed : 0.5;
+}
+
 const competeProb = (myConf: number, theirConf: number, stretchProb: number): number => {
   const gap = myConf - theirConf;
   return gap <= 0 ? stretchProb * 0.6 : gap === 1 ? stretchProb + 0.1 : stretchProb + 0.3;
@@ -278,14 +314,21 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
 
   if (willing >= needed) return { type: "bid", seat, amount: needed };
 
-  // Marginal stretch.
+  // Marginal stretch — use calibrated signal and aggression index.
   if (high !== null && needed <= willing + 1) {
     const sameTeam = teamOf(high.seat) === teamOf(seat);
-    const theirConf = signalToNum(state.signals[high.seat]);
+    const holderProf = state.profiles[high.seat];
+    // Calibrated strength of the current bid-holder's signal.
+    const theirConf = calibratedSignal(state.signals[high.seat], holderProf);
+    // If the holder is a known over-bidder, their calibrated signal will be
+    // deflated and we'll be more willing to contest.
     if (!sameTeam && myConf >= theirConf) {
-      if (rng() < competeProb(myConf, theirConf, p.stretchProb))
+      // Boost stretch probability if the opponent bids aggressively (bluffs often).
+      const aggBonus = Math.max(0, aggressionIndex(holderProf) - 0.4) * 0.3;
+      if (rng() < competeProb(myConf, theirConf, p.stretchProb + aggBonus))
         return { type: "bid", seat, amount: needed };
-    } else if (sameTeam && myConf === 2 && theirConf === 0) {
+    } else if (sameTeam && myConf === 2 && theirConf <= 0.5) {
+      // Partner holds it but profile says they over-claim on weak signals: take over.
       if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
     }
   }
@@ -375,11 +418,11 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
     // Heuristic 6: read partner's signal to judge whether modest win is safe to load.
     // Nearest same-team seat as a proxy for partner signal (good enough for any count).
     const partnerSeat = (seat % 2 === 0 ? 1 : 0);
-    const partnerSignal = signalToNum(state.signals[partnerSeat]);
+    const partnerCalibrated = calibratedSignal(state.signals[partnerSeat], state.profiles[partnerSeat]);
     const winVal = trumpValue(winnerCard, trump);
     const partnerStrong = winVal !== null
-      ? (winVal === boss || winVal! >= 12 || partnerSignal >= p.loadSignalThreshold)
-      : partnerSignal >= p.loadSignalThreshold;
+      ? (winVal === boss || winVal! >= 12 || partnerCalibrated >= p.loadSignalThreshold)
+      : partnerCalibrated >= p.loadSignalThreshold;
 
     const safe = cards.filter((c) => !wouldWin(c));
     const pool = safe.length ? safe : cards;
@@ -397,8 +440,9 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
   // Opponent winning.
   if (winners.length && trickHasValue) {
     // Heuristic 6: if an opponent signaled strong, reconsider fighting for the trick.
+    // Use calibrated signal for opponents: a known bluffer gets less credit.
     const opponentConf = (state.signals as (HandSignal | null)[])
-      .map((s, i) => teamOf(i) !== myTeam ? signalToNum(s) : -1)
+      .map((s, i) => teamOf(i) !== myTeam ? calibratedSignal(s, state.profiles[i]) : -1)
       .reduce((a, b) => Math.max(a, b), -1);
     if (opponentConf >= 2 && winners.every((c) => !isTrump(c, trump))) {
       // Opponent is very strong but we can only beat with a non-trump — skip it.
