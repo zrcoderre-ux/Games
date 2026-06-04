@@ -1221,6 +1221,73 @@ function allMeldsInHand(hand: RummyCard[]): RummyCard[][] {
   return melds;
 }
 
+// ---------- strategic meld withholding ----------
+// "Going-out surprise": deliberately hold back complete melds so opponents
+// don't realise you're one draw away from emptying your hand. Next turn you
+// play everything in one sweep, capturing full opponent held-card penalties
+// before anyone can react.
+//
+// Returns the set of card IDs that form the withheld melds (protected from
+// discard selection this turn), or null if withholding is not indicated.
+function evaluateGoOutSurprise(
+  state: RummyState,
+  seat: number,
+  personality: AiPersonality,
+  rng: () => number,
+): Set<number> | null {
+  if (state.mustMeldCardId != null) return null; // forced card blocks the strategy
+
+  const hand = state.hands[seat];
+
+  // Find every complete meld currently in hand.
+  const meldGroups = allMeldsInHand(hand);
+  if (meldGroups.length === 0) return null;
+
+  // Identify cards committed to complete melds.
+  const meldedIds = new Set(meldGroups.flatMap((g) => g.map((c) => c.id)));
+
+  // Simulate playing all current melds + layoffs; count what would remain.
+  let remaining = hand.filter((c) => !meldedIds.has(c.id));
+  for (const tm of state.melds) {
+    for (const c of [...remaining]) {
+      const combined = [...tm.cards, c];
+      if (tm.kind === "set" ? isSet(combined) : isRun(combined)) {
+        remaining = remaining.filter((x) => x !== c);
+      }
+    }
+  }
+
+  if (remaining.length === 0) return null; // already going out this turn — no withholding needed
+  if (remaining.length > 3) return null;   // too far from going out to set up a surprise
+
+  // The remaining cards must have genuine meld potential — otherwise we're just
+  // stalling with deadweight, which is -EV.
+  const remainingEV = remaining.reduce((s, c) => s + cardMeldEV(state, seat, c), 0);
+  if (remainingEV <= 0) return null; // remaining cards are likely stuck; abandon plan
+
+  // Going out is only worth delaying if opponents are still holding significant value.
+  const opponentHeld = state.hands.reduce(
+    (s, h, i) => (i !== seat ? s + h.reduce((hs, c) => hs + cardValue(c), 0) : s),
+    0,
+  );
+  // Conservative threshold: the opponent-held bonus must exceed what we'd score
+  // by playing our melds now, otherwise we're better off scoring immediately.
+  const immediateScore = meldGroups.flat().reduce((s, c) => s + cardValue(c), 0);
+  if (opponentHeld < immediateScore * 0.6) return null; // not enough upside
+
+  // Abort if any opponent is dangerously close to going out themselves.
+  if (minOpponentHandSize(state, seat) <= 3) return null;
+
+  // Personality gate: each profile has a different appetite for this gambit.
+  // We derive a "gambit probability" from earlyDiscount (risk tolerance proxy)
+  // and apply an extra penalty for the opportunist's erratic nature.
+  const gamblerFactor = (personality.earlyDiscount - 0.60) / 0.16; // 0 at 0.60, 1 at 0.76
+  const gamblerProb = Math.max(0, Math.min(1, gamblerFactor));
+  if (rng() > gamblerProb) return null;
+
+  return meldedIds;
+}
+
 function aiMove(state: RummyState, seat: number): RummyMove {
   const hand = state.hands[seat];
   const personality = getPersonality(seat);
@@ -1289,33 +1356,45 @@ function aiMove(state: RummyState, seat: number): RummyMove {
     }
   }
 
-  // 2. Lay down all complete melds, highest value first.
-  const allMelds = allMeldsInHand(hand);
-  if (allMelds.length > 0) return { type: "meld", seat, cards: allMelds[0].map((c) => c.id) };
+  // 2. Check for the "going-out surprise" gambit before committing to playing melds.
+  //    If active, we suppress meld/layoff play and discard only from non-meld cards.
+  const withheldIds = !opponentLow ? evaluateGoOutSurprise(state, seat, personality, rng) : null;
 
-  // 3. Lay off cards onto existing table melds.
-  const layoffCandidates: Array<{ move: RummyMove; value: number }> = [];
-  for (const m of state.melds) {
-    for (const c of hand) {
-      const lo = layoffOnto(state, m, c, seat);
-      if (lo) layoffCandidates.push({ move: lo, value: cardValue(c) });
+  if (withheldIds === null) {
+    // Normal path: lay down all complete melds, highest value first.
+    const allMelds = allMeldsInHand(hand);
+    if (allMelds.length > 0) return { type: "meld", seat, cards: allMelds[0].map((c) => c.id) };
+
+    // Lay off cards onto existing table melds.
+    const layoffCandidates: Array<{ move: RummyMove; value: number }> = [];
+    for (const m of state.melds) {
+      for (const c of hand) {
+        const lo = layoffOnto(state, m, c, seat);
+        if (lo) layoffCandidates.push({ move: lo, value: cardValue(c) });
+      }
+    }
+    if (layoffCandidates.length > 0) {
+      layoffCandidates.sort((a, b) => {
+        if (opponentLow) return b.value - a.value;
+        const aCard = hand.find((c) => c.id === (a.move as { cards: number[] }).cards[0])!;
+        const bCard = hand.find((c) => c.id === (b.move as { cards: number[] }).cards[0])!;
+        const aPot = meldPotential([aCard, ...hand.filter((c) => c !== aCard)]);
+        const bPot = meldPotential([bCard, ...hand.filter((c) => c !== bCard)]);
+        return aPot - bPot;
+      });
+      return layoffCandidates[0].move;
     }
   }
-  if (layoffCandidates.length > 0) {
-    layoffCandidates.sort((a, b) => {
-      if (opponentLow) return b.value - a.value;
-      const aCard = hand.find((c) => c.id === (a.move as { cards: number[] }).cards[0])!;
-      const bCard = hand.find((c) => c.id === (b.move as { cards: number[] }).cards[0])!;
-      const aPot = meldPotential([aCard, ...hand.filter((c) => c !== aCard)]);
-      const bPot = meldPotential([bCard, ...hand.filter((c) => c !== bCard)]);
-      return aPot - bPot;
-    });
-    return layoffCandidates[0].move;
-  }
 
-  // 4. Discard the best card according to probability + opponent model.
+  // 3. Discard — either from the full hand (normal) or from non-withheld cards (gambit).
+  //    Withheld cards are excluded from discard candidates; discard from the remainder.
   //    Apply misplay: occasionally pick from the suboptimal end of the ranking.
-  const discardRanked = [...hand].map((c) => {
+  const discardPool = withheldIds ? hand.filter((c) => !withheldIds.has(c.id)) : hand;
+  // Safety: if withholding leaves nothing to discard (shouldn't happen given the ≤3
+  // remaining check, but guard anyway), fall through to full hand.
+  const discardSource = discardPool.length > 0 ? discardPool : hand;
+
+  const discardRanked = discardSource.map((c) => {
     if (c.joker) return { card: c, score: -200 };
     const mev = cardMeldEV(state, seat, c);
     const danger = opponentDangerWithModel(state, c, seat, model);
