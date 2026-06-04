@@ -64,6 +64,8 @@ const S = {
   rummyMeldOpen: null, // meld id whose popup is open
   rummyRoundAcked: null, // JSON key of the lastRound already dismissed
   rummyRoundTimer: null, // auto-dismiss setTimeout handle
+  hljHandAcked: null, // JSON key of the lastHand already dismissed
+  hljHandTimer: null, // auto-dismiss setTimeout handle
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
@@ -1050,7 +1052,82 @@ function renderHLJ(v) {
     ? `<span class="turnflag">Your turn</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  // End-of-hand result popup
+  const hljHandModal = (() => {
+    const lh = v.lastHand;
+    if (!lh || v.phase === "gameOver") return "";
+    const handKey = JSON.stringify(lh);
+    if (S.hljHandAcked === handKey) return "";
+
+    if (S.hljHandTimer == null) {
+      S.hljHandTimer = setTimeout(() => {
+        S.hljHandAcked = handKey;
+        S.hljHandTimer = null;
+        render();
+      }, 30000);
+    }
+
+    const bidderTeamLetter = lh.bidderTeam === 0 ? "A" : "B";
+    const bidderName = esc(seatName(v, lh.bidderSeat));
+
+    const pts = lh.detail;
+    const pointItems = [
+      { label: "High",     team: pts.high },
+      { label: "Low",      team: pts.low },
+      { label: "Jack",     team: pts.jack },
+      { label: "Bonhomme", team: pts.bonhomme },
+      { label: "Game",     team: pts.game },
+    ].filter(p => p.team !== null && p.team !== undefined);
+
+    const ptRows = pointItems.map(p => {
+      const letter = p.team === 0 ? "A" : "B";
+      return `<div class="hlj-rr-ptrow">
+        <span class="hlj-rr-ptname">${p.label}</span>
+        <span class="hlj-rr-ptteam t${letter}">Team ${letter}</span>
+      </div>`;
+    }).join("");
+
+    const made = lh.made;
+    const scoreRows = [0, 1].map(t => {
+      const letter = t === 0 ? "A" : "B";
+      const delta = lh.deltaByTeam[t];
+      const total = v.scores[t];
+      const sign = delta > 0 ? "+" : "";
+      const isBidder = t === lh.bidderTeam;
+      return `<div class="hlj-rr-scorerow${isBidder && !made ? " setback" : ""}">
+        <span class="hlj-rr-scoreteam t${letter}">Team ${letter}</span>
+        <span class="hlj-rr-scoredelta">${sign}${delta}</span>
+        <span class="hlj-rr-scoretotal">${total} pts</span>
+      </div>`;
+    }).join("");
+
+    const kittyCards = (v.lastKitty || []).map(c => cardHTML(c, { mini: true })).join("");
+    const kittySection = kittyCards
+      ? `<div class="hlj-rr-section"><div class="hlj-rr-seclabel">Kitty</div><div class="hlj-rr-kitty">${kittyCards}</div></div>`
+      : "";
+
+    const contractLine = `${bidderName} bid <b>${lh.bid}</b> for Team ${bidderTeamLetter} &mdash; <span class="${made ? "hlj-made" : "hlj-set"}">${made ? "Made it" : "Set back"}</span>`;
+
+    return `<div class="modal-back" data-action="hlj-ack-hand">
+      <div class="modal" data-stop="1">
+        <div class="modalhead"><span>Hand over</span><button class="btn sm ghost" data-action="hlj-ack-hand">Next hand</button></div>
+        <div class="modalbody">
+          <div class="hlj-rr-contract">${contractLine}</div>
+          <div class="hlj-rr-section">
+            <div class="hlj-rr-seclabel">Points taken</div>
+            ${ptRows}
+          </div>
+          ${kittySection}
+          <div class="hlj-rr-section hlj-rr-scores">
+            <div class="hlj-rr-seclabel">Score</div>
+            ${scoreRows}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  })();
+
+  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, hand, actions: null, selfMeta, selfTurn, selfExtra }) + hljHandModal;
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
@@ -1908,6 +1985,12 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "toggle-card": return toggleSel(+t.dataset.cardid);
+    case "hlj-ack-hand": {
+      const lh = S.view && S.view.lastHand;
+      if (lh) S.hljHandAcked = JSON.stringify(lh);
+      if (S.hljHandTimer) { clearTimeout(S.hljHandTimer); S.hljHandTimer = null; }
+      return render();
+    }
     case "ack-round": {
       const lr = S.view && S.view.lastRound;
       if (lr) S.rummyRoundAcked = JSON.stringify(S.view.scores);
