@@ -394,7 +394,24 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
       if (new Set(move.cards).size !== move.cards.length) return false; // no card listed twice
       const objs = move.cards.map((id) => hand.find((c) => c.id === id));
       if (objs.some((o) => !o)) return false;
-      return validMeld(objs as RummyCard[]);
+      if (!validMeld(objs as RummyCard[])) return false;
+      // If a deep-pile pickup is outstanding, this meld must not strand the forced card —
+      // after removing these cards from hand the forced card must still be meldable or
+      // layable (on any existing meld OR on the meld we're about to place).
+      if (state.mustMeldCardId != null && !move.cards.includes(state.mustMeldCardId)) {
+        const mustCard = hand.find((c) => c.id === state.mustMeldCardId);
+        if (mustCard) {
+          const remainHand = hand.filter((c) => !move.cards.includes(c.id));
+          const newMeldCards = objs as RummyCard[];
+          const newMeldKind: "set" | "run" = isSet(newMeldCards) ? "set" : "run";
+          const allMelds = [...state.melds, { id: -1, kind: newMeldKind, cards: newMeldCards }];
+          const canStillPlay =
+            canFormMeldWith(remainHand, mustCard) ||
+            allMelds.some((m) => m.kind === "set" ? isSet([...m.cards, mustCard]) : isRun([...m.cards, mustCard]));
+          if (!canStillPlay) return false;
+        }
+      }
+      return true;
     }
     case "layoff": {
       if (state.turnPhase !== "play" || !move.cards || move.cards.length < 1) return false;
@@ -404,7 +421,22 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
       const objs = move.cards.map((id) => hand.find((c) => c.id === id));
       if (objs.some((o) => !o)) return false;
       const combined = [...m.cards, ...(objs as RummyCard[])];
-      return m.kind === "set" ? isSet(combined) : isRun(combined);
+      if (!(m.kind === "set" ? isSet(combined) : isRun(combined))) return false;
+      // Same stranding check for layoffs: spending hand cards must not make the
+      // forced card unplayable.
+      if (state.mustMeldCardId != null && !move.cards.includes(state.mustMeldCardId)) {
+        const mustCard = hand.find((c) => c.id === state.mustMeldCardId);
+        if (mustCard) {
+          const remainHand = hand.filter((c) => !move.cards.includes(c.id));
+          const updatedMeldCards = m.kind === "run" ? orderRunCards(combined) : combined;
+          const updatedMelds = state.melds.map((x) => x.id === move.meldId ? { ...x, cards: updatedMeldCards } : x);
+          const canStillPlay =
+            canFormMeldWith(remainHand, mustCard) ||
+            updatedMelds.some((mx) => mx.kind === "set" ? isSet([...mx.cards, mustCard]) : isRun([...mx.cards, mustCard]));
+          if (!canStillPlay) return false;
+        }
+      }
+      return true;
     }
     case "discard":
       // Can't discard until any card drawn from the discard pile is melded.
