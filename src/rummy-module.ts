@@ -507,11 +507,13 @@ function legalMoves(state: RummyState): RummyMove[] {
     if (state.stock.length > 0) moves.push({ type: "drawStock", seat });
     const top = state.discard[state.discard.length - 1];
     if (top) moves.push({ type: "drawDiscard", seat, cardId: top.id }); // top is always takeable
-    // Whole-pile pickup: offer bottom card when it can be immediately melded/laid off
-    if (state.discard.length > 1) {
-      const bottom = state.discard[0];
-      if (canFormMeldWith([...hand, ...state.discard], bottom) || canLayoff(state, bottom))
-        moves.push({ type: "drawDiscard", seat, cardId: bottom.id });
+    // Whole-pile pickup: any non-top card is legal if it can be immediately melded/laid off
+    // using the hand plus all cards swept above it.
+    for (let i = 0; i < state.discard.length - 1; i++) {
+      const target = state.discard[i];
+      const taken = state.discard.slice(i);
+      if (canFormMeldWith([...hand, ...taken], target) || canLayoff(state, target))
+        moves.push({ type: "drawDiscard", seat, cardId: target.id });
     }
     return moves;
   }
