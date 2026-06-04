@@ -72,6 +72,7 @@ const S = {
   dragId: null, // card id being dragged within the hand
   dropBeforeId: null, // drop target (insert before this card id; null = end)
   heartsPass: new Set(), // selected card ids to pass (Hearts)
+  hotseats: {}, // seat → name for pass-and-play reservations (pre-start, client-only)
   pjCard: null, // selected card id (Pegs & Jokers)
   pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
   showLog: false,
@@ -406,7 +407,14 @@ async function connectLocal() {
   }
   const sock = localMod.createLocalSocket(S.party);
   S.ws = sock;
-  sock.onopen = joinOnOpen;
+  sock.onopen = () => {
+    joinOnOpen();
+    // Seat any pass-and-play players reserved before switching to local.
+    for (const [seat, name] of Object.entries(S.hotseats)) {
+      send({ t: "addHuman", seat: +seat, name });
+    }
+    S.hotseats = {};
+  };
   sock.onmessage = onFrame;
   sock.onclose = () => { S.connected = false; };
   render();
@@ -675,12 +683,18 @@ function renderLobby(v) {
       const isRummyLobby = S.party === "rummy500" && v.phase === "lobby";
       const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
       const DIFF_LABELS = ["Easy", "Medium", "Hard", "Expert"];
+      // Hotseat reservation: a seat the host has earmarked for a local human
+      // player (pass-and-play). Stored client-side in S.hotseats until start.
+      const reserved = !you && isHost && S.hotseats[i];
+
       let ctrl = "";
-      if (isEmpty) {
+      if (reserved) {
+        ctrl = `<button class="btn sm danger" data-action="clear-hotseat" data-seat="${i}">Remove</button>`;
+      } else if (isEmpty) {
         ctrl =
           (S.offline ? "" : `<button class="btn sm" data-action="sit" data-seat="${i}">Sit</button>`) +
-          (S.offline ? `<button class="btn sm" data-action="addhuman" data-seat="${i}">+ Player</button>` : "") +
-          (isHost ? `<button class="btn sm ghost" data-action="addbot" data-seat="${i}">+ Bot</button>` : "");
+          (isHost ? `<button class="btn sm ghost" data-action="addbot" data-seat="${i}">+ Bot</button>` : "") +
+          (isHost ? `<button class="btn sm ghost" data-action="reserve-hotseat" data-seat="${i}">+ Pass &amp; Play</button>` : "");
       } else if (s.kind === "bot" && isHost) {
         const diffPicker = isRummyLobby
           ? `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`
@@ -689,9 +703,13 @@ function renderLobby(v) {
       } else if (S.offline && s.kind === "human" && i !== v.hostSeat) {
         ctrl = `<button class="btn sm danger" data-action="clearseat" data-seat="${i}">Remove</button>`;
       }
+
+      const displayName = reserved ? S.hotseats[i] : (isEmpty ? `Seat ${i + 1}` : esc(s.name || "Player"));
+      const displayRole = reserved ? "pass & play" : role;
+      const reservedChip = reserved ? `<span class="chip bot" style="background:rgba(100,160,240,.16);color:#88b8f0;border-color:rgba(100,160,240,.35)">local</span>` : "";
       return `<div class="seat ${you ? "me" : ""}">${av}
-        <div><div class="nm">${isEmpty ? `Seat ${i + 1}` : esc(s.name || "Player")}</div><div class="rl">${role}</div></div>
-        <div class="tags">${tags.join("")}${ctrl}</div></div>`;
+        <div><div class="nm">${displayName}</div><div class="rl">${displayRole}</div></div>
+        <div class="tags">${tags.join("")}${reservedChip}${ctrl}</div></div>`;
     })
     .join("");
 
@@ -723,10 +741,16 @@ function renderLobby(v) {
        </div>`
     : `<div class="panel" style="text-align:center"><p class="sub">Waiting for the host to deal…</p></div>`;
 
+  const hasHotseats = Object.keys(S.hotseats).length > 0;
   const sharePanel = S.offline
     ? `<div class="panel cream">
         <h2>Offline game</h2>
         <p class="sub">All on this device. Add bots to play solo, or add more <b>players</b> for pass-and-play — each gets their own hidden hand, and the device asks you to hand it over between turns.</p>
+      </div>`
+    : hasHotseats
+    ? `<div class="panel cream">
+        <h2>Pass &amp; Play</h2>
+        <p class="sub">Local players share this device. When the game starts it'll run offline — each player's hand stays hidden until it's their turn.</p>
       </div>`
     : `<div class="panel cream">
         <h2>Lobby</h2>
@@ -1662,6 +1686,7 @@ function doLeave() {
   S.party = null;
   S.offline = false;
   S.hotseat = false;
+  S.hotseats = {};
   S.awaitingPass = false;
   S.revealedSeat = null;
   history.replaceState(null, "", "/");
@@ -1672,9 +1697,11 @@ function doStart() {
   S.revealedSeat = 0;
   S.awaitingPass = false;
   const v = S.view;
-  // If the only human is the host, no server needed — switch to local play.
+  const hasHotseats = Object.keys(S.hotseats).length > 0;
+  // If the only human is the host (no remote humans) OR the host has added
+  // pass-and-play seats, drop the server and run locally.
   const nonHostHumans = v.seats.filter((s, i) => s.kind === "human" && i !== v.you).length;
-  if (nonHostHumans === 0) {
+  if (nonHostHumans === 0 || hasHotseats) {
     S.intentionalClose = true;
     try { S.ws?.close(); } catch {}
     S.connected = false;
@@ -1754,6 +1781,17 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "clearseat": return send({ t: "clearSeat", seat: +t.dataset.seat });
+    case "reserve-hotseat": {
+      const seat = +t.dataset.seat;
+      const name = (prompt("Player name?", `Player ${seat + 1}`) || "").trim();
+      if (!name) return;
+      S.hotseats[seat] = name;
+      return render();
+    }
+    case "clear-hotseat": {
+      delete S.hotseats[+t.dataset.seat];
+      return render();
+    }
     case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
     case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
