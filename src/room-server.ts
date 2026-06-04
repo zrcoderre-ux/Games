@@ -93,12 +93,14 @@ export abstract class RoomServer<
     const seat = conn.state?.seat;
     if (seat === null || seat === undefined || !this.room.seats[seat]) return;
     if (this.inProgress()) {
-      // Hand the seat to a bot so play continues; the human reclaims it on
-      // reconnect (same pid -> same seat). This is the short-team/disconnect
-      // coverage: any abandoned seat is immediately filled.
-      this.room.seats[seat] = { kind: "bot", name: this.room.seats[seat].name };
-      await this.persist();
-      await this.resolveBotsAndBroadcast();
+      // Only replace with a bot if other human players are still connected.
+      // Solo-vs-bots games simply pause until the human reconnects.
+      const otherHumans = this.room.seats.filter((s, i) => i !== seat && s.kind === "human").length;
+      if (otherHumans > 0) {
+        this.room.seats[seat] = { kind: "bot", name: this.room.seats[seat].name };
+        await this.persist();
+        await this.resolveBotsAndBroadcast();
+      }
     } else {
       this.room.seats[seat] = { kind: "empty", name: null };
       await this.persist();
@@ -143,9 +145,14 @@ export abstract class RoomServer<
   private async handleLeave(conn: Connection<ConnState>) {
     const st = conn.state!;
     if (st.seat === null) return;
-    this.room.seats[st.seat] = this.inProgress()
-      ? { kind: "bot", name: this.room.seats[st.seat].name }
-      : { kind: "empty", name: null };
+    if (this.inProgress()) {
+      const otherHumans = this.room.seats.filter((s, i) => i !== st.seat && s.kind === "human").length;
+      this.room.seats[st.seat] = otherHumans > 0
+        ? { kind: "bot", name: this.room.seats[st.seat].name }
+        : { kind: "empty", name: null }; // sole human leaving: free the seat
+    } else {
+      this.room.seats[st.seat] = { kind: "empty", name: null };
+    }
     delete this.room.pidSeats[st.pid];
     conn.setState({ ...st, seat: null });
     await this.persist();
