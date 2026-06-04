@@ -1206,7 +1206,7 @@ function rummyRoundModal(v) {
 
 // Popup showing all cards in a single meld. Reachable by tapping any meld on the felt.
 function rummyMeldModal(v) {
-  if (!S.rummyMeldOpen) return "";
+  if (S.rummyMeldOpen == null) return "";
   const m = v.melds.find((x) => x.id === S.rummyMeldOpen);
   if (!m) { S.rummyMeldOpen = null; return ""; }
   const inPlay = v.yourTurn && v.turnPhase === "play";
