@@ -35,6 +35,7 @@ export type LogEntry = {
   cards?: LogCard[]; // optional cards rendered inline after msg
   suit?: string; // optional bare suit glyph (e.g. trump called)
   tail?: string; // optional text rendered after the cards
+  extraCards?: LogCard[]; // expandable extra cards (e.g. rest of a discard pile pickup)
 };
 
 // ---------- the contract ----------

@@ -337,6 +337,7 @@ function rummyEntries(prev: RummyState, next: RummyState, move: RummyMove): Omit
       msg: "took",
       cards: target ? [target] : [],
       tail: extra ? `+${extra} more from the discard` : "from the discard",
+      extraCards: extra ? taken.slice(1) : undefined,
     });
   } else if (move.type === "meld") {
     out.push({ seat, msg: "melded", cards: move.cards.map((id) => findCard(hand, id)).filter(Boolean) as RummyCard[] });

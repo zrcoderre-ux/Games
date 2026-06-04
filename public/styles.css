@@ -755,6 +755,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   border:1px solid rgba(205,160,90,.12)}
 .logrow b{color:var(--brass-hi);font-weight:700}
 .logrow i{color:var(--ink-soft);font-style:italic}
+/* expandable pile pickup in log */
+.log-expand-btn{background:none;border:none;padding:0;cursor:pointer;color:var(--brass-hi);font-size:inherit;
+  text-decoration:underline dotted;text-underline-offset:2px}
+.log-expand-btn:hover,.log-expand-btn.active{color:var(--ink)}
+.log-extra-cards{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
 /* log tab switcher */
 .log-tabs{display:flex;gap:4px}
 .log-tab{background:none;border:1px solid rgba(205,160,90,.25);border-radius:8px;

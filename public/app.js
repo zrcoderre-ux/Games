@@ -75,6 +75,7 @@ const S = {
   pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
   showLog: false,
   logTab: "log", // "log" | "melds"
+  logExpandedId: null, // id of log entry whose extraCards are expanded
 };
 
 // Pegs & Jokers peg colors, one per seat. Even seats are team A, odd are team B.
@@ -266,7 +267,17 @@ function logEntryHTML(v, e) {
   const body = e.seat == null ? `<i>${esc(e.msg)}</i>` : esc(e.msg);
   const suit = e.suit ? ` <span class="lc ${RED.has(e.suit) ? "red" : ""}">${SUIT[e.suit]}</span>` : "";
   const cards = (e.cards || []).map((c) => cardText(c)).join(" ");
-  const tail = e.tail ? ` ${esc(e.tail)}` : "";
+  let tail = "";
+  if (e.tail && e.extraCards && e.extraCards.length) {
+    const expanded = S.logExpandedId === e.id;
+    tail = ` <button class="log-expand-btn${expanded ? " active" : ""}" data-action="expand-log" data-entryid="${e.id}">${esc(e.tail)}</button>`;
+    if (expanded) {
+      const miniCards = [e.cards?.[0], ...e.extraCards].filter(Boolean).map((c) => cardHTML(c, { mini: true })).join("");
+      tail += `<div class="log-extra-cards">${miniCards}</div>`;
+    }
+  } else if (e.tail) {
+    tail = ` ${esc(e.tail)}`;
+  }
   return `${who}${body}${suit}${cards ? " " + cards : ""}${tail}`;
 }
 
@@ -1641,6 +1652,7 @@ app.addEventListener("click", (e) => {
     case "toggle-offline": S.offline = !!t.checked; return renderStart();
     case "toggle-log": S.showLog = !S.showLog; return render();
     case "log-tab": S.logTab = t.dataset.tab; return render();
+    case "expand-log": { const eid = +t.dataset.entryid; S.logExpandedId = S.logExpandedId === eid ? null : eid; return render(); }
     case "connect": return doConnect();
     case "copy-link": return copyLink();
     case "leave": return doLeave();
