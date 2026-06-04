@@ -1060,7 +1060,7 @@ function renderRummy(v) {
               suits.includes(s) ? `<span class="${cls}${RED.has(s)?" red":""}">${SUIT[s]}</span>` : ""
             ).join("");
             const jkBadge = jk ? `<span class="set-jk">★×${jk}</span>` : "";
-            inner = `<div class="card mini set-merged tappable">${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
+            inner = `<div class="card mini set-merged tappable" ${meldAttrs}>${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
           } else {
             // Run: fixed total width of 2 mini cards; margin shrinks as count grows
             const n = m.cards.length;
@@ -1074,8 +1074,7 @@ function renderRummy(v) {
           return `<div class="meld tappable ${active ? "target" : ""}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         }).join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
-  // Piles hide during the play phase so the meld area can expand into that space.
-  const center = inPlay ? "" : `<div class="piles">${stock}${discard}</div>`;
+  const center = `<div class="piles">${stock}${discard}</div>`;
 
   // hand: selected cards float to a row above the fan; unselected cards are fanned.
   // Cards incompatible with the current selection are dimmed.
@@ -1207,7 +1206,7 @@ function rummyRoundModal(v) {
 
 // Popup showing all cards in a single meld. Reachable by tapping any meld on the felt.
 function rummyMeldModal(v) {
-  if (!S.rummyMeldOpen) return "";
+  if (S.rummyMeldOpen == null) return "";
   const m = v.melds.find((x) => x.id === S.rummyMeldOpen);
   if (!m) { S.rummyMeldOpen = null; return ""; }
   const inPlay = v.yourTurn && v.turnPhase === "play";
