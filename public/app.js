@@ -1113,7 +1113,7 @@ function rummyRoundModal(v) {
     const netStr = net >= 0 ? `+${net}` : `${net}`;
     const heldHand = lr.heldCards?.[i] ?? [];
     const heldCardEls = !wentOut && heldHand.length
-      ? `<div class="rr-held">${heldHand.map((c) => cardText(c)).join(" ")}</div>`
+      ? `<div class="rr-held">${heldHand.map((c) => cardHTML(c, { mini: true })).join("")}</div>`
       : "";
     return `<div class="rr-row${wentOut ? " rr-out" : ""}">
       <div class="rr-name">${name}${wentOut ? " <span class='rr-badge'>went out</span>" : ""}</div>
