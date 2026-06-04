@@ -1301,6 +1301,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   filter:blur(1px);
 }
 .trump-watermark.red{color:rgba(200,60,60,.07)}
+.trump-watermark.joker-placeholder{
+  color:rgba(255,255,255,0); /* strip native emoji color */
+  filter:blur(1px) sepia(1) saturate(3) hue-rotate(90deg) brightness(.55) opacity(.55);
+}
 
 /* self-extra strip between selfbar and actions */
 .self-extra{
