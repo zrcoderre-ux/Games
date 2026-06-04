@@ -225,7 +225,7 @@
     }
     // ---------- bots + broadcast ----------
     meta() {
-      return { seats: this.seats, hostSeat: this.hostSeat, players: this.seats.length, inLobby: this.state === null };
+      return { seats: this.seats, hostSeat: this.hostSeat, players: this.seats.length, inLobby: this.state === null, botReplacement: false, disconnectedSeats: [] };
     }
     broadcast() {
       const meta = this.meta();

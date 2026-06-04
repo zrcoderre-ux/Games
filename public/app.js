@@ -164,16 +164,7 @@ function cardHTML(c, o = {}) {
       ? `<span class="joker-as-badge ${RED.has(o.jokerAs.suit) ? "red" : ""}">${rankLabel(o.jokerAs.rank)}${SUIT[o.jokerAs.suit]}</span>`
       : "";
     const action = o.jokerAs && !o.inMeld ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
-    const corner = `<b>J</b><i>kr</i>`;
-    if (o.mini) {
-      return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl">${corner}</span><span class="joker-hat">\ud83c\udccf</span>${badge}</div>`;
-    }
-    return `<div class="${cls.join(" ")}"${st}${action}>
-      <span class="corner tl">${corner}</span>
-      <span class="joker-art"><span class="joker-hat-big">\ud83c\udccf</span><span class="joker-bells">\u2726 \u2726 \u2726</span></span>
-      <span class="corner br">${corner}</span>
-      ${badge}
-    </div>`;
+    return `<div class="${cls.join(" ")}"${st}${action}><img class="joker-img" src="/joker_black.png" alt="Joker">${badge}</div>`;
   }
   if (RED.has(c.suit)) cls.push("red");
   const r = rankLabel(c.rank);
@@ -1597,7 +1588,7 @@ function doStart() {
   S.awaitingPass = false;
   if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: S.view.players, marbles: S.view.marbles } });
   const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-  send({ t: "start", config: { players: S.view.players, target } });
+  send({ t: "start", config: { players: S.view.players, target, botDifficulty: S.view.botDifficulty } });
 }
 
 function toggleSel(id) {
