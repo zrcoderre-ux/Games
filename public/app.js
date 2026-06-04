@@ -63,7 +63,7 @@ const S = {
   rummyLayoff: null, // selected meld id for layoff
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
-  rummyExpanded: new Set(), // meld ids with middle cards expanded
+
   discardOpen: false, // discard-pile popup open?
   dragId: null, // card id being dragged within the hand
   dropBeforeId: null, // drop target (insert before this card id; null = end)
@@ -977,27 +977,15 @@ function renderRummy(v) {
             const jkBadge = jk ? `<span class="set-jk">★×${jk}</span>` : "";
             inner = `<div class="card mini set-merged${inPlay?" tappable":""}">${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
           } else {
-            // Run: show endpoints; hide middle cards behind a +N toggle
-            const expanded = S.rummyExpanded.has(m.id);
-            const n = m.cards.length;
-            if (!expanded && n > 3) {
-              const first = cardHTML(m.cards[0], { mini: true, jokerAs: jokerRes[0] ?? undefined, inMeld: true });
-              const last  = cardHTML(m.cards[n-1], { mini: true, jokerAs: jokerRes[n-1] ?? undefined, inMeld: true });
-              inner = `<div class="run-compact${inPlay?" tappable":""}">
-                ${first}
-                <button class="meld-toggle" data-action="toggle-run" data-meldid="${m.id}">···</button>
-                ${last}
-              </div>`;
-            } else {
-              const allCards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true })).join("");
-              const collapseBtn = n > 3 ? `<button class="meld-toggle" data-action="toggle-run" data-meldid="${m.id}">−</button>` : "";
-              inner = `<div class="run-full${inPlay?" tappable":""}">${allCards}${collapseBtn}</div>`;
-            }
+            // Run: all cards shown densely stacked; no toggle needed
+            const allCards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true })).join("");
+            inner = `<div class="run-dense${inPlay?" tappable":""}">${allCards}</div>`;
           }
           return `<div class="meld ${inPlay?"tappable":""} ${active ? "target" : ""}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         }).join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
-  const center = `<div class="piles">${stock}${discard}</div>`;
+  // Piles hide during the play phase so the meld area can expand into that space.
+  const center = inPlay ? "" : `<div class="piles">${stock}${discard}</div>`;
 
   // hand: selected cards float to a row above the fan; unselected cards are fanned.
   // Cards incompatible with the current selection are dimmed.
@@ -1522,7 +1510,7 @@ app.addEventListener("click", (e) => {
     }
     case "toggle-card": return toggleSel(+t.dataset.cardid);
     case "select-meld": S.rummyLayoff = S.rummyLayoff === +t.dataset.meldid ? null : +t.dataset.meldid; return render();
-    case "toggle-run": { const id = +t.dataset.meldid; S.rummyExpanded[S.rummyExpanded.has(id) ? "delete" : "add"](id); return render(); }
+
     case "meld-selected": return doMeld();
     case "layoff-selected": return doLayoff();
     case "discard-selected": return doDiscard();
