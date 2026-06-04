@@ -972,6 +972,7 @@ function redact(state, seat, meta) {
     currentTrick: state.currentTrick,
     lastTrick,
     lastHand: state.lastHand,
+    lastKitty: state.lastHand ? state.kitty : null,
     log: state.log ?? []
   };
 }

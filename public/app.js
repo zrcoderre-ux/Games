@@ -64,6 +64,8 @@ const S = {
   rummyMeldOpen: null, // meld id whose popup is open
   rummyRoundAcked: null, // JSON key of the lastRound already dismissed
   rummyRoundTimer: null, // auto-dismiss setTimeout handle
+  hljHandAcked: null, // JSON key of the lastHand already dismissed
+  hljHandTimer: null, // auto-dismiss setTimeout handle
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
@@ -563,6 +565,7 @@ function tableShell(v, parts) {
       ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
       <div class="center">${parts.center}</div>
       ${parts.trick || ""}
+      ${parts.feltBid || ""}
       ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
     </div>
     <div class="selfwrap">${self}</div>
@@ -933,14 +936,7 @@ function renderHLJ(v) {
       .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
       .join("")}</div></div>`;
   } else if (v.phase === "bidding") {
-    // Show bid history on the table as mini chips
-    const bidLog = Array.isArray(v.bidHistory) ? v.bidHistory : [];
-    const bidItems = bidLog.map(b => {
-      const name = esc(seatName(v, b.seat));
-      if (b.type === "pass") return `<span class="hlj-table-bid passed">${name}: Pass</span>`;
-      return `<span class="hlj-table-bid">${name}: <b>${b.amount}</b></span>`;
-    }).join("");
-    centerExtra = `<div class="hlj-table-bids">${bidItems || '<span class="callout-sm">Bidding&hellip;</span>'}</div>`;
+    centerExtra = "";
   } else {
     centerExtra = `<div class="callout">Lead a card to open the trick.</div>`;
   }
@@ -965,11 +961,36 @@ function renderHLJ(v) {
     key: cardKey(c),
   }))}</div>`;
 
-  // Poker chip bid buttons -- shown only on your bidding turn
+  // Bid result tokens positioned on the felt near each player
+  // plus your chip buttons anchored at the bottom of the felt
   const minBid = bids.length ? bids[0].amount : 2;
   const curHighAmt = v.highBid ? v.highBid.amount : null;
-  const bidSlider = v.yourTurn && bids.length
-    ? `<div class="hlj-bid-row">
+  const bidHistory = Array.isArray(v.bidHistory) ? v.bidHistory : [];
+
+  // Build a positioned overlay: one token per player who has bid/passed
+  const posClass = (seat) => {
+    const n = v.seats.length;
+    if (you == null) return "pos-top";
+    const off = (seat - you + n) % n;
+    if (off === 0) return "pos-bottom";
+    if (off === Math.floor(n / 2)) return "pos-top";
+    return off < n / 2 ? "pos-left" : "pos-right";
+  };
+  const bidTokens = v.phase === "bidding"
+    ? bidHistory.map(b => {
+        const pos = posClass(b.seat);
+        const label = b.type === "pass" ? "Pass" : String(b.amount);
+        const cls = b.type === "pass" ? "pass" : "chip";
+        return `<div class="hlj-bid-token ${pos} ${cls}">${label}</div>`;
+      }).join("")
+    : "";
+  const bidOverlay = bidTokens
+    ? `<div class="hlj-bid-overlay">${bidTokens}</div>`
+    : "";
+
+  // Your chip buttons, rendered on the felt when it's your bidding turn
+  const feltBidPanel = v.phase === "bidding" && v.yourTurn && bids.length
+    ? `<div class="hlj-felt-bid">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
             const legal = n >= minBid;
@@ -979,7 +1000,10 @@ function renderHLJ(v) {
         </div>
         ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
       </div>`
-    : (v.yourTurn && canPass && !bids.length ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : "");
+    : (v.phase === "bidding" && v.yourTurn && canPass && !bids.length
+        ? `<div class="hlj-felt-bid"><button class="hlj-pass-btn" data-action="move-pass">Pass</button></div>`
+        : "");
+  const bidSlider = "";  // removed from selfExtra
 
   // Signal -- only shown for players who have bid (not passed)
   const signalLevels = ["weak", "medium", "strong"];
@@ -1017,7 +1041,7 @@ function renderHLJ(v) {
     <span class="hlj-score-chip t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
   </div>`;
 
-  const selfExtra = `${teamScores}${bidSlider}${signalControl}${trumpControl}${playHint}`;
+  const selfExtra = `${teamScores}${signalControl}${trumpControl}${playHint}`;
 
   const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
   const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
@@ -1028,7 +1052,82 @@ function renderHLJ(v) {
     ? `<span class="turnflag">Your turn</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, trick: hljTrick, feltOverlay, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  // End-of-hand result popup
+  const hljHandModal = (() => {
+    const lh = v.lastHand;
+    if (!lh || v.phase === "gameOver") return "";
+    const handKey = JSON.stringify(lh);
+    if (S.hljHandAcked === handKey) return "";
+
+    if (S.hljHandTimer == null) {
+      S.hljHandTimer = setTimeout(() => {
+        S.hljHandAcked = handKey;
+        S.hljHandTimer = null;
+        render();
+      }, 30000);
+    }
+
+    const bidderTeamLetter = lh.bidderTeam === 0 ? "A" : "B";
+    const bidderName = esc(seatName(v, lh.bidderSeat));
+
+    const pts = lh.detail;
+    const pointItems = [
+      { label: "High",     team: pts.high },
+      { label: "Low",      team: pts.low },
+      { label: "Jack",     team: pts.jack },
+      { label: "Bonhomme", team: pts.bonhomme },
+      { label: "Game",     team: pts.game },
+    ].filter(p => p.team !== null && p.team !== undefined);
+
+    const ptRows = pointItems.map(p => {
+      const letter = p.team === 0 ? "A" : "B";
+      return `<div class="hlj-rr-ptrow">
+        <span class="hlj-rr-ptname">${p.label}</span>
+        <span class="hlj-rr-ptteam t${letter}">Team ${letter}</span>
+      </div>`;
+    }).join("");
+
+    const made = lh.made;
+    const scoreRows = [0, 1].map(t => {
+      const letter = t === 0 ? "A" : "B";
+      const delta = lh.deltaByTeam[t];
+      const total = v.scores[t];
+      const sign = delta > 0 ? "+" : "";
+      const isBidder = t === lh.bidderTeam;
+      return `<div class="hlj-rr-scorerow${isBidder && !made ? " setback" : ""}">
+        <span class="hlj-rr-scoreteam t${letter}">Team ${letter}</span>
+        <span class="hlj-rr-scoredelta">${sign}${delta}</span>
+        <span class="hlj-rr-scoretotal">${total} pts</span>
+      </div>`;
+    }).join("");
+
+    const kittyCards = (v.lastKitty || []).map(c => cardHTML(c, { mini: true })).join("");
+    const kittySection = kittyCards
+      ? `<div class="hlj-rr-section"><div class="hlj-rr-seclabel">Kitty</div><div class="hlj-rr-kitty">${kittyCards}</div></div>`
+      : "";
+
+    const contractLine = `${bidderName} bid <b>${lh.bid}</b> for Team ${bidderTeamLetter} &mdash; <span class="${made ? "hlj-made" : "hlj-set"}">${made ? "Made it" : "Set back"}</span>`;
+
+    return `<div class="modal-back" data-action="hlj-ack-hand">
+      <div class="modal" data-stop="1">
+        <div class="modalhead"><span>Hand over</span><button class="btn sm ghost" data-action="hlj-ack-hand">Next hand</button></div>
+        <div class="modalbody">
+          <div class="hlj-rr-contract">${contractLine}</div>
+          <div class="hlj-rr-section">
+            <div class="hlj-rr-seclabel">Points taken</div>
+            ${ptRows}
+          </div>
+          ${kittySection}
+          <div class="hlj-rr-section hlj-rr-scores">
+            <div class="hlj-rr-seclabel">Score</div>
+            ${scoreRows}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  })();
+
+  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, hand, actions: null, selfMeta, selfTurn, selfExtra }) + hljHandModal;
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
@@ -1886,6 +1985,12 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "toggle-card": return toggleSel(+t.dataset.cardid);
+    case "hlj-ack-hand": {
+      const lh = S.view && S.view.lastHand;
+      if (lh) S.hljHandAcked = JSON.stringify(lh);
+      if (S.hljHandTimer) { clearTimeout(S.hljHandTimer); S.hljHandTimer = null; }
+      return render();
+    }
     case "ack-round": {
       const lr = S.view && S.view.lastRound;
       if (lr) S.rummyRoundAcked = JSON.stringify(S.view.scores);
