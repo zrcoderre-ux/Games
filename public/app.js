@@ -684,7 +684,6 @@ function renderStart() {
 
         <button class="felt-cta" data-action="connect">Take a Seat</button>
 
-        <div class="felt-theme-row">${themePickerHTML()}</div>
       </div>
     </div>`;
 }
@@ -968,20 +967,22 @@ function renderHLJ(v) {
   const bidHistory = Array.isArray(v.bidHistory) ? v.bidHistory : [];
 
   // Build a positioned overlay: one token per player who has bid/passed
-  const posClass = (seat) => {
+  const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    if (you == null) return "pos-top";
+    if (you == null) return "transform:translate(-50%, calc(-50% - min(30vh, 180px)))";
     const off = (seat - you + n) % n;
-    if (off === 0) return "pos-bottom";
-    if (off === Math.floor(n / 2)) return "pos-top";
-    return off < n / 2 ? "pos-left" : "pos-right";
+    if (off === 0) return "transform:translate(-50%, calc(-50% + min(26vh, 140px)))";
+    if (off === Math.floor(n / 2)) return "transform:translate(-50%, calc(-50% - min(30vh, 180px)))";
+    return off < n / 2
+      ? "transform:translate(calc(-50% - min(36vw, 200px)), -50%)"
+      : "transform:translate(calc(-50% + min(36vw, 200px)), -50%)";
   };
   const bidTokens = v.phase === "bidding"
     ? bidHistory.map(b => {
-        const pos = posClass(b.seat);
+        const style = bidPosStyle(b.seat);
         const label = b.type === "pass" ? "Pass" : String(b.amount);
         const cls = b.type === "pass" ? "pass" : "chip";
-        return `<div class="hlj-bid-token ${pos} ${cls}">${label}</div>`;
+        return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("")
     : "";
   const bidOverlay = bidTokens

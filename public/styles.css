@@ -1306,7 +1306,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-bid-overlay{position:absolute;inset:0;pointer-events:none;z-index:3}
 .hlj-bid-token{
   position:absolute;left:50%;top:50%;
-  transform:translate(-50%,-50%);
   pointer-events:all;
   font-family:"Fraunces",serif;font-size:15px;font-weight:700;
   display:grid;place-items:center;
@@ -1325,11 +1324,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   background:rgba(0,0,0,.35);border:1px solid rgba(180,180,140,.2);
   border-radius:20px;padding:4px 10px;width:auto;height:auto;
 }
-/* position offsets matching .trick.positioned */
-.hlj-bid-token.pos-top   {transform:translate(-50%, calc(-50% - min(30vh, 180px)))}
-.hlj-bid-token.pos-bottom{transform:translate(-50%, calc(-50% + min(26vh, 140px)))}
-.hlj-bid-token.pos-left  {transform:translate(calc(-50% - min(36vw, 200px)), -50%)}
-.hlj-bid-token.pos-right {transform:translate(calc(-50% + min(36vw, 200px)), -50%)}
 
 /* Felt-anchored chip panel — your bid turn, sits above the selfwrap */
 .hlj-felt-bid{
