@@ -71,6 +71,7 @@ const S = {
   pjCard: null, // selected card id (Pegs & Jokers)
   pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
   showLog: false,
+  logTab: "log", // "log" | "melds"
 };
 
 // Pegs & Jokers peg colors, one per seat. Even seats are team A, odd are team B.
@@ -166,11 +167,10 @@ function cardHTML(c, o = {}) {
   const r = rankLabel(c.rank);
   const s = SUIT[c.suit];
   const corner = `<b>${r}</b><i>${s}</i>`;
-  const court = c.rank >= 11 && c.rank <= 13;
-  const center = court
-    ? `<span class="court">${r}<span style="font-size:.55em;margin-left:1px">${s}</span></span>`
-    : `<span class="pip">${s}</span>`;
-  return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span>${center}<span class="corner br">${corner}</span></div>`;
+  if (o.mini) {
+    return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span></div>`;
+  }
+  return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span><span class="pip">${s}</span><span class="corner br">${corner}</span></div>`;
 }
 
 function seatName(v, i) {
@@ -360,13 +360,50 @@ function appbar(v, opts = {}) {
 function logSheet() {
   if (!S.showLog) return "";
   const v = S.view;
-  const entries = v && v.log ? v.log : [];
-  const rows = entries.length
-    ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("")
-    : `<div class="logrow" style="color:var(--ink-dim)">No moves yet — they'll appear here as the hand plays out.</div>`;
+  const tab = S.logTab;
+
+  // --- Log tab ---
+  const logBody = () => {
+    const entries = v && v.log ? v.log : [];
+    const rows = entries.length
+      ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("")
+      : `<div class="logrow" style="color:var(--ink-dim)">No moves yet.</div>`;
+    return `<div class="loglist">${rows}</div>`;
+  };
+
+  // --- Melds tab ---
+  const meldsBody = () => {
+    const melds = v && v.melds ? v.melds : [];
+    if (!melds.length) return `<div class="logrow" style="color:var(--ink-dim)">No melds on the table yet.</div>`;
+    // Group by owner seat
+    const byPlayer = {};
+    for (const m of melds) {
+      const s = m.owner ?? -1;
+      if (!byPlayer[s]) byPlayer[s] = [];
+      byPlayer[s].push(m);
+    }
+    return Object.entries(byPlayer).map(([seat, pmelds]) => {
+      const name = v ? esc(seatName(v, +seat)) : `Seat ${+seat + 1}`;
+      const meldRows = pmelds.map((m) => {
+        const jokerRes = resolveJokers(m);
+        const cards = m.cards.map((c, ci) =>
+          cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true })
+        ).join("");
+        const kind = m.kind === "set" ? "Set" : "Run";
+        return `<div class="meld-log-row"><span class="meld-kind">${kind}</span><div class="meld-log-cards">${cards}</div></div>`;
+      }).join("");
+      return `<div class="meld-log-player"><div class="meld-log-name">${name}</div>${meldRows}</div>`;
+    }).join("");
+  };
+
+  const tabs = (t) => `<div class="log-tabs">
+    <button class="log-tab${t === "log" ? " active" : ""}" data-action="log-tab" data-tab="log">Log</button>
+    <button class="log-tab${t === "melds" ? " active" : ""}" data-action="log-tab" data-tab="melds">Melds</button>
+  </div>`;
+
   return `<div class="logsheet">
-      <div class="loghead"><span>Move log</span><button class="btn sm ghost" data-action="toggle-log">Close</button></div>
-      <div class="loglist">${rows}</div>
+      <div class="loghead">${tabs(tab)}<button class="btn sm ghost" data-action="toggle-log">Close</button></div>
+      <div class="logbody">${tab === "melds" ? meldsBody() : logBody()}</div>
     </div>`;
 }
 
@@ -1446,6 +1483,7 @@ app.addEventListener("click", (e) => {
     case "pick-game": S.pickGame = t.dataset.game; return renderStart();
     case "toggle-offline": S.offline = !!t.checked; return renderStart();
     case "toggle-log": S.showLog = !S.showLog; return render();
+    case "log-tab": S.logTab = t.dataset.tab; return render();
     case "connect": return doConnect();
     case "copy-link": return copyLink();
     case "leave": return doLeave();
