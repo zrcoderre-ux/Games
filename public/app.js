@@ -775,12 +775,12 @@ function renderHLJ(v) {
   const center = `<div class="crestrow">${trumpCrest}${teamCrest(0)}${teamCrest(1)}${bidCrest}</div>${centerExtra}`;
 
   // hand (fanned), dim non-legal cards while it's your turn to play
-  const hand = fanHand(v.yourHand, (c) => ({
+  const hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => ({
     playable: plays.has(cardKey(c)),
     dim: plays.size > 0 && !plays.has(cardKey(c)),
     action: plays.has(cardKey(c)) ? "play-card" : "",
     key: cardKey(c),
-  }));
+  }))}</div>`;
 
   // actions
   const acts = [];
@@ -1283,13 +1283,13 @@ function renderHearts(v) {
   }
 
   // Hand: in passing, tap to (de)select up to 3; in play, tap a glowing legal card.
-  const hand = fanHand(v.yourHand, (c) => {
+  const hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => {
     if (passing) {
       return { action: v.youPassed ? "" : "toggle-pass", id: c.id, sel: S.heartsPass.has(c.id), playable: !v.youPassed, dim: v.youPassed };
     }
     const can = plays.has(c.id);
     return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
-  });
+  })}</div>`;
 
   // Actions.
   const acts = [];
