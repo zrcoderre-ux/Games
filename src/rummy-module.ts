@@ -805,19 +805,129 @@ function simulatePlayPoints(hand: RummyCard[], melds: Meld[]): number {
   return handPoints(h);
 }
 
-// Connectivity: how many distinct meld groups does `hand` contribute to?
-// A card contributes if it can form a set or run with at least one other card.
-function meldPotential(hand: RummyCard[]): number {
-  let score = 0;
-  for (const c of hand) {
-    if (c.joker) { score += 20; continue; }
-    const sameRank = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
-    const inSuitAdj = hand.filter(
-      (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2,
-    ).length;
-    score += sameRank * 3 + inSuitAdj * 2;
+// ---------- probability accounting ----------
+
+// Cards that are fully visible to the AI at `seat`: own hand + discard pile + melds.
+function visibleCards(state: RummyState, seat: number): RummyCard[] {
+  return [
+    ...state.hands[seat],
+    ...state.discard,
+    ...state.melds.flatMap((m) => m.cards),
+  ];
+}
+
+// Total cards whose location is unknown (stock + other players' hands).
+function unknownCount(state: RummyState, seat: number): number {
+  return (
+    state.stock.length +
+    state.hands.reduce((s, h, i) => (i !== seat ? s + h.length : s), 0)
+  );
+}
+
+// Probability that one specific rank+suit is drawable from the remaining unknowns.
+// With double-deck there can be 2 copies; we account for how many are already visible.
+function probDraw(state: RummyState, seat: number, rank: number, suit: Suit): number {
+  const totalDecks = decksFor(state.players);
+  const seen = visibleCards(state, seat);
+  const visibleCopies = seen.filter((c) => !c.joker && c.rank === rank && c.suit === suit).length;
+  const remaining = Math.max(0, totalDecks - visibleCopies);
+  if (remaining === 0) return 0;
+  const unk = unknownCount(state, seat);
+  return unk > 0 ? Math.min(1, remaining / unk) : 0;
+}
+
+// Probability of drawing at least one copy of a needed card in `draws` future draws,
+// given `pPerDraw` probability on each individual draw.
+// Uses the binomial complement: P(at least 1) = 1 - (1 - p)^draws.
+function probEventually(pPerDraw: number, draws: number): number {
+  if (pPerDraw <= 0 || draws <= 0) return 0;
+  return Math.min(1, 1 - Math.pow(1 - pPerDraw, draws));
+}
+
+// Expected number of future draws this seat will get before the round ends.
+// Approximation: stock cards / players (each player draws once per full round of turns).
+function expectedFutureDraws(state: RummyState, seat: number): number {
+  return Math.max(0, state.stock.length / state.players);
+}
+
+// ---------- card hold-value (probability-weighted) ----------
+
+// Expected point contribution of holding `card` given the current known state:
+// how likely is it that we eventually meld it vs. get stuck with it?
+//
+// Returns a value in [-cardValue, +cardValue]:
+//   positive → card is likely to be melded (worth keeping)
+//   negative → card is likely to be deadweight (worth discarding)
+//
+// Set completion and run completion are both evaluated; the best path wins.
+function cardMeldEV(state: RummyState, seat: number, card: RummyCard): number {
+  if (card.joker) return cardValue(card); // jokers are always meldable
+  const hand = state.hands[seat];
+  const draws = expectedFutureDraws(state, seat);
+  const val = cardValue(card);
+
+  // --- set potential ---
+  const sameRankInHand = hand.filter((c) => !c.joker && c.rank === card.rank && c.id !== card.id);
+  const jokersInHand = jokersOf(hand).length;
+  let pSet = 0;
+
+  if (sameRankInHand.length + jokersInHand >= 2) {
+    // Already have a complete set (or joker-assisted): contribution is certain.
+    pSet = 1;
+  } else if (sameRankInHand.length === 1) {
+    // Have a pair; need one more of any remaining suit.
+    const usedSuits = new Set([card.suit, sameRankInHand[0].suit]);
+    let pOneMore = 0;
+    for (const s of SUITS) if (!usedSuits.has(s)) pOneMore += probDraw(state, seat, card.rank, s);
+    pSet = probEventually(pOneMore, draws);
+  } else if (jokersInHand >= 1) {
+    // One joker plus this card; need one more of same rank.
+    let pOneMore = 0;
+    const usedSuits = new Set([card.suit]);
+    for (const s of SUITS) if (!usedSuits.has(s)) pOneMore += probDraw(state, seat, card.rank, s);
+    pSet = probEventually(pOneMore, draws) * 0.7; // joker might be used elsewhere
   }
-  return score;
+
+  // --- run potential ---
+  // Find the best run window containing this card, counting missing natural ranks.
+  let pRun = 0;
+  for (const aceRank of [1, 14]) {
+    const cr = card.rank === 14 ? aceRank : card.rank;
+    if (cr < 1 || cr > 14) continue;
+    const byRank = new Map<number, true>();
+    for (const c of hand) {
+      if (c.joker || c.suit !== card.suit) continue;
+      const r = c.rank === 14 ? aceRank : c.rank;
+      byRank.set(r, true);
+    }
+    byRank.set(cr, true);
+    // Evaluate all run windows of length 3–5 that include cr.
+    for (let lo = Math.max(1, cr - 4); lo <= cr; lo++) {
+      for (let hi = cr; hi <= Math.min(14, lo + 6); hi++) {
+        if (hi - lo + 1 < 3) continue;
+        const needed: number[] = [];
+        for (let r = lo; r <= hi; r++) if (!byRank.has(r)) needed.push(r);
+        const canFillWithJokers = needed.length <= jokersInHand;
+        if (canFillWithJokers) {
+          // Run is already completable — the card is basically secured.
+          pRun = Math.max(pRun, 0.95);
+          continue;
+        }
+        const stillNeed = needed.length - jokersInHand;
+        if (stillNeed > 2) continue; // too many gaps
+        // Probability of drawing ALL still-needed cards.
+        let pAll = 1;
+        for (const r of needed.slice(jokersInHand)) {
+          pAll *= probEventually(probDraw(state, seat, r, card.suit), draws / Math.max(1, stillNeed));
+        }
+        pRun = Math.max(pRun, pAll * (hi - lo + 1 >= 4 ? 1.0 : 0.8)); // prefer longer runs
+      }
+    }
+  }
+
+  const pMeld = Math.min(1, Math.max(pSet, pRun));
+  // Expected value: +val if melded, -val if stuck. Weighted by probability.
+  return val * pMeld - val * (1 - pMeld);
 }
 
 // Is `card` likely useful to any opponent? Returns a danger score 0–10.
@@ -888,24 +998,22 @@ function evaluateDeepPickup(
   return { gain: grossGain - effectiveHeldPenalty, cards: taken };
 }
 
-// Choose the best discard from `hand`, accounting for:
-//   - card's own meld potential (keep connected cards)
-//   - opponent danger (weighted by personality)
-//   - endgame pressure: when opponents are running low, dump high-value isolated cards fast
+// Choose the best discard from `hand`.
+// Uses probability-weighted meld EV so the AI pivots away from stranded high-value
+// cards (e.g. lone Ace with no partners visible or likely) even late in the round.
 function bestDiscard(state: RummyState, hand: RummyCard[], seat: number, personality: AiPersonality): RummyCard {
   const opponentLow = minOpponentHandSize(state, seat) <= personality.endgameHandSize;
   const score = (c: RummyCard): number => {
     if (c.joker) return -200; // never discard a wild
-    let discardScore = cardValue(c);
-    const mates = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
-    const adjInSuit = hand.filter(
-      (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2,
-    ).length;
-    discardScore -= mates >= 2 ? 12 : mates === 1 ? 5 : 0;
-    discardScore -= adjInSuit * 3;
+    // Probability-aware meld EV: negative means this card is more likely deadweight.
+    const mev = cardMeldEV(state, seat, c);
+    // Base discard score: high-value deadweight → discard; high-value secured → keep.
+    let discardScore = -mev; // invert: high mev = keep = low discard score
+    // Opponent danger: avoid giving them useful cards.
     const danger = opponentDanger(state, c, seat);
-    discardScore -= danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
-    if (opponentLow) discardScore += cardValue(c) * 0.5;
+    discardScore += danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
+    // Endgame: amplify the pressure to shed deadweight quickly.
+    if (opponentLow) discardScore += Math.max(0, -mev) * 0.5;
     return discardScore;
   };
   return [...hand].sort((a, b) => score(b) - score(a))[0];
@@ -914,21 +1022,18 @@ function bestDiscard(state: RummyState, hand: RummyCard[], seat: number, persona
 // Speculative top-card value: should we take the top discard even without an
 // immediate meld? Returns a score; > 0 means "yes, it's worth it".
 //
-// Model: connectivity to current hand creates expected future meld value;
-// holding cost is discounted by earlyDiscount (aggressive bots treat most of
-// the round as early, conservative bots never accept much holding cost).
+// Uses probability-weighted meld EV of the top card given it joins our hand,
+// minus a personality-discounted holding cost.
 function speculativeTopValue(hand: RummyCard[], top: RummyCard, state: RummyState, personality: AiPersonality): number {
   if (top.joker) return 40; // always worth a speculative grab
   const progress = roundProgress(state);
-  // How much future meld opportunity is left? Discount fades as stock empties.
   const futureDiscount = personality.earlyDiscount * (1 - progress);
-  // Connectivity to current hand
-  const sameRank = hand.filter((c) => !c.joker && c.rank === top.rank).length;
-  const adjInSuit = hand.filter((c) => !c.joker && c.suit === top.suit && Math.abs(c.rank - top.rank) <= 2).length;
-  const connectivity = sameRank * 10 + adjInSuit * 5;
-  // Effective holding risk: point loss if card never melds, discounted by future opportunity
-  const holdingCost = cardValue(top) * (1 - futureDiscount);
-  return connectivity - holdingCost;
+  // Simulate adding top to hand, then evaluate its meld EV in that context.
+  const hypotheticalState = { ...state, hands: state.hands.map((h, i) => i === state.turn ? [...h, top] : h) };
+  const mev = cardMeldEV(hypotheticalState, state.turn, top);
+  // mev is in [-val, +val]; if positive the card is likely to meld.
+  // Still apply a holding cost discount so speculative grabs fade late in round.
+  return mev * (0.5 + futureDiscount * 0.5);
 }
 
 // Find all complete melds in `hand`, returning them in play order (largest first
