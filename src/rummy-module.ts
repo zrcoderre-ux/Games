@@ -727,31 +727,202 @@ function layoffOnto(state: RummyState, m: Meld, c: RummyCard, seat: number): Rum
   const ok = m.kind === "set" ? isSet(combined) : isRun(combined);
   return ok ? { type: "layoff", seat, meldId: m.id, cards: [c.id] } : null;
 }
-function worstDiscard(hand: RummyCard[]): RummyCard {
+
+// ── AI helpers ────────────────────────────────────────────────────────────────
+
+// How many unmelded points does `hand` carry?
+function handPoints(hand: RummyCard[]): number {
+  return hand.reduce((s, c) => s + cardValue(c), 0);
+}
+
+// Simulated-turn score: meld/layoff everything possible from `hand` given
+// the current melds on the table, return leftover point total.
+function simulatePlayPoints(hand: RummyCard[], melds: Meld[]): number {
+  let h = [...hand];
+  // iterate until stable
+  for (let pass = 0; pass < 12; pass++) {
+    const before = h.length;
+    const set = findSet(h);
+    if (set) { h = h.filter((c) => !set.includes(c)); continue; }
+    const run = findRun(h);
+    if (run) { h = h.filter((c) => !run.includes(c)); continue; }
+    // layoffs onto existing melds
+    let laid = false;
+    for (const m of melds) {
+      for (const c of h) {
+        const combined = [...m.cards, c];
+        if (m.kind === "set" ? isSet(combined) : isRun(combined)) {
+          h = h.filter((x) => x !== c);
+          laid = true;
+          break;
+        }
+      }
+      if (laid) break;
+    }
+    if (!laid && h.length === before) break;
+  }
+  return handPoints(h);
+}
+
+// Connectivity: how many distinct meld groups does `hand` contribute to?
+// A card contributes if it can form a set or run with at least one other card.
+function meldPotential(hand: RummyCard[]): number {
+  let score = 0;
+  for (const c of hand) {
+    if (c.joker) { score += 20; continue; }
+    const sameRank = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
+    const inSuitAdj = hand.filter(
+      (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2,
+    ).length;
+    score += sameRank * 3 + inSuitAdj * 2;
+  }
+  return score;
+}
+
+// Is `card` likely useful to any opponent? Returns a danger score 0–10.
+// Checks: does it extend a visible meld, or match the rank/suit-run of recent discards?
+function opponentDanger(state: RummyState, card: RummyCard, seat: number): number {
+  if (card.joker) return 0; // wild – we never discard it anyway
+  let danger = 0;
+  // Extends an existing meld on the table (any player can lay off)
+  for (const m of state.melds) {
+    const combined = [...m.cards, card];
+    if (m.kind === "set" ? isSet(combined) : isRun(combined)) { danger += 4; break; }
+  }
+  // If there's already one of the same rank visible in melds, a second gives
+  // opponents a pair (dangerous if they have the third)
+  const sameRankOnTable = state.melds.flatMap((m) => m.cards).filter((c) => !c.joker && c.rank === card.rank).length;
+  if (sameRankOnTable >= 1) danger += 2;
+  // High-value cards are universally more dangerous (opponent will meld them for big points)
+  danger += Math.floor(cardValue(card) / 5);
+  return Math.min(danger, 10);
+}
+
+// Minimum cards remaining across all opponents.
+function minOpponentHandSize(state: RummyState, seat: number): number {
+  let min = Infinity;
+  for (let i = 0; i < state.players; i++) {
+    if (i !== seat) min = Math.min(min, state.hands[i].length);
+  }
+  return min === Infinity ? 99 : min;
+}
+
+// Evaluate picking up the discard pile down to `targetCard`.
+// Returns a net-gain score (positive = worth doing, negative = not).
+// Takes into account: points gained from melding the pile, penalty for cards
+// we can't meld, danger of giving opponents our discard, and pile depth cost.
+function evaluateDeepPickup(
+  state: RummyState,
+  seat: number,
+  targetCardId: number,
+): { gain: number; cards: RummyCard[] } {
+  const discardPile = state.discard;
+  const targetIdx = discardPile.findIndex((c) => c.id === targetCardId);
+  if (targetIdx < 0) return { gain: -Infinity, cards: [] };
+
+  const taken = discardPile.slice(targetIdx); // targetCard + everything above it
+  const combined = [...state.hands[seat], ...taken];
+
+  // Simulate playing everything we can from the combined hand
+  const leftoverPts = simulatePlayPoints(combined, state.melds);
+  const takenPts = taken.reduce((s, c) => s + cardValue(c), 0);
+  const handPts = handPoints(state.hands[seat]);
+
+  // Net: points we'd gain from melding pile cards minus increase in held penalty
+  const meldedFromPile = takenPts - Math.max(0, leftoverPts - handPts);
+  // Cost: we have to hold extra cards if we can't meld them all
+  const extraHeld = Math.max(0, leftoverPts - handPts);
+  // Extra depth cost: each card we pick up that we can't immediately meld is a liability
+  const depthPenalty = taken.length * 1.5;
+
+  return { gain: meldedFromPile - extraHeld * 0.5 - depthPenalty, cards: taken };
+}
+
+// Choose the best discard from `hand`, accounting for:
+//   - card's own meld potential (keep connected cards)
+//   - opponent danger (don't feed their melds)
+//   - endgame pressure: when opponents are running low, dump high-value isolated cards fast
+function bestDiscard(state: RummyState, hand: RummyCard[], seat: number): RummyCard {
+  const opponentLow = minOpponentHandSize(state, seat) <= 3;
   const score = (c: RummyCard): number => {
-    if (c.joker) return -100; // a wild is far too useful to throw away
-    let keep = 0;
-    const mates = hand.filter((x) => x.rank === c.rank && x.id !== c.id).length;
-    keep += mates >= 2 ? 8 : mates === 1 ? 3 : 0;
-    keep += hand.filter((x) => x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2).length * 2;
-    return cardValue(c) - keep; // higher == more discardable
+    if (c.joker) return -200; // never discard a wild
+    // Base: card's point value (high = more tempting to discard, but risky)
+    let discardScore = cardValue(c);
+    // Meld connectivity: keep cards that are part of partial melds
+    const mates = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
+    const adjInSuit = hand.filter(
+      (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2,
+    ).length;
+    discardScore -= mates >= 2 ? 12 : mates === 1 ? 5 : 0;
+    discardScore -= adjInSuit * 3;
+    // Opponent danger: avoid giving them useful cards (unless we're forced to in endgame)
+    const danger = opponentDanger(state, c, seat);
+    discardScore -= danger * (opponentLow ? 1 : 2); // danger matters less when we're desperate
+    // Endgame pressure: if opponents are close to going out, dump high isolates fast
+    if (opponentLow) discardScore += cardValue(c) * 0.5; // amplify the urge to shed points
+    return discardScore;
   };
   return [...hand].sort((a, b) => score(b) - score(a))[0];
 }
 
+// Find all complete melds in `hand`, returning them in play order (largest first
+// by point value, so we empty hand and maximize scored points).
+function allMeldsInHand(hand: RummyCard[]): RummyCard[][] {
+  const melds: RummyCard[][] = [];
+  let remaining = [...hand];
+  for (let pass = 0; pass < 20; pass++) {
+    const run = findRun(remaining);
+    const set = findSet(remaining);
+    // Pick whichever scores more points
+    const runPts = run ? run.reduce((s, c) => s + cardValue(c), 0) : -1;
+    const setPts = set ? set.reduce((s, c) => s + cardValue(c), 0) : -1;
+    const pick = runPts >= setPts ? run : set;
+    if (!pick) break;
+    melds.push(pick);
+    remaining = remaining.filter((c) => !pick.includes(c));
+  }
+  return melds;
+}
+
 function aiMove(state: RummyState, seat: number): RummyMove {
   const hand = state.hands[seat];
+  const opponentLow = minOpponentHandSize(state, seat) <= 3;
 
+  // ── Draw phase ──────────────────────────────────────────────────────────────
   if (state.turnPhase === "draw") {
-    const top = state.discard[state.discard.length - 1];
+    const discard = state.discard;
+    const top = discard[discard.length - 1];
+
+    // Always take the top card if it immediately enables a meld or layoff
     if (top && (canFormMeldWith([...hand, top], top) || canLayoff(state, top)))
       return { type: "drawDiscard", seat, cardId: top.id };
+
+    // Consider picking up deeper into the discard pile.
+    // Only worth it when NOT in endgame pressure (opponents nearly out).
+    if (!opponentLow && discard.length >= 2) {
+      let bestGain = 8; // threshold: must be meaningfully better than drawing from stock
+      let bestTarget: RummyCard | null = null;
+      // Scan from top down; stop at depth 6 (diminishing returns beyond that)
+      const maxDepth = Math.min(discard.length, 6);
+      for (let depth = 1; depth < maxDepth; depth++) {
+        const candidate = discard[discard.length - 1 - depth];
+        // The target card must itself be useful (part of a meld in our combined hand)
+        const combined = [...hand, ...discard.slice(discard.length - 1 - depth)];
+        if (!canFormMeldWith(combined, candidate) && !canLayoff(state, candidate)) continue;
+        const { gain } = evaluateDeepPickup(state, seat, candidate.id);
+        if (gain > bestGain) { bestGain = gain; bestTarget = candidate; }
+      }
+      if (bestTarget) return { type: "drawDiscard", seat, cardId: bestTarget.id };
+    }
+
     if (state.stock.length > 0) return { type: "drawStock", seat };
-    if (top) return { type: "drawDiscard", seat, cardId: top.id }; // last resort (round usually ended)
+    if (top) return { type: "drawDiscard", seat, cardId: top.id }; // last resort
     return { type: "drawStock", seat };
   }
 
-  // Place the forced (discard-drawn) card first.
+  // ── Play phase ───────────────────────────────────────────────────────────────
+
+  // 1. Handle the forced card from a deep discard pickup first.
   if (state.mustMeldCardId != null) {
     const mc = hand.find((c) => c.id === state.mustMeldCardId);
     if (mc) {
@@ -763,17 +934,36 @@ function aiMove(state: RummyState, seat: number): RummyMove {
     }
   }
 
-  // Lay down a complete meld if we have one.
-  const set = findSet(hand);
-  const run = findRun(hand);
-  const pick = run && (!set || run.length >= set.length) ? run : set;
-  if (pick) return { type: "meld", seat, cards: pick.map((c) => c.id) };
+  // 2. Lay down all complete melds, highest value first (max scoring + hand reduction).
+  const allMelds = allMeldsInHand(hand);
+  if (allMelds.length > 0) return { type: "meld", seat, cards: allMelds[0].map((c) => c.id) };
 
-  // Lay off any single card that fits an existing meld.
-  for (const m of state.melds) for (const c of hand) { const lo = layoffOnto(state, m, c, seat); if (lo) return lo; }
+  // 3. Lay off cards onto existing table melds.
+  //    Prioritise layoffs that shed high-value isolated cards (no other meld home).
+  const layoffCandidates: Array<{ move: RummyMove; value: number }> = [];
+  for (const m of state.melds) {
+    for (const c of hand) {
+      const lo = layoffOnto(state, m, c, seat);
+      if (lo) layoffCandidates.push({ move: lo, value: cardValue(c) });
+    }
+  }
+  // Under endgame pressure, lay off everything we can. Otherwise prefer high-value
+  // cards that have no other meld potential (shed liability first).
+  if (layoffCandidates.length > 0) {
+    layoffCandidates.sort((a, b) => {
+      if (opponentLow) return b.value - a.value; // shed points fast
+      // Prefer to lay off cards with low meld potential (less valuable to keep)
+      const aCard = hand.find((c) => c.id === (a.move as { cards: number[] }).cards[0])!;
+      const bCard = hand.find((c) => c.id === (b.move as { cards: number[] }).cards[0])!;
+      const aPot = meldPotential([aCard, ...hand.filter((c) => c !== aCard)]);
+      const bPot = meldPotential([bCard, ...hand.filter((c) => c !== bCard)]);
+      return aPot - bPot; // lay off low-potential cards first
+    });
+    return layoffCandidates[0].move;
+  }
 
-  // Otherwise discard.
-  return { type: "discard", seat, cardId: worstDiscard(hand).id };
+  // 4. Discard the least valuable / most dangerous card.
+  return { type: "discard", seat, cardId: bestDiscard(state, hand, seat).id };
 }
 
 // ---------- the module ----------
