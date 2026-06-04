@@ -190,7 +190,7 @@ body:has(.felt-table)::before{
 /* Scattered face-down card backs */
 .cb{
   position:absolute;width:40px;height:56px;border-radius:5px;z-index:1;
-  background:linear-gradient(135deg,#8b1a1a 0%,#6b1010 100%);
+  background:linear-gradient(135deg,#1a3a8b 0%,#102068 100%);
   border:1.5px solid rgba(255,255,255,.15);
   box-shadow:2px 3px 8px rgba(0,0,0,.55),inset 0 0 0 3px rgba(255,255,255,.05);
 }
