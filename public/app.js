@@ -166,11 +166,13 @@ function cardHTML(c, o = {}) {
     const action = o.jokerAs && !o.inMeld ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
     const corner = `<b>J</b><i>kr</i>`;
     if (o.mini) {
-      return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl">${corner}</span><span class="joker-hat">\ud83c\udccf</span>${badge}</div>`;
+      return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl"><b>J</b></span><span class="joker-hat">\ud83c\udccf</span>${badge}</div>`;
     }
     return `<div class="${cls.join(" ")}"${st}${action}>
       <span class="corner tl">${corner}</span>
-      <span class="joker-art"><span class="joker-hat-big">\ud83c\udccf</span><span class="joker-bells">\u2726 \u2726 \u2726</span></span>
+      <span class="joker-star itl">\u2605</span><span class="joker-star itr">\u2605</span>
+      <span class="joker-art"><span class="joker-hat-big">\ud83c\udccf</span><span class="joker-label">Joker</span></span>
+      <span class="joker-star ibl">\u2605</span><span class="joker-star ibr">\u2605</span>
       <span class="corner br">${corner}</span>
       ${badge}
     </div>`;
