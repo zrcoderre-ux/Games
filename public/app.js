@@ -948,7 +948,7 @@ function renderRummy(v) {
               const last  = cardHTML(m.cards[n-1], { mini: true, jokerAs: jokerRes[n-1] ?? undefined });
               inner = `<div class="run-compact${inPlay?" tappable":""}" ${meldAttrs}>
                 ${first}
-                <button class="meld-toggle" data-action="toggle-run" data-meldid="${m.id}">+${n-2}</button>
+                <button class="meld-toggle" data-action="toggle-run" data-meldid="${m.id}">···</button>
                 ${last}
               </div>`;
             } else {
