@@ -703,7 +703,6 @@ function renderLobby(v) {
     const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
     const tc = isTeamGame ? (i % 2 === 0 ? "tA" : "tB") : "";
 
-    // Single compact action per seat — no stacked button pairs
     let action = "";
     if (reserved) {
       action = `<button class="lby-act danger" data-action="clear-hotseat" data-seat="${i}">✕</button>`;
@@ -718,26 +717,33 @@ function renderLobby(v) {
       action = `<button class="lby-act danger" data-action="clearseat" data-seat="${i}">✕</button>`;
     }
 
-    const displayName = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open" : esc(s.name || "Player");
+    const displayName = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open seat" : esc(s.name || "Player");
     const initials = reserved ? S.hotseats[i].charAt(0).toUpperCase()
       : !isEmpty ? (s.name || "?").charAt(0).toUpperCase()
-      : "";
-    const avClass = isEmpty ? "empty" : reserved ? "local" : you ? "you" : s.kind === "bot" ? "bot" : "human";
-    const avIcon = s.kind === "bot" && !reserved ? "\u265F" : initials;
+      : (i + 1).toString();
 
-    let role = isEmpty ? "open" : reserved ? "pass & play" : s.kind === "bot" ? "bot" : you ? "you" : i === v.hostSeat ? "host" : "player";
+    const avClass = isEmpty ? "empty" : reserved ? "local" : you ? "you" : s.kind === "bot" ? "bot" : "human";
+    const avIcon = s.kind === "bot" && !reserved ? "♟" : initials;
+
+    let roleLabel = "open";
+    if (reserved) roleLabel = "pass &amp; play";
+    else if (!isEmpty) roleLabel = s.kind === "bot" ? "computer" : you ? "you" : i === v.hostSeat ? "host" : "player";
+
+    const hostBadge = i === v.hostSeat && !isEmpty && !you ? `<span class="lby-badge host">host</span>` : "";
+    const youBadge  = you ? `<span class="lby-badge you">you</span>` : "";
+    const localBadge = reserved ? `<span class="lby-badge local">local</span>` : "";
 
     return `<div class="lby-seat ${isEmpty ? "empty" : ""} ${you ? "me" : ""} ${tc}">
       <div class="lby-av ${avClass}">${avIcon}</div>
       <div class="lby-seat-info">
         <div class="lby-seat-name">${displayName}</div>
-        <div class="lby-seat-role">${role}</div>
+        <div class="lby-seat-role">${roleLabel}${hostBadge}${youBadge}${localBadge}</div>
       </div>
       ${action ? `<div class="lby-seat-action">${action}</div>` : ""}
     </div>`;
   };
 
-  // For team games: two compact columns. Non-team: single list.
+  // Layout: two-column team grid for team games, single list otherwise
   let seatsHTML;
   if (isTeamGame) {
     const idxA = v.seats.map((_, i) => i).filter(i => i % 2 === 0);
@@ -756,31 +762,35 @@ function renderLobby(v) {
     seatsHTML = `<div class="lby-seat-list">${v.seats.map((s, i) => renderSeat(s, i)).join("")}</div>`;
   }
 
-  // Pass & Play — one section-level button, not per-seat
+  // Pass & Play — section-level button uses first empty seat
   const emptySeats = v.seats.map((s,i)=>({s,i})).filter(({s,i})=> s.kind==="empty" && i!==v.you);
   const passPlayBtn = isHost && emptySeats.length > 0
     ? `<button class="lby-passplay-btn" data-action="reserve-hotseat" data-seat="${emptySeats[0].i}">+ Add Pass &amp; Play Player</button>`
     : "";
-  const hasHotseats = Object.keys(S.hotseats).length > 0;
 
-  // Config controls (host only, compact)
+  // Config controls (host only)
   const cfgControls = isPJ
     ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-         <div class="seg">${[4,6].map(c=>`<button class="${c===v.players?"on":""}" data-action="pj-setplayers" data-count="${c}">${c}</button>`).join("")}</div></div>
-       <div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
-         <div class="seg">${GAMES["pegs-and-jokers"].marbles.map(m=>`<button class="${m===v.marbles?"on":""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
+         <div class="seg">${[4, 6].map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="pj-setplayers" data-count="${c}">${c}</button>`).join("")}</div></div>
+         <p class="sub" style="margin:2px 0 10px 72px">${v.players === 6 ? "Two teams of three." : "Two pairs, partners opposite."}</p>
+         <div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
+         <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
     : `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-         <div class="seg">${counts.map(c=>`<button class="${c===v.players?"on":""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>
+         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>
        <div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
          <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>`;
 
   const botReplacementToggle = !S.offline
-    ? `<label class="lby-replace-toggle"><input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement?"checked":""} /> Auto-replace disconnects with bots</label>`
+    ? `<label class="lby-replace-toggle">
+         <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} />
+         Auto-replace disconnects with bots
+       </label>`
     : "";
 
+  const hasHotseats = Object.keys(S.hotseats).length > 0;
   let shareRow = "";
   if (S.offline) {
-    shareRow = `<p class="lby-mode-note">${hasHotseats ? "Pass &amp; Play \u2014 device shared between turns." : "Offline \u2014 bots on this device."}</p>`;
+    shareRow = `<p class="lby-mode-note">${hasHotseats ? "Pass &amp; Play — device is shared between turns." : "Offline — all bots play on this device."}</p>`;
   } else {
     shareRow = `<div class="lby-share-row">
       <input class="lby-link-input" readonly value="${esc(link)}" onclick="this.select()" />
@@ -788,10 +798,13 @@ function renderLobby(v) {
     </div>`;
   }
 
-  const cfgSection = isHost ? `<div class="lby-cfg">${cfgControls}${botReplacementToggle}</div>` : "";
   const dealBtn = isHost
     ? `<button class="felt-cta" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button>`
-    : `<p class="lby-waiting">Waiting for the host to deal\u2026</p>`;
+    : `<p class="lby-waiting">Waiting for the host to deal…</p>`;
+
+  const cfgSection = isHost
+    ? `<div class="lby-cfg">${cfgControls}${botReplacementToggle}</div>`
+    : "";
 
   app.__set = `${appbar(v)}
     <div class="lby-wrap">
@@ -806,4 +819,1174 @@ function renderLobby(v) {
     </div>`;
 }
 
+// ---------- shared: game over ----------
+function scoreList(rows) {
+  return `<div class="seats">${rows
+    .map(
+      (r) => `<div class="seat ${r.you ? "me" : ""}">${avatarHTML(r.name)}
+        <div class="nm">${esc(r.name)}${r.you ? ' <span class="chip you">you</span>' : ""}${r.win ? ' <span class="chip host">winner</span>' : ""}</div>
+        <div class="tags"><b style="font-family:Fraunces,serif;font-size:22px;color:${r.win ? "var(--brass-hi)" : "var(--ink)"}">${r.score}</b></div></div>`,
+    )
+    .join("")}</div>`;
+}
 
+function renderGameOver(v, title, scoresHTML) {
+  const isHost = v.you !== null && v.you === v.hostSeat;
+  app.__set = `${appbar(v)}
+    <div class="stage">
+      <div class="panel cream" style="text-align:center">
+        <div class="hero"><div class="logo">\u2660</div><h1>${esc(title)}</h1><p class="sub">Good game.</p></div>
+      </div>
+      <div class="panel"><h2 style="margin-bottom:10px">Final scores</h2>${scoresHTML}</div>
+      <div class="panel" style="text-align:center">${
+        isHost ? `<button class="btn" data-action="newgame">Deal a new game</button>` : `<p class="sub">Waiting for the host to deal again…</p>`
+      }</div>
+    </div>`;
+}
+
+// Which card in a completed High Low Jack trick won it (port of engine
+// trickWinner): highest trump — joker is the lowest trump — else highest of the
+// led suit. Returns the index into the play-order cards array.
+// Build a spatially-positioned trick div: each card floats toward its player's edge.
+// `plays`  – [{card, seat, name?}]
+// `you`    – viewer's seat index (null = spectator → all top)
+// `n`      – total seat count
+// options  – winSeat: seat whose card gets .win; faded: dim the whole trick
+function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
+  const posClass = (seat) => {
+    if (you == null) return "pos-top";
+    const off = (seat - you + n) % n;
+    if (off === 0) return "pos-bottom";
+    if (off === Math.floor(n / 2)) return "pos-top";
+    return off < n / 2 ? "pos-left" : "pos-right";
+  };
+  const inner = plays.map((p, idx) =>
+    `<div class="play ${posClass(p.seat)}${idx === 0 ? " lead" : ""}">${cardHTML(p.card, { mini: true, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
+  ).join("");
+  return `<div class="trick positioned${faded ? " faded" : ""}">${inner}</div>`;
+}
+
+function hljWinIdx(cards, trump) {
+  if (!cards || !cards.length) return -1;
+  const tval = (c) => (c.joker ? 0 : c.suit === trump ? c.rank : null);
+  const trumps = cards.filter((c) => tval(c) != null);
+  if (trumps.length) {
+    let best = trumps[0];
+    for (const c of trumps) if (tval(c) > tval(best)) best = c;
+    return cards.indexOf(best);
+  }
+  const ledSuit = cards[0].joker ? trump : cards[0].suit;
+  const followers = cards.filter((c) => !c.joker && c.suit === ledSuit);
+  let best = followers[0];
+  for (const c of followers) if (c.rank > best.rank) best = c;
+  return cards.indexOf(best);
+}
+
+// ---------- High Low Jack ----------
+function renderHLJ(v) {
+  if (v.phase === "gameOver") {
+    const w = v.winner;
+    const you = v.you;
+    const rows = [
+      { name: "Team A", score: v.scores[0], win: w === 0, you: you != null && you % 2 === 0 },
+      { name: "Team B", score: v.scores[1], win: w === 1, you: you != null && you % 2 === 1 },
+    ];
+    return renderGameOver(v, w == null ? "Game over" : `Team ${w === 0 ? "A" : "B"} wins!`, scoreList(rows));
+  }
+
+  const lm = v.yourTurn ? v.legalMoves : [];
+  const bids = lm.filter((m) => m.type === "bid");
+  const canPass = lm.some((m) => m.type === "pass");
+  const trumpChoices = lm.filter((m) => m.type === "selectTrump");
+  const plays = new Set(lm.filter((m) => m.type === "play").map((m) => cardKey(m.card)));
+  const highBid = v.highBid ? `${v.highBid.amount} (${esc(seatName(v, v.highBid.seat))})` : "\u2014";
+
+  const teamLetter = (i) => (i % 2 === 0 ? "A" : "B");
+
+  // pods (everyone but you), tagged with their team
+  const pods = v.seats
+    .map((s, i) =>
+      i === v.you
+        ? null
+        : { seat: i, html: podHTML(v, i, {
+            active: i === v.toAct,
+            dealer: i === v.dealerSeat,
+            team: teamLetter(i),
+            partner: v.you != null && i % 2 === v.you % 2,
+            count: v.handCounts[i],
+            note: v.phase === "bidding" && v.signals[i] ? v.signals[i] : null,
+          }) },
+    )
+    .filter(Boolean);
+
+  // center: trick area (trump watermark on felt separately)
+  const you = v.you;
+  const myTeam = you != null ? you % 2 : null;
+  let hljTrick;
+  let centerExtra = "";
+  if (v.currentTrick.length) {
+    const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+    hljTrick = trickHTML(trickPlays, you, v.seats.length);
+  } else if (v.phase !== "bidding" && v.lastTrick) {
+    const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
+    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
+      .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
+      .join("")}</div></div>`;
+  } else {
+    centerExtra = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
+  }
+  const center = centerExtra;
+
+  // Trump watermark on felt fabric
+  const feltOverlay = v.trump
+    ? `<span class="trump-watermark ${RED.has(v.trump) ? "red" : ""}">${SUIT[v.trump]}</span>`
+    : "";
+
+  // hand (fanned), dim non-legal cards while it's your turn to play
+  const hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => ({
+    playable: plays.has(cardKey(c)),
+    dim: plays.size > 0 && !plays.has(cardKey(c)),
+    action: plays.has(cardKey(c)) ? "play-card" : "",
+    key: cardKey(c),
+  }))}</div>`;
+
+  // Bid slider \u2014 shown only on your bidding turn
+  const minBid = bids.length ? bids[0].amount : 2;
+  const maxBid = 6;
+  const curHighAmt = v.highBid ? v.highBid.amount : null;
+  const sliderVal = bids.length ? bids[0].amount : minBid; // default to minimum legal bid
+  const bidSlider = v.yourTurn && bids.length
+    ? `<div class="hlj-bid-row">
+        <span class="hlj-bid-label">Bid: <b id="hlj-bid-display">${sliderVal}</b></span>
+        <input class="hlj-slider" type="range" id="hlj-bid-slider" min="${minBid}" max="${maxBid}" value="${sliderVal}"
+          oninput="document.getElementById('hlj-bid-display').textContent=this.value" />
+        <div class="hlj-bid-pips">${Array.from({length: maxBid - 1}, (_, i) => {
+          const n = i + 2;
+          const isCur = curHighAmt === n;
+          return `<span class="${isCur ? "pip-cur" : ""}">${isCur ? `${n}\u2605` : n}</span>`;
+        }).join("")}</div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button class="btn" data-action="hlj-bid-confirm">Bid</button>
+          ${canPass ? `<button class="btn ghost" data-action="move-pass">Pass</button>` : ""}
+        </div>
+      </div>`
+    : (v.yourTurn && canPass && !bids.length ? `<button class="btn ghost sm" data-action="move-pass">Pass</button>` : "");
+
+  // Signal slider \u2014 shown during bidding when you have a seat
+  const signalLevels = ["weak", "medium", "strong"];
+  const curSignal = v.you != null ? v.signals?.[v.you] : null;
+  const sigIdx = curSignal ? signalLevels.indexOf(curSignal) : -1;
+  const signalControl = v.phase === "bidding" && v.you != null
+    ? `<div class="hlj-signal-row">
+        <span class="hlj-signal-label">Signal partner</span>
+        <div class="hlj-signal-seg">
+          ${signalLevels.map((l, i) => `<button class="hlj-sig-btn${i === sigIdx ? " active" : ""}" data-action="signal" data-level="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}
+        </div>
+      </div>`
+    : "";
+
+  // Trump suit buttons \u2014 when you need to select
+  const trumpControl = v.yourTurn && trumpChoices.length
+    ? `<div class="hlj-trump-row">
+        <span class="hint">Choose trump:</span>
+        <div style="display:flex;gap:10px;justify-content:center">
+          ${trumpChoices.map((m) => `<button class="btn" data-action="move-trump" data-suit="${m.suit}" style="font-size:22px;min-width:54px;color:${RED.has(m.suit) ? "var(--suit-red)" : "#2a2018"}">${SUIT[m.suit]}</button>`).join("")}
+        </div>
+      </div>`
+    : "";
+
+  const playHint = v.yourTurn && plays.size ? `<span class="hint">Tap a glowing card to play.</span>` : "";
+
+  // Team score strip below hand
+  const myTeamIdx = you != null ? you % 2 : 0; // 0=A, 1=B
+  const oppTeamIdx = 1 - myTeamIdx;
+  const myTeamLetter = myTeamIdx === 0 ? "A" : "B";
+  const oppTeamLetter = myTeamIdx === 0 ? "B" : "A";
+  const teamScores = `<div class="hlj-scores">
+    <span class="hlj-score-chip t${myTeamLetter} mine"><span class="teamdot t${myTeamLetter}"></span>Team ${myTeamLetter}&nbsp;<b>${v.scores[myTeamIdx]}</b></span>
+    <span class="hlj-score-chip t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
+  </div>`;
+
+  const selfExtra = `${teamScores}${bidSlider}${signalControl}${trumpControl}${playHint}`;
+
+  const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
+  const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
+  const selfMeta = you != null
+    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>`
+    : `play to ${v.target}`;
+  const selfTurn = v.yourTurn
+    ? `<span class="turnflag">Your turn</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+
+  app.__set = tableShell(v, { pods, center, trick: hljTrick, feltOverlay, hand, actions: null, selfMeta, selfTurn, selfExtra });
+}
+
+// ---------- Rummy 500: client-side rule mirror ----------
+// These mirror rummy-module.ts so the UI can disable illegal actions outright
+// (the server still re-validates). Jokers are wild in both sets and runs.
+function rIsSet(cards) {
+  if (cards.length < 3) return false;
+  const nat = cards.filter((c) => !c.joker);
+  return nat.length > 0 && nat.every((c) => c.rank === nat[0].rank);
+}
+function rIsRun(cards) {
+  if (cards.length < 3) return false;
+  const nat = cards.filter((c) => !c.joker);
+  const jokers = cards.length - nat.length;
+  if (!nat.length) return false;
+  const suit = nat[0].suit;
+  if (!nat.every((c) => c.suit === suit)) return false;
+  for (const ace of [1, 14]) {
+    const ranks = nat.map((c) => (c.rank === 14 ? ace : c.rank)).sort((a, b) => a - b);
+    if (new Set(ranks).size !== ranks.length) continue;
+    const lo = ranks[0], hi = ranks[ranks.length - 1];
+    if (lo < 1 || hi > 14) continue;
+    const gaps = hi - lo + 1 - ranks.length;
+    if (gaps < 0 || gaps > jokers) continue;
+    const extra = jokers - gaps;
+    if (hi - lo + 1 + extra > 14) continue;
+    if ((lo - 1) + (14 - hi) < extra) continue;
+    return true;
+  }
+  return false;
+}
+const rValidMeld = (cards) => rIsSet(cards) || rIsRun(cards);
+const rCanLayoff = (meld, cards) =>
+  meld.kind === "set" ? rIsSet([...meld.cards, ...cards]) : rIsRun([...meld.cards, ...cards]);
+
+// Reconcile S.rummyOrder with the live hand: keep order, append new cards, drop gone ones.
+function rummyOrdered(hand) {
+  const ids = hand.map((c) => c.id);
+  S.rummyOrder = S.rummyOrder.filter((id) => ids.includes(id));
+  for (const id of ids) if (!S.rummyOrder.includes(id)) S.rummyOrder.push(id);
+  return S.rummyOrder.map((id) => hand.find((c) => c.id === id)).filter(Boolean);
+}
+function rummySort(hand, mode) {
+  const rank = (c) => (c.joker ? 100 : c.rank); // jokers sort to the end
+  const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
+  const by = mode === "suit"
+    ? (a, b) => (a.joker - b.joker) || (suitOrder[a.suit] - suitOrder[b.suit]) || (rank(a) - rank(b))
+    : (a, b) => (rank(a) - rank(b)) || (suitOrder[a.suit] - suitOrder[b.suit]);
+  S.rummyOrder = [...hand].sort(by).map((c) => c.id);
+  render();
+}
+
+// ---------- Rummy 500 ----------
+
+// Mirror of orderRunCards from rummy-module — returns parallel array of
+// resolved {rank,suit} for each card (null for natural cards).
+function resolveJokers(meld) {
+  const cards = meld.cards;
+  if (meld.kind === "set") {
+    const naturalRank = cards.find((c) => !c.joker)?.rank;
+    if (naturalRank == null) return cards.map(() => null);
+    const usedSuits = new Set(cards.filter((c) => !c.joker).map((c) => c.suit));
+    const freeSuits = ["S", "H", "C", "D"].filter((s) => !usedSuits.has(s));
+    let si = 0;
+    return cards.map((c) => c.joker ? { rank: naturalRank, suit: freeSuits[si++] ?? "S" } : null);
+  }
+  // run: mirror orderRunCards logic
+  const naturals = cards.filter((c) => !c.joker);
+  const jokers = cards.filter((c) => c.joker);
+  if (!naturals.length) return cards.map(() => null);
+  for (const aceRank of [1, 14]) {
+    const eff = naturals.map((c) => ({ c, r: c.rank === 14 ? aceRank : c.rank })).sort((a, b) => a.r - b.r);
+    const ranks = eff.map((x) => x.r);
+    if (new Set(ranks).size !== ranks.length) continue;
+    const low = ranks[0], high = ranks[ranks.length - 1];
+    const gaps = high - low + 1 - ranks.length;
+    if (gaps < 0 || gaps > jokers.length) continue;
+    const extra = jokers.length - gaps;
+    const after = Math.min(extra, 14 - high);
+    const before = extra - after;
+    if (before > low - 1) continue;
+    const suit = naturals[0].suit; // runs are same suit
+    const byRank = new Map(eff.map((x) => [x.r, x.c]));
+    const jkAssign = [];
+    for (let r = low - before; r <= high + after; r++) if (!byRank.has(r)) jkAssign.push(r);
+    let ji = 0;
+    // Map original jokers to their assigned ranks in order they appear in cards[]
+    const jokerRanks = new Map();
+    for (const jk of jokers) jokerRanks.set(jk, jkAssign[ji++]);
+    return cards.map((c) => c.joker ? { rank: jokerRanks.get(c) ?? 0, suit } : null);
+  }
+  return cards.map(() => null);
+}
+
+// Can card `c` join the current selection and still potentially form a valid meld/layoff?
+function rCompatible(sel, c, layMeld) {
+  if (c.joker) return true;
+  if (!sel.length) return true;
+  if (layMeld) return rCanLayoff(layMeld, [...sel, c]);
+  const naturals = sel.filter((s) => !s.joker);
+  if (!naturals.length) return true; // only jokers selected so far
+  const jokerCount = sel.filter((s) => s.joker).length;
+  // Set: same rank, no duplicate suit
+  const setRank = naturals[0].rank;
+  if (naturals.every((s) => s.rank === setRank) && c.rank === setRank && !sel.some((s) => s.suit === c.suit))
+    return true;
+  // Run: same suit, rank fits in range with available jokers as gap-fill
+  const runSuit = naturals[0].suit;
+  if (naturals.every((s) => s.suit === runSuit) && c.suit === runSuit) {
+    const allRanks = [...naturals.map((s) => s.rank), c.rank].sort((a, b) => a - b);
+    const lo = allRanks[0], hi = allRanks[allRanks.length - 1];
+    const gaps = hi - lo + 1 - allRanks.length;
+    if (gaps >= 0 && gaps <= jokerCount) return true;
+  }
+  return false;
+}
+
+function renderRummy(v) {
+  // prune stale selections (cards no longer in hand)
+  const handIds = new Set(v.yourHand.map((c) => c.id));
+  for (const id of [...S.rummySel]) if (!handIds.has(id)) S.rummySel.delete(id);
+
+  if (v.phase === "gameOver") {
+    const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
+  }
+
+  const lm = v.yourTurn ? v.legalMoves : [];
+  const canStock = lm.some((m) => m.type === "drawStock");
+  const discardDraw = lm.find((m) => m.type === "drawDiscard");
+  const bottom = v.discard.length ? v.discard[0] : null;
+  const canTakePile = bottom && lm.some((m) => m.type === "drawDiscard" && m.cardId === bottom.id) && v.discard.length > 1;
+  const top = v.discard.length ? v.discard[v.discard.length - 1] : null;
+  const inPlay = v.yourTurn && v.turnPhase === "play";
+
+  const pods = v.seats
+    .map((s, i) =>
+      i === v.you
+        ? null
+        : { seat: i, html: podHTML(v, i, {
+            active: i === v.toAct,
+            dealer: i === v.dealerSeat,
+            count: v.handCounts[i],
+            pts: v.scores[i],
+            note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
+          }) },
+    )
+    .filter(Boolean);
+
+  // center: stock + discard piles (mini), then melds on the felt
+  const stock = `<div class="pile mini-pile">
+      <div class="lbl">Stock</div>
+      <div class="stockwrap" ${canStock ? `data-action="draw-stock" style="cursor:pointer"` : ""}>
+        ${v.stockCount > 1 ? cardHTML({}, { back: true, mini: true, style: "position:absolute;top:2px;left:2px;opacity:.6" }) : ""}
+        ${v.stockCount > 0 ? cardHTML({}, { back: true, mini: true }) : `<div class="card mini" style="opacity:.22"></div>`}
+      </div>
+      <div class="pts">${v.stockCount} left</div>
+    </div>`;
+  // Discard pile: clicking always opens the full pile modal.
+  const peek = v.discard.slice(-5);
+  const stackCards = peek
+    .map((c, i) => {
+      const off = (peek.length - 1 - i) * 4;
+      const style = `position:absolute;left:${-off}px;top:${-off}px;z-index:${i}`;
+      return cardHTML(c, { mini: true, style: style + (i < peek.length - 1 ? ";filter:brightness(.92)" : "") });
+    })
+    .join("");
+  const discard = `<div class="pile mini-pile">
+      <div class="lbl">Discard</div>
+      <div class="discardstack" data-action="open-discard" title="View discard pile" style="cursor:pointer">
+        ${top ? stackCards : `<div class="card mini" style="opacity:.22"></div>`}
+      </div>
+      <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
+    </div>`;
+  const melds = v.melds.length
+    ? `<div class="melds">${v.melds.map((m) => {
+          const active = S.rummyLayoff === m.id;
+          const jokerRes = resolveJokers(m);
+          const meldAttrs = `data-action="open-meld" data-meldid="${m.id}"`;
+          let inner;
+          if (m.kind === "set") {
+            // Compact: one card showing rank + a pip per suit present
+            const naturals = m.cards.filter((c) => !c.joker);
+            const suits = naturals.map((c) => c.suit);
+            const jk = m.cards.filter((c) => c.joker).length;
+            const rank = naturals.length ? rankLabel(naturals[0].rank) : "★";
+            const CORNERS = [["S","sc-tl"],["H","sc-tr"],["C","sc-bl"],["D","sc-br"]];
+            const pips = CORNERS.map(([s, cls]) =>
+              suits.includes(s) ? `<span class="${cls}${RED.has(s)?" red":""}">${SUIT[s]}</span>` : ""
+            ).join("");
+            const jkBadge = jk ? `<span class="set-jk">★×${jk}</span>` : "";
+            inner = `<div class="card mini set-merged tappable" ${meldAttrs}>${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
+          } else {
+            // Run: fixed total width of 2 mini cards; margin shrinks as count grows
+            const n = m.cards.length;
+            const negMargin = n <= 1 ? 0 : Math.round(44 * (n - 2) / (n - 1));
+            const allCards = m.cards.map((c, ci) => {
+              const ml = ci === 0 ? "" : `margin-left:-${negMargin}px`;
+              return cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true, style: ml });
+            }).join("");
+            inner = `<div class="run-dense tappable">${allCards}</div>`;
+          }
+          return `<div class="meld tappable ${active ? "target" : ""}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
+        }).join("")}</div>`
+    : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
+  const center = `<div class="piles">${stock}${discard}</div>`;
+
+  // hand: selected cards float to a row above the fan; unselected cards are fanned.
+  // Cards incompatible with the current selection are dimmed.
+  const ordered = rummyOrdered(v.yourHand);
+  const selCards = ordered.filter((c) => S.rummySel.has(c.id));
+  const fanCards = ordered.filter((c) => !S.rummySel.has(c.id));
+  const layMeld = v.melds.find((m) => m.id === S.rummyLayoff);
+
+  // Determine which unselected cards are compatible with the current selection
+  const compatibleIds = inPlay && selCards.length
+    ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld)).map((c) => c.id))
+    : null; // null = no filtering
+
+  const selRow = selCards.length
+    ? `<div class="selrow">${selCards.map((c) => cardHTML(c, {
+        action: "toggle-card", id: c.id, sel: true,
+        must: c.id === v.mustMeldCardId,
+      })).join("")}</div>`
+    : "";
+  const fan = fanHand(fanCards, (c) => {
+    const incompatible = inPlay && compatibleIds != null && !compatibleIds.has(c.id);
+    return {
+      action: incompatible ? "" : "toggle-card",
+      id: incompatible ? undefined : c.id,
+      draggable: !incompatible,
+      must: c.id === v.mustMeldCardId,
+      playable: inPlay && !incompatible,
+      dim: incompatible,
+    };
+  });
+  const hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
+  const canMeld = selCards.length >= 3 && rValidMeld(selCards);
+  const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards);
+  const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;
+
+  // sort controls (available whenever you hold cards) \u2014 single alternating button
+  const nextSort = S.rummySort === "suit" ? "rank" : "suit";
+  const sortBar = v.yourHand.length
+    ? `<button class="btn ghost sm" data-action="sort-toggle">Sort ${nextSort === "suit" ? "\u2660\u2665 suit" : "1\u20139 rank"}</button>`
+    : "";
+
+  // actions
+  const acts = [];
+  if (v.yourTurn && v.turnPhase === "draw") {
+    if (canStock) acts.push(`<button class="btn" data-action="draw-stock">Draw stock</button>`);
+    acts.push(sortBar);
+    acts.push(`<span class="hint">Draw from stock, or tap the discard pile to pick up cards.</span>`);
+  } else if (inPlay) {
+    const n = S.rummySel.size;
+    if (canMeld) {
+      acts.push(`<button class="btn" data-action="meld-selected">Play meld (${n})</button>`);
+      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    } else if (canLay) {
+      acts.push(`<button class="btn" data-action="layoff-selected">Lay off (${n})</button>`);
+      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    } else if (canDiscard) {
+      acts.push(`<button class="btn" data-action="discard-selected">Discard</button>`);
+      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    } else if (n) {
+      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
+    }
+    acts.push(sortBar);
+    if (v.mustMeldCardId != null) acts.push(`<span class="hint">The green card must be melded or laid off before you discard.</span>`);
+    else if (canMeld) acts.push(`<span class="hint">Tap \u201cPlay meld\u201d to put these ${n} cards down.</span>`);
+    else if (canLay) acts.push(`<span class="hint">Tap \u201cLay off\u201d to add these cards to the highlighted meld.</span>`);
+    else if (n >= 3) acts.push(`<span class="hint">These cards don\u2019t form a valid meld.</span>`);
+    else acts.push(`<span class="hint">Select cards to meld or lay off, or select one to discard. Tap a meld to target it.</span>`);
+  } else {
+    acts.push(sortBar);
+  }
+
+  const selfMeta = v.you != null ? `Score ${v.scores[v.you]} \u00b7 play to ${v.target}` : `play to ${v.target}`;
+  const selfTurn = v.yourTurn
+    ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+
+  app.__set = tableShell(v, { pods, center, feltBottom: melds, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
+}
+
+// Round-end summary popup: shown after a round finishes, auto-dismisses after 20s.
+function rummyRoundModal(v) {
+  if (!v.lastRound || v.phase === "gameOver") return "";
+  const lr = v.lastRound;
+  const roundKey = JSON.stringify(v.scores); // unique per round result
+  if (S.rummyRoundAcked === roundKey) return "";
+
+  // Start the 20s auto-dismiss timer once per round popup.
+  if (S.rummyRoundTimer === null) {
+    S.rummyRoundTimer = setTimeout(() => {
+      S.rummyRoundAcked = roundKey;
+      S.rummyRoundTimer = null;
+      render();
+    }, 20000);
+  }
+
+  const rows = v.seats.map((_, i) => {
+    const name = esc(seatName(v, i));
+    const melded = lr.meldedPts[i] ?? 0;
+    const held = lr.heldPts[i] ?? 0;
+    const net = lr.delta[i] ?? 0;
+    const total = v.scores[i];
+    const wentOut = i === lr.outSeat;
+    const mathStr = wentOut
+      ? `${melded > 0 ? `+${melded}` : melded}`
+      : `${melded > 0 ? `+${melded}` : melded} − ${held}`;
+    const netStr = net >= 0 ? `+${net}` : `${net}`;
+    const heldHand = lr.heldCards?.[i] ?? [];
+    const heldCardEls = !wentOut && heldHand.length
+      ? `<div class="rr-held">${heldHand.map((c) => cardHTML(c, { mini: true })).join("")}</div>`
+      : "";
+    return `<div class="rr-row${wentOut ? " rr-out" : ""}">
+      <div class="rr-name">${name}${wentOut ? " <span class='rr-badge'>went out</span>" : ""}</div>
+      <div class="rr-math">${mathStr} = <b>${netStr}</b></div>
+      <div class="rr-total">Total: ${total}</div>
+      ${heldCardEls}
+    </div>`;
+  }).join("");
+
+  return `<div class="modal-back" data-action="ack-round">
+    <div class="modal" data-stop="1">
+      <div class="modalhead"><span>Round over</span></div>
+      <div class="modalbody rr-body">${rows}</div>
+      <div style="padding:8px 14px 4px;text-align:right">
+        <button class="btn" data-action="ack-round">Next hand</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Popup showing all cards in a single meld. Reachable by tapping any meld on the felt.
+function rummyMeldModal(v) {
+  if (S.rummyMeldOpen == null) return "";
+  const m = v.melds.find((x) => x.id === S.rummyMeldOpen);
+  if (!m) { S.rummyMeldOpen = null; return ""; }
+  const inPlay = v.yourTurn && v.turnPhase === "play";
+  const jokerRes = resolveJokers(m);
+  const cards = m.cards.map((c, ci) =>
+    cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined })
+  ).join("");
+  const kind = m.kind === "set" ? "Set" : "Run";
+  const owner = esc(seatName(v, m.owner));
+  const isTargeted = S.rummyLayoff === m.id;
+  const layBtn = inPlay
+    ? (isTargeted
+        ? `<button class="btn ghost sm" data-action="unlayoff-meld">Remove lay-off target</button>`
+        : `<button class="btn" data-action="layoff-meld" data-meldid="${m.id}">Lay off here</button>`)
+    : "";
+  return `<div class="modal-back" data-action="close-meld">
+      <div class="modal" data-stop="1">
+        <div class="modalhead"><span>${kind} — ${owner}</span>
+          <button class="btn sm ghost" data-action="close-meld">Close</button></div>
+        <div class="modalbody">
+          <div class="meld-modal-cards">${cards}</div>
+          ${layBtn ? `<div style="margin-top:10px">${layBtn}</div>` : ""}
+        </div>
+      </div>
+    </div>`;
+}
+
+// Popup listing the whole discard pile. During draw phase, cards are clickable
+// when legal; non-legal deeper cards are greyed out.
+function discardModal(v) {
+  if (!S.discardOpen) return "";
+  const canDraw = v.yourTurn && v.turnPhase === "draw";
+  const lm = canDraw ? v.legalMoves : [];
+  // Deeper-card legal ids (from generateMoves); top card is ALWAYS legal when canDraw.
+  const deepLegalIds = new Set(lm.filter((m) => m.type === "drawDiscard").map((m) => m.cardId));
+  const n = v.discard.length;
+  const cards = n
+    ? v.discard.map((c, i) => {
+        const isTop = i === n - 1;
+        // Top card is always takeable; deeper cards only if engine says so.
+        const legal = canDraw && (isTop || deepLegalIds.has(c.id));
+        const label = isTop ? "top" : i === 0 && n > 1 ? "bottom" : "";
+        const cardEl = legal
+          ? cardHTML(c, { mini: true, playable: true, action: "draw-discard", id: c.id })
+          : cardHTML(c, { mini: true, style: "opacity:.35" });
+        const sweepLabel = !isTop && legal ? `<span class="sweep-label">Takes ${n - i} cards</span>` : "";
+        return `<div class="dcard ${label}">${cardEl}${sweepLabel}</div>`;
+      }).join("")
+    : `<div class="callout" style="font-size:13px">The discard pile is empty.</div>`;
+  const hint = canDraw
+    ? `<p class="sub" style="margin:8px 14px 0">Tap a card to take it and everything above it. Greyed cards can't be taken this turn.</p>`
+    : `<p class="sub" style="margin:8px 14px 0">Oldest first \u2014 top card is highlighted.</p>`;
+  return `<div class="modal-back" data-action="close-discard">
+      <div class="modal" data-stop="1">
+        <div class="modalhead"><span>Discard pile \u2014 ${n} card${n === 1 ? "" : "s"}</span>
+          <button class="btn sm ghost" data-action="close-discard">Close</button></div>
+        <div class="modalbody"><div class="dgrid">${cards}</div></div>
+        ${hint}
+      </div>
+    </div>`;
+}
+
+// ---------- actions ----------
+// ---------- Hearts (Black Lady) ----------
+// Pass direction from the seat offset the server reports (0 = a "hold" hand).
+const passDir = (offset, players) =>
+  offset === 0 ? "hold" : offset === 1 ? "left" : offset === players - 1 ? "right" : "across";
+
+function renderHearts(v) {
+  // Prune stale pass selections (cards that left the hand after the exchange).
+  const handIds = new Set(v.yourHand.map((c) => c.id));
+  for (const id of [...S.heartsPass]) if (!handIds.has(id)) S.heartsPass.delete(id);
+
+  if (v.phase === "gameOver") {
+    const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
+    // Lowest score wins, so the title still points at v.winner (server picks the min).
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
+  }
+
+  const passing = v.phase === "passing";
+  // Hearts cards carry ids; legalMoves give the playable card ids for this turn.
+  const plays = new Set(
+    (v.yourTurn && !passing ? v.legalMoves : []).filter((m) => m.type === "play").map((m) => m.card),
+  );
+
+  // Pods (everyone but you): running total is the big number; cards left as the
+  // stack count; a small note for who's to play / points taken this hand.
+  const pods = v.seats
+    .map((s, i) =>
+      i === v.you
+        ? null
+        : { seat: i, html: podHTML(v, i, {
+            active: i === v.toAct,
+            count: v.handCounts[i],
+            pts: v.scores[i],
+            note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
+          }) },
+    )
+    .filter(Boolean);
+
+  // Center: passing prompt, or the crests + the trick (kept showing the last
+  // completed trick for a beat once it's swept, so each card is visible).
+  let center, heartsTrick;
+  if (passing) {
+    const dir = passDir(v.passOffset, v.players);
+    center = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <span class="crest">passing <b>${dir}</b></span>
+        <span class="crest">hand ${v.handNo + 1}</span>
+      </div>
+      <div class="callout">${
+        v.youPassed ? "Your cards are away \u2014 waiting for the table." : `Choose 3 cards to pass ${dir}.`
+      }</div>`;
+  } else {
+    const broken = `<span class="crest"><span class="suit red">\u2665</span> ${v.heartsBroken ? "broken" : "not broken"}</span>`;
+    const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${broken}<span class="crest">hand ${v.handNo + 1}</span></div>`;
+    const showLast = v.currentTrick.length === 0 && v.lastTrick;
+    const winSeat = showLast ? v.lastTrick.winner : null;
+    if (v.currentTrick.length) {
+      const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+      heartsTrick = trickHTML(plays, v.you, v.seats.length);
+    } else if (showLast) {
+      const plays = v.lastTrick.cards.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+      heartsTrick = trickHTML(plays, v.you, v.seats.length, { winSeat, faded: true });
+    }
+    const note = showLast
+      ? `<div class="callout" style="font-size:13px">Trick to ${esc(seatName(v, v.lastTrick.winner))}.</div>`
+      : !v.currentTrick.length ? `<div class="callout">Lead a card to open the trick.</div>` : "";
+    center = `${crests}${note}`;
+  }
+
+  // Hand: in passing, selected cards lift into a selrow above the fan (Rummy-style).
+  let hand;
+  if (passing && !v.youPassed) {
+    const selCards = v.yourHand.filter((c) => S.heartsPass.has(c.id));
+    const fanCards = v.yourHand.filter((c) => !S.heartsPass.has(c.id));
+    const selRow = selCards.length
+      ? `<div class="selrow">${selCards.map((c) => cardHTML(c, { action: "toggle-pass", id: c.id, sel: true })).join("")}</div>`
+      : "";
+    const full = S.heartsPass.size >= 3;
+    const fan = fanHand(fanCards, (c) => ({ action: full ? "" : "toggle-pass", id: c.id, playable: !full, dim: full }));
+    hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
+  } else {
+    hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => {
+      if (passing) return { id: c.id, dim: true };
+      const can = plays.has(c.id);
+      return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
+    })}</div>`;
+  }
+
+  // Actions.
+  const acts = [];
+  if (passing && !v.youPassed) {
+    const n = S.heartsPass.size;
+    acts.push(`<button class="btn" data-action="pass-3" ${v.yourTurn && n === 3 ? "" : "disabled"}>Pass 3${n ? ` (${n}/3)` : ""}</button>`);
+    acts.push(`<span class="hint">${n === 3 ? "Tap a selected card to swap it out." : v.yourTurn ? `Select ${3 - n} more card${3 - n === 1 ? "" : "s"} to pass.` : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
+  } else if (passing) {
+    acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
+  } else if (v.yourTurn && plays.size) {
+    acts.push(`<span class="hint">Tap a glowing card to play.</span>`);
+  }
+
+  const you = v.you;
+  const selfMeta = you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`;
+  const selfTurn = v.yourTurn
+    ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
+
+  app.__set = tableShell(v, { pods, center, trick: heartsTrick, hand, actions: acts.join(""), selfMeta, selfTurn });
+}
+
+// ---------- Pegs & Jokers ----------
+const pjCardLabel = (c) => (!c ? "" : c.joker ? "Joker" : `${rankLabel(c.rank)}${SUIT[c.suit]}`);
+
+function pegXY(board, peg) {
+  if (peg.loc.z === "ring") return board.ring[peg.loc.r];
+  if (peg.loc.z === "castle") return board.castles[peg.owner][peg.loc.i];
+  return board.starts[peg.owner][peg.loc.i];
+}
+
+// A painted golf tee standing in a hole: contact shadow, tapered shaft, a
+// cupped head with paint sheen and a gloss highlight. Color drives gradient
+// stops via CSS vars so one gradient serves every seat color.
+function pjTee(x, y, color, glow) {
+  const top = y - 3.6, hr = 2.15;
+  const f = (n) => n.toFixed(2);
+  return `<g style="--tc:${color};--tc-hi:${shade(color, 48)};--tc-sh:${shade(color, -42)}" ${glow ? 'filter="url(#pjglow)"' : ""}>
+    <ellipse cx="${f(x + 0.5)}" cy="${f(y + 0.6)}" rx="2.4" ry="0.85" fill="#000" opacity="0.34"/>
+    <path d="M ${f(x - 0.62)},${f(top)} L ${f(x + 0.62)},${f(top)} L ${f(x + 0.2)},${f(y + 0.2)} L ${f(x - 0.2)},${f(y + 0.2)} Z" fill="var(--tc-sh)"/>
+    <path d="M ${f(x - 0.62)},${f(top)} L ${f(x - 0.05)},${f(top)} L ${f(x - 0.08)},${f(y + 0.2)} L ${f(x - 0.2)},${f(y + 0.2)} Z" fill="var(--tc)" opacity="0.55"/>
+    <ellipse cx="${f(x)}" cy="${f(top)}" rx="${hr}" ry="${f(hr * 0.74)}" fill="url(#pjhead)" stroke="${glow ? "#fff" : "#180f08"}" stroke-width="${glow ? 0.65 : 0.32}"/>
+    <ellipse cx="${f(x)}" cy="${f(top - 0.22)}" rx="${f(hr * 0.6)}" ry="${f(hr * 0.36)}" fill="#000" opacity="0.18"/>
+    <ellipse cx="${f(x - 0.55)}" cy="${f(top - 0.5)}" rx="0.85" ry="0.5" fill="#fff" opacity="0.62"/>
+  </g>`;
+}
+
+// The dark-wood board: a grained, beveled rectangular frame assembled from
+// trapezoidal panels (slanted seams), a recessed table showing through the
+// hollow, wooden castle arms, drilled holes with depth, and golf-tee pegs.
+function pjBoardSVG(v, glow) {
+  const b = v.board;
+  const W = b.viewW, H = b.viewH, C = b.center, P = b.players;
+  const f = (n) => n.toFixed(2);
+  const hole = (h) => `<g>
+      <circle cx="${f(h.x)}" cy="${f(h.y)}" r="1.75" fill="url(#pjhole)"/>
+      <circle cx="${f(h.x - 0.18)}" cy="${f(h.y - 0.18)}" r="1.75" fill="none" stroke="var(--wood-hi)" stroke-width="0.22" opacity="0.35"/>
+    </g>`;
+  let s = `<svg class="pjsvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <linearGradient id="pjwood" x1="0" y1="0" x2="0.7" y2="1">
+        <stop offset="0%" stop-color="var(--wood-3)"/><stop offset="45%" stop-color="var(--wood-2)"/><stop offset="100%" stop-color="var(--wood-1)"/>
+      </linearGradient>
+      <radialGradient id="pjtable" cx="50%" cy="46%" r="65%">
+        <stop offset="0%" stop-color="#3c2611"/><stop offset="72%" stop-color="#241608"/><stop offset="100%" stop-color="var(--wood-0)"/>
+      </radialGradient>
+      <radialGradient id="pjhole" cx="42%" cy="38%" r="62%">
+        <stop offset="0%" stop-color="#070402"/><stop offset="65%" stop-color="#130c06"/><stop offset="100%" stop-color="#2a1a0d"/>
+      </radialGradient>
+      <linearGradient id="pjhead" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--tc-hi)"/><stop offset="52%" stop-color="var(--tc)"/><stop offset="100%" stop-color="var(--tc-sh)"/>
+      </linearGradient>
+      <linearGradient id="pjsheen" x1="0" y1="0" x2="0.4" y2="1">
+        <stop offset="0%" stop-color="#fff" stop-opacity="0.10"/><stop offset="38%" stop-color="#fff" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.22"/>
+      </linearGradient>
+      <filter id="pjgrain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.018 0.46" numOctaves="2" seed="11" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0"/>
+      </filter>
+      <filter id="pjgrainv" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.4 0.02" numOctaves="2" seed="5" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.42 0"/>
+      </filter>
+      <filter id="pjglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="url(#pjwood)"/>
+    <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="#000" filter="url(#pjgrain)" opacity="0.5" style="mix-blend-mode:multiply"/>
+    <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="url(#pjsheen)"/>
+    <rect x="0.5" y="0.5" width="${f(W - 1)}" height="${f(H - 1)}" rx="4.6" fill="none" stroke="var(--wood-edge)" stroke-width="0.7"/>`;
+  // slanted panel seams: a beveled groove crossing the wood band toward centre
+  for (const sp of b.seams) {
+    const dx = C.x - sp.x, dy = C.y - sp.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+    const ox = sp.x - ux * 8, oy = sp.y - uy * 8, ix = sp.x + ux * 5, iy = sp.y + uy * 5;
+    s += `<line x1="${f(ox)}" y1="${f(oy)}" x2="${f(ix)}" y2="${f(iy)}" stroke="#0b0805" stroke-width="0.8" opacity="0.6"/>`;
+    s += `<line x1="${f(ox + 0.55)}" y1="${f(oy)}" x2="${f(ix + 0.55)}" y2="${f(iy)}" stroke="var(--wood-hi)" stroke-width="0.3" opacity="0.32"/>`;
+  }
+  // recessed table: a dark rim (shadow of the raised frame) then the grained surface
+  const ho = b.hollow;
+  s += `<rect x="${f(ho.x - 1)}" y="${f(ho.y - 1)}" width="${f(ho.w + 2)}" height="${f(ho.h + 2)}" rx="3.6" fill="#000" opacity="0.55"/>`;
+  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="url(#pjtable)"/>`;
+  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="#000" filter="url(#pjgrainv)" opacity="0.4" style="mix-blend-mode:multiply"/>`;
+  s += `<rect x="${f(ho.x + 0.4)}" y="${f(ho.y + 0.4)}" width="${f(ho.w - 0.8)}" height="${f(ho.h - 0.8)}" rx="2.6" fill="none" stroke="#000" stroke-width="0.5" opacity="0.4"/>`;
+  // castle arms: a wooden bar from each rail entry inward to the last heaven hole
+  for (let p = 0; p < P; p++) {
+    const cm = b.ring[b.castleEntries[p]], last = b.castles[p][b.castles[p].length - 1];
+    s += `<line x1="${f(cm.x)}" y1="${f(cm.y + 0.35)}" x2="${f(last.x)}" y2="${f(last.y + 0.35)}" stroke="#000" stroke-width="4.8" stroke-linecap="round" opacity="0.3"/>`;
+    s += `<line x1="${f(cm.x)}" y1="${f(cm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="url(#pjwood)" stroke-width="4.4" stroke-linecap="round"/>`;
+    s += `<line x1="${f(cm.x)}" y1="${f(cm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="var(--wood-hi)" stroke-width="0.5" stroke-linecap="round" opacity="0.25" transform="translate(-0.4,-0.5)"/>`;
+  }
+  // centre hub
+  s += `<circle cx="${C.x}" cy="${C.y}" r="3.6" fill="url(#pjwood)" stroke="var(--wood-edge)" stroke-width="0.4"/>`;
+  s += `<circle cx="${C.x}" cy="${C.y}" r="3.6" fill="#000" filter="url(#pjgrain)" opacity="0.4" style="mix-blend-mode:multiply"/>`;
+  // holes: ring, then each player's castle + start
+  for (const h of b.ring) s += hole(h);
+  for (let p = 0; p < P; p++) { for (const h of b.castles[p]) s += hole(h); for (const h of b.starts[p]) s += hole(h); }
+  // exit collars (colored ring marking where each player joins the track)
+  for (let p = 0; p < P; p++) { const h = b.ring[b.exits[p]]; s += `<circle cx="${f(h.x)}" cy="${f(h.y)}" r="2.5" fill="none" stroke="${PJ_PEG[p]}" stroke-width="0.55" opacity="0.9"/>`; }
+  // pegs as golf tees
+  for (const peg of v.pegs) { const h = pegXY(b, peg); s += pjTee(h.x, h.y, PJ_PEG[peg.owner], glow.has(peg.owner + ":" + peg.idx)); }
+  s += `</svg>`;
+  return s;
+}
+
+function pjMoveLabel(v, m) {
+  const tag = (ref) => `peg ${ref.idx + 1}${ref.owner !== v.you ? " (partner)" : ""}`;
+  const cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+  if (m.type === "move") return `${cap(tag(m.marble))} \u2192 ahead ${m.steps}`;
+  if (m.type === "comeOut") return `Bring ${tag(m.marble)} out`;
+  if (m.type === "split7") return `Split 7: ${tag(m.a.marble)} +${m.a.steps}, ${tag(m.b.marble)} +${m.b.steps}`;
+  if (m.type === "joker") {
+    const victim = v.pegs.find((p) => p.loc.z === "ring" && p.loc.r === m.target);
+    return `Joker: send ${victim ? esc(seatName(v, victim.owner)) : "a rival"} home`;
+  }
+  return `Discard ${pjCardLabel(v.yourHand.find((c) => c.id === m.cardId))}`;
+}
+
+function renderPJ(v) {
+  if (v.phase === "gameOver") {
+    const perTeam = (v.players / 2) * v.marbles;
+    const tally = (t) => v.homeCounts.reduce((a, c, p) => a + (p % 2 === t ? c : 0), 0);
+    const seatsOf = (t) => v.seats.map((_, i) => i).filter((i) => i % 2 === t).map((i) => i + 1).join(" & ");
+    const rows = [
+      { name: `Team A \u00b7 seats ${seatsOf(0)}`, score: `${tally(0)}/${perTeam}`, win: v.winner === 0, you: v.you != null && v.you % 2 === 0 },
+      { name: `Team B \u00b7 seats ${seatsOf(1)}`, score: `${tally(1)}/${perTeam}`, win: v.winner === 1, you: v.you != null && v.you % 2 === 1 },
+    ];
+    return renderGameOver(v, v.winner == null ? "Game over" : `Team ${v.winner === 0 ? "A" : "B"} wins!`, scoreList(rows));
+  }
+
+  const yours = v.yourTurn;
+  const allForfeit = yours && v.legalMoves.length > 0 && v.legalMoves.every((m) => m.type === "forfeit");
+  // Keep a stale card selection from sticking if it's no longer in hand.
+  if (S.pjCard != null && !v.yourHand.some((c) => c.id === S.pjCard)) S.pjCard = null;
+  const candidates = !yours ? [] : allForfeit ? v.legalMoves : S.pjCard == null ? [] : v.legalMoves.filter((m) => m.cardId === S.pjCard);
+  S.pjMoves = candidates;
+
+  const glow = new Set();
+  for (const m of candidates) {
+    if (m.type === "split7") { glow.add(m.a.marble.owner + ":" + m.a.marble.idx); glow.add(m.b.marble.owner + ":" + m.b.marble.idx); }
+    else if (m.marble) glow.add(m.marble.owner + ":" + m.marble.idx);
+  }
+
+  // top rail: a strip of seats with peg color, name, and pegs-home count
+  const strip = v.seats
+    .map((s, i) => `<div class="pjseat ${i === v.toAct ? "active" : ""} ${i === v.you ? "me" : ""}">
+        <span class="dot" style="background:${PJ_PEG[i]}"></span>
+        <span class="nm">${esc(seatName(v, i))}</span><span class="hm">${v.homeCounts[i]}/${v.marbles}</span>
+      </div>`)
+    .join("");
+  const pods = [`<div class="pjstrip">${strip}</div>`];
+
+  // Authentic scale: show the whole board, as large as the viewport allows.
+  const maxW = `min(94vw, ${((v.board.viewW / v.board.viewH) * 90).toFixed(1)}vh)`;
+  const center = `<div class="pjwrap" style="max-width:${maxW}">${pjBoardSVG(v, glow)}</div>`;
+
+  // hand: tap a usable card to reveal its moves
+  const usable = new Set(v.legalMoves.filter((m) => "cardId" in m).map((m) => m.cardId));
+  const hand = v.yourHand
+    .map((c) => `<span class="pjcardslot" ${yours ? `data-action="pj-pick-card" data-cardid="${c.id}"` : ""}>${cardHTML(c, { playable: yours && usable.has(c.id), dim: yours && !usable.has(c.id), sel: S.pjCard === c.id })}</span>`)
+    .join("");
+
+  const acts = [];
+  if (yours && allForfeit) {
+    acts.push(`<span class="hint">No legal move \u2014 discard a card to pass.</span>`);
+    candidates.forEach((m, i) => acts.push(`<button class="btn ghost sm" data-action="pj-move" data-mi="${i}">Discard ${pjCardLabel(v.yourHand.find((c) => c.id === m.cardId))}</button>`));
+  } else if (yours && S.pjCard == null) {
+    acts.push(`<span class="hint">Tap a glowing card to see its moves.</span>`);
+  } else if (yours && candidates.length === 0) {
+    acts.push(`<span class="hint">No move with that card \u2014 pick another.</span>`);
+  } else if (yours) {
+    candidates.forEach((m, i) => acts.push(`<button class="btn sm" data-action="pj-move" data-mi="${i}">${pjMoveLabel(v, m)}</button>`));
+  }
+
+  const perTeam = (v.players / 2) * v.marbles;
+  const homeMine = v.you != null ? v.homeCounts.reduce((a, c, p) => a + (p % 2 === v.you % 2 ? c : 0), 0) : 0;
+  const selfMeta = v.you != null ? `Team ${v.you % 2 === 0 ? "A" : "B"} \u00b7 ${homeMine}/${perTeam} home \u00b7 first team all-home wins` : `first team all-home wins`;
+  const playingPartner = yours && v.playingFor.length && v.playingFor[0] !== v.you;
+  const selfTurn = yours
+    ? `<span class="turnflag">Your turn${playingPartner ? " \u2014 playing teammate" : ""}</span>`
+    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+
+  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+}
+
+function doConnect() {
+  const name = document.getElementById("f-name").value.trim();
+  const game = document.getElementById("f-game").value;
+  let room = document.getElementById("f-room").value.trim();
+  if (!name) return toast("Enter a name first.");
+  if (!GAMES[game]) return toast("Pick a game.");
+  S.name = name;
+  S.party = game;
+  localStorage.setItem("cg_name", name);
+  if (!room) room = Math.random().toString(36).slice(2, 7);
+  S.room = room;
+  history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
+  connect();
+}
+
+function copyLink() {
+  const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
+  navigator.clipboard?.writeText(link).then(() => toast("Link copied."), () => toast(link));
+}
+
+function doLeave() {
+  S.intentionalClose = true;
+  if (!S.offline) send({ t: "leave" });
+  try { S.ws?.close(); } catch {}
+  S.view = null;
+  S.connected = false;
+  S.party = null;
+  S.offline = false;
+  S.hotseat = false;
+  S.hotseats = {};
+  S.awaitingPass = false;
+  S.revealedSeat = null;
+  history.replaceState(null, "", "/");
+  renderStart();
+}
+
+function doStart() {
+  S.revealedSeat = 0;
+  S.awaitingPass = false;
+  const v = S.view;
+  const hasHotseats = Object.keys(S.hotseats).length > 0;
+  // If the only human is the host (no remote humans) OR the host has added
+  // pass-and-play seats, drop the server and run locally.
+  const nonHostHumans = v.seats.filter((s, i) => s.kind === "human" && i !== v.you).length;
+  if (nonHostHumans === 0 || hasHotseats) {
+    S.intentionalClose = true;
+    try { S.ws?.close(); } catch {}
+    S.connected = false;
+    S.view = null;
+    const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party]?.target;
+    connectLocal(v.seats, { target, marbles: v.marbles, botDifficulty: v.botDifficulty });
+    return;
+  }
+  if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: v.players, marbles: v.marbles } });
+  const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
+  send({ t: "start", config: { players: v.players, target, botDifficulty: v.botDifficulty } });
+}
+
+function toggleSel(id) {
+  if (S.rummySel.has(id)) S.rummySel.delete(id);
+  else S.rummySel.add(id);
+  render();
+}
+function doMeld() {
+  const cards = [...S.rummySel];
+  if (cards.length < 3) return toast("Select at least 3 cards to meld.");
+  send({ t: "move", move: { type: "meld", seat: S.view.you, cards } });
+  S.rummySel.clear();
+}
+function doLayoff() {
+  if (S.rummyLayoff === null) return toast("Tap a meld and choose “Lay off here”.");
+  const cards = [...S.rummySel];
+  if (!cards.length) return toast("Select cards to lay off.");
+  send({ t: "move", move: { type: "layoff", seat: S.view.you, meldId: S.rummyLayoff, cards } });
+  S.rummySel.clear();
+  S.rummyLayoff = null;
+}
+function doDiscard() {
+  if (S.rummySel.size !== 1) return toast("Select exactly one card to discard.");
+  const cardId = [...S.rummySel][0];
+  send({ t: "move", move: { type: "discard", seat: S.view.you, cardId } });
+  S.rummySel.clear();
+}
+
+// ---------- delegated events ----------
+app.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-action]");
+  if (!t) return;
+  // clicks inside the modal shouldn't fall through to the backdrop's close
+  if (t.classList.contains("modal-back") && e.target.closest("[data-stop]")) return;
+  const v = S.view;
+  switch (t.dataset.action) {
+    case "open-discard": S.discardOpen = true; return render();
+    case "close-discard": S.discardOpen = false; return render();
+    case "sort-toggle": { const m = S.rummySort === "suit" ? "rank" : "suit"; S.rummySort = m; return rummySort(v.yourHand, m); }
+    case "pick-game": S.pickGame = t.dataset.game; return renderStart();
+    case "set-theme": {
+      S.theme = t.dataset.t;
+      localStorage.setItem("cg_theme", S.theme);
+      applyTheme(S.theme);
+      return renderStart();
+    }
+    case "toggle-log": S.showLog = !S.showLog; return render();
+    case "log-tab": S.logTab = t.dataset.tab; return render();
+    case "expand-log": { const eid = +t.dataset.entryid; S.logExpandedId = S.logExpandedId === eid ? null : eid; return render(); }
+    case "connect": return doConnect();
+    case "copy-link": return copyLink();
+    case "leave": return doLeave();
+    case "sit": return send({ t: "sit", seat: +t.dataset.seat });
+    case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
+    case "set-bot-difficulty": {
+      const seat = +t.dataset.seat;
+      const diff = +t.value;
+      const cur = v.botDifficulty ? [...v.botDifficulty] : Array(v.players).fill(2);
+      cur[seat] = diff;
+      return send({ t: "setConfig", config: { players: v.players, target: v.target, botDifficulty: cur } });
+    }
+    case "removebot": return send({ t: "removeBot", seat: +t.dataset.seat });
+    case "addhuman": {
+      const seat = +t.dataset.seat;
+      const name = (prompt("Player name?", `Player ${seat + 1}`) || "").trim();
+      if (name) send({ t: "addHuman", seat, name });
+      return;
+    }
+    case "clearseat": return send({ t: "clearSeat", seat: +t.dataset.seat });
+    case "reserve-hotseat": {
+      const seat = +t.dataset.seat;
+      const name = (prompt("Player name?", `Player ${seat + 1}`) || "").trim();
+      if (!name) return;
+      S.hotseats[seat] = name;
+      return render();
+    }
+    case "clear-hotseat": {
+      delete S.hotseats[+t.dataset.seat];
+      return render();
+    }
+    case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
+    case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
+    case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
+    case "setcount": {
+      const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
+      const config = { players: +t.dataset.count, target };
+      if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
+      return send({ t: "setConfig", config });
+    }
+    case "start": return doStart();
+    case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
+    case "move-bid": return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
+    case "hlj-bid-confirm": {
+      const amt = +(document.getElementById("hlj-bid-slider")?.value ?? 2);
+      return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
+    }
+    case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
+    case "move-trump": return send({ t: "move", move: { type: "selectTrump", seat: v.you, suit: t.dataset.suit } });
+    case "signal": return send({ t: "aux", payload: t.dataset.level });
+    case "play-card": {
+      const c = v.yourHand.find((x) => cardKey(x) === t.dataset.key);
+      if (c) send({ t: "move", move: { type: "play", seat: v.you, card: c } });
+      return;
+    }
+    case "draw-stock": return send({ t: "move", move: { type: "drawStock", seat: v.you } });
+    case "draw-discard": S.discardOpen = false; return send({ t: "move", move: { type: "drawDiscard", seat: v.you, cardId: +t.dataset.cardid } });
+    case "reveal-joker": {
+      t.classList.add("joker-pulse");
+      setTimeout(() => t.classList.remove("joker-pulse"), 700);
+      return;
+    }
+    case "toggle-card": return toggleSel(+t.dataset.cardid);
+    case "ack-round": {
+      const lr = S.view && S.view.lastRound;
+      if (lr) S.rummyRoundAcked = JSON.stringify(S.view.scores);
+      if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
+      return render();
+    }
+    case "open-meld": S.rummyMeldOpen = +t.dataset.meldid; return render();
+    case "close-meld": S.rummyMeldOpen = null; return render();
+    case "layoff-meld": S.rummyLayoff = +t.dataset.meldid; S.rummyMeldOpen = null; return render();
+    case "unlayoff-meld": S.rummyLayoff = null; S.rummyMeldOpen = null; return render();
+
+    case "meld-selected": return doMeld();
+    case "layoff-selected": return doLayoff();
+    case "discard-selected": return doDiscard();
+    case "clear-sel": S.rummySel.clear(); S.rummyLayoff = null; return render();
+    case "toggle-pass": {
+      const id = +t.dataset.cardid;
+      if (S.heartsPass.has(id)) S.heartsPass.delete(id);
+      else if (S.heartsPass.size >= 3) return toast("You pass exactly 3 cards.");
+      else S.heartsPass.add(id);
+      return render();
+    }
+    case "pass-3": {
+      if (S.heartsPass.size !== 3) return toast("Select exactly 3 cards to pass.");
+      send({ t: "move", move: { type: "pass", seat: v.you, cards: [...S.heartsPass] } });
+      S.heartsPass.clear();
+      return;
+    }
+    case "clear-pass": S.heartsPass.clear(); return render();
+    case "play-hearts": return send({ t: "move", move: { type: "play", seat: v.you, card: +t.dataset.cardid } });
+    case "pj-setplayers": return send({ t: "setConfig", config: { players: +t.dataset.count, marbles: v.marbles } });
+    case "pj-setmarbles": return send({ t: "setConfig", config: { players: v.players, marbles: +t.dataset.m } });
+    case "pj-pick-card": S.pjCard = S.pjCard === +t.dataset.cardid ? null : +t.dataset.cardid; return render();
+    case "pj-move": {
+      const m = S.pjMoves[+t.dataset.mi];
+      if (m) send({ t: "move", move: m });
+      S.pjCard = null;
+      return;
+    }
+  }
+});
+
+// ---------- drag to reorder your hand (Rummy) ----------
+// We track the drop target during the drag, then reorder S.rummyOrder once on
+// drop — re-rendering mid-drag would cancel the native drag in some browsers.
+function handCard(el) {
+  const c = el && el.closest(".hand [data-cardid]");
+  return c ? +c.dataset.cardid : null;
+}
+app.addEventListener("dragstart", (e) => {
+  const id = handCard(e.target);
+  if (id == null) return;
+  S.dragId = id;
+  S.dropBeforeId = null;
+  e.dataTransfer.effectAllowed = "move";
+  e.target.closest("[data-cardid]")?.classList.add("dragging");
+});
+app.addEventListener("dragover", (e) => {
+  if (S.dragId == null) return;
+  e.preventDefault();
+  const el = e.target.closest && e.target.closest(".hand [data-cardid]");
+  if (!el) return;
+  const over = +el.dataset.cardid;
+  const r = el.getBoundingClientRect();
+  const after = e.clientX > r.left + r.width / 2; // dropped on the right half → after this card
+  const ids = S.rummyOrder.filter((x) => x !== S.dragId);
+  const pos = ids.indexOf(over) + (after ? 1 : 0);
+  S.dropBeforeId = pos >= ids.length ? null : ids[pos];
+});
+function endDrag(e) {
+  if (S.dragId == null) return;
+  if (e) e.preventDefault();
+  const ids = S.rummyOrder.filter((x) => x !== S.dragId);
+  const idx = S.dropBeforeId == null ? ids.length : ids.indexOf(S.dropBeforeId);
+  ids.splice(idx < 0 ? ids.length : idx, 0, S.dragId);
+  S.rummyOrder = ids;
+  S.dragId = null;
+  S.dropBeforeId = null;
+  render();
+}
+app.addEventListener("drop", endDrag);
+app.addEventListener("dragend", endDrag);
+
+// keep the host's "play to" value in the shared lobby config (so re-renders don't lose it)
+app.addEventListener("change", (e) => {
+  if (e.target.id === "f-target" && S.view && S.view.phase === "lobby") {
+    const target = parseInt(e.target.value, 10);
+    if (target > 0) {
+      const cfg = { players: S.view.players, target };
+      if (S.view.botDifficulty) cfg.botDifficulty = S.view.botDifficulty;
+      send({ t: "setConfig", config: cfg });
+    }
+  }
+});
+
+// ---------- init ----------
+function init() {
+  S.pid = localStorage.getItem("cg_pid");
+  if (!S.pid) {
+    S.pid = (crypto.randomUUID && crypto.randomUUID()) || `p_${Math.random().toString(36).slice(2)}${Date.now()}`;
+    localStorage.setItem("cg_pid", S.pid);
+  }
+  S.name = localStorage.getItem("cg_name") || "";
+  S.theme = localStorage.getItem("cg_theme") || "midnight";
+  applyTheme(S.theme);
+  const q = new URLSearchParams(location.search);
+  const game = q.get("game");
+  const room = q.get("room");
+  if (game && GAMES[game]) { S.party = game; S.pickGame = game; }
+  if (room) S.room = room;
+  if (S.party && S.room && S.name) connect();
+  else { S.party = S.party || null; renderStart(); }
+}
+init();
