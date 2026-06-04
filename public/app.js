@@ -75,6 +75,7 @@ const S = {
   pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
   showLog: false,
   logTab: "log", // "log" | "melds"
+  logExpandedId: null, // id of log entry whose extraCards are expanded
 };
 
 // Pegs & Jokers peg colors, one per seat. Even seats are team A, odd are team B.
@@ -266,7 +267,17 @@ function logEntryHTML(v, e) {
   const body = e.seat == null ? `<i>${esc(e.msg)}</i>` : esc(e.msg);
   const suit = e.suit ? ` <span class="lc ${RED.has(e.suit) ? "red" : ""}">${SUIT[e.suit]}</span>` : "";
   const cards = (e.cards || []).map((c) => cardText(c)).join(" ");
-  const tail = e.tail ? ` ${esc(e.tail)}` : "";
+  let tail = "";
+  if (e.tail && e.extraCards && e.extraCards.length) {
+    const expanded = S.logExpandedId === e.id;
+    tail = ` <button class="log-expand-btn${expanded ? " active" : ""}" data-action="expand-log" data-entryid="${e.id}">${esc(e.tail)}</button>`;
+    if (expanded) {
+      const miniCards = [e.cards?.[0], ...e.extraCards].filter(Boolean).map((c) => cardHTML(c, { mini: true })).join("");
+      tail += `<div class="log-extra-cards">${miniCards}</div>`;
+    }
+  } else if (e.tail) {
+    tail = ` ${esc(e.tail)}`;
+  }
   return `${who}${body}${suit}${cards ? " " + cards : ""}${tail}`;
 }
 
@@ -1328,22 +1339,31 @@ function renderHearts(v) {
     center = `${crests}${note}`;
   }
 
-  // Hand: in passing, tap to (de)select up to 3; in play, tap a glowing legal card.
-  const hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => {
-    if (passing) {
-      return { action: v.youPassed ? "" : "toggle-pass", id: c.id, sel: S.heartsPass.has(c.id), playable: !v.youPassed, dim: v.youPassed };
-    }
-    const can = plays.has(c.id);
-    return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
-  })}</div>`;
+  // Hand: in passing, selected cards lift into a selrow above the fan (Rummy-style).
+  let hand;
+  if (passing && !v.youPassed) {
+    const selCards = v.yourHand.filter((c) => S.heartsPass.has(c.id));
+    const fanCards = v.yourHand.filter((c) => !S.heartsPass.has(c.id));
+    const selRow = selCards.length
+      ? `<div class="selrow">${selCards.map((c) => cardHTML(c, { action: "toggle-pass", id: c.id, sel: true })).join("")}</div>`
+      : "";
+    const full = S.heartsPass.size >= 3;
+    const fan = fanHand(fanCards, (c) => ({ action: full ? "" : "toggle-pass", id: c.id, playable: !full, dim: full }));
+    hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
+  } else {
+    hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => {
+      if (passing) return { id: c.id, dim: true };
+      const can = plays.has(c.id);
+      return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
+    })}</div>`;
+  }
 
   // Actions.
   const acts = [];
   if (passing && !v.youPassed) {
     const n = S.heartsPass.size;
-    acts.push(`<button class="btn" data-action="pass-3" ${v.yourTurn && n === 3 ? "" : "disabled"}>Pass 3${n ? ` (${n})` : ""}</button>`);
-    if (n) acts.push(`<button class="btn ghost sm" data-action="clear-pass">Clear</button>`);
-    acts.push(`<span class="hint">${v.yourTurn ? "Select exactly 3 cards to pass." : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
+    acts.push(`<button class="btn" data-action="pass-3" ${v.yourTurn && n === 3 ? "" : "disabled"}>Pass 3${n ? ` (${n}/3)` : ""}</button>`);
+    acts.push(`<span class="hint">${n === 3 ? "Tap a selected card to swap it out." : v.yourTurn ? `Select ${3 - n} more card${3 - n === 1 ? "" : "s"} to pass.` : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
   } else if (passing) {
     acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
   } else if (v.yourTurn && plays.size) {
@@ -1632,6 +1652,7 @@ app.addEventListener("click", (e) => {
     case "toggle-offline": S.offline = !!t.checked; return renderStart();
     case "toggle-log": S.showLog = !S.showLog; return render();
     case "log-tab": S.logTab = t.dataset.tab; return render();
+    case "expand-log": { const eid = +t.dataset.entryid; S.logExpandedId = S.logExpandedId === eid ? null : eid; return render(); }
     case "connect": return doConnect();
     case "copy-link": return copyLink();
     case "leave": return doLeave();
