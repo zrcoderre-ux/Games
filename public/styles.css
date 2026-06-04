@@ -39,6 +39,130 @@
   --noise:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
 }
 
+/* ============================================================
+   VELVET theme — deep plum with rose-gold
+   ============================================================ */
+[data-theme="velvet"]:root,[data-theme="velvet"] :root,
+:root:has([data-theme="velvet"]){ --is-velvet:1 }
+[data-theme="velvet"]{
+  --wood-0:#0d0610;--wood-1:#170c20;--wood-2:#221430;--wood-3:#321c48;
+  --wood-edge:#4a2460;--wood-hi:#6e3c88;
+  --felt-0:#2a1030;--felt-1:#3a1845;--felt-2:#4e245c;
+  --cream:#f5e8f8;--cream-2:#e8d0f0;--parchment:#faf2fe;
+  --ink:#f0e6fc;--ink-soft:rgba(228,198,250,.72);--ink-dim:rgba(195,155,225,.48);
+  --brass:#c07890;--brass-hi:#e8a0b8;--amber:#c87090;
+  --ember:#d04060;
+  --suit-red:#d02060;--suit-blk:#1a0c28;
+  --ok:#9060c0;--warn:#c890a0;--bad:#c03050;
+}
+[data-theme="velvet"] body{
+  background:radial-gradient(140% 80% at 50% -5%,#2a1040 0%,var(--wood-1) 40%,var(--wood-0) 100%);
+}
+[data-theme="velvet"] .btn{
+  background:linear-gradient(178deg,var(--brass-hi),var(--brass) 60%,#904060);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #601840,0 9px 16px -6px rgba(0,0,0,.7);
+}
+[data-theme="velvet"] .btn:active{box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 2px 6px rgba(0,0,0,.4),0 1px 0 #601840,0 4px 8px -5px rgba(0,0,0,.6)}
+[data-theme="velvet"] .btn.sm{box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 3px 0 #601840,0 6px 10px -6px rgba(0,0,0,.5)}
+[data-theme="velvet"] .brand .glyph,[data-theme="velvet"] .hero .logo{background:linear-gradient(160deg,var(--brass-hi),var(--brass) 55%,#804060)}
+[data-theme="velvet"] .seg button.on{background:linear-gradient(178deg,var(--brass-hi),var(--brass));color:#1a0828}
+[data-theme="velvet"] .panel,.panel.cream{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(0,0,0,.08)),linear-gradient(170deg,#2a1440,#180a28);border-color:rgba(220,160,240,.12)}
+[data-theme="velvet"] .gamecard{background:linear-gradient(170deg,#281240,#180a28);border-color:rgba(220,160,240,.12)}
+[data-theme="velvet"] .roomtag{border-color:rgba(224,150,200,.22)}
+[data-theme="velvet"] .field{border-color:rgba(224,150,200,.28)}
+[data-theme="velvet"] .field:focus{border-color:var(--brass);box-shadow:inset 0 2px 6px rgba(0,0,0,.35),0 0 0 3px rgba(224,150,200,.25)}
+[data-theme="velvet"] .seat.me{border-color:rgba(224,150,200,.55);background:rgba(224,150,200,.1)}
+[data-theme="velvet"] .btn.ghost{background:linear-gradient(178deg,#2a1440,#180a28);box-shadow:inset 0 1px 0 rgba(220,180,255,.14),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #0d0610,0 9px 16px -8px rgba(0,0,0,.7)}
+
+/* ============================================================
+   BAIZE theme — racing green with copper
+   ============================================================ */
+[data-theme="baize"]{
+  --wood-0:#060c08;--wood-1:#0c1810;--wood-2:#142418;--wood-3:#1e3424;
+  --wood-edge:#2c4a32;--wood-hi:#426850;
+  --felt-0:#0e2e14;--felt-1:#164020;--felt-2:#1e542a;
+  --cream:#f0ece0;--cream-2:#ddd8c4;--parchment:#f8f4ea;
+  --ink:#e8f0e4;--ink-soft:rgba(180,210,170,.62);--ink-dim:rgba(130,170,120,.38);
+  --brass:#b87840;--brass-hi:#dca060;--amber:#c08030;
+  --ember:#c04830;
+  --suit-red:#c43028;--suit-blk:#0e1c10;
+  --ok:#48a860;--warn:#c8960e;--bad:#b04030;
+}
+[data-theme="baize"] body{
+  background:radial-gradient(140% 80% at 50% -5%,#142820 0%,var(--wood-1) 40%,var(--wood-0) 100%);
+}
+[data-theme="baize"] .btn{
+  background:linear-gradient(178deg,var(--brass-hi),var(--brass) 60%,#8a5818);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #5a3810,0 9px 16px -6px rgba(0,0,0,.7);
+}
+[data-theme="baize"] .btn:active{box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 2px 6px rgba(0,0,0,.4),0 1px 0 #5a3810,0 4px 8px -5px rgba(0,0,0,.6)}
+[data-theme="baize"] .btn.sm{box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 3px 0 #5a3810,0 6px 10px -6px rgba(0,0,0,.5)}
+[data-theme="baize"] .brand .glyph,[data-theme="baize"] .hero .logo{background:linear-gradient(160deg,var(--brass-hi),var(--brass) 55%,#7a5018)}
+[data-theme="baize"] .seg button.on{background:linear-gradient(178deg,var(--brass-hi),var(--brass));color:#060c08}
+[data-theme="baize"] .panel,.panel.cream{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(0,0,0,.08)),linear-gradient(170deg,#182e1e,#0e1e12);border-color:rgba(160,210,150,.12)}
+[data-theme="baize"] .gamecard{background:linear-gradient(170deg,#182e1e,#0e1e12);border-color:rgba(160,210,150,.12)}
+[data-theme="baize"] .roomtag{border-color:rgba(180,200,160,.22)}
+[data-theme="baize"] .field{border-color:rgba(200,180,130,.28)}
+[data-theme="baize"] .field:focus{border-color:var(--brass);box-shadow:inset 0 2px 6px rgba(0,0,0,.35),0 0 0 3px rgba(200,170,100,.25)}
+[data-theme="baize"] .seat.me{border-color:rgba(200,180,100,.55);background:rgba(200,180,100,.1)}
+[data-theme="baize"] .btn.ghost{background:linear-gradient(178deg,#182e1e,#0e1e12);box-shadow:inset 0 1px 0 rgba(160,210,150,.14),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #060c08,0 9px 16px -8px rgba(0,0,0,.7)}
+
+/* ============================================================
+   PARCHMENT theme — warm sepia, aged paper, antique
+   ============================================================ */
+[data-theme="parchment"]{
+  --wood-0:#1e1408;--wood-1:#2c1e0c;--wood-2:#3e2c14;--wood-3:#523c1e;
+  --wood-edge:#6e5028;--wood-hi:#8a6e3c;
+  --felt-0:#2a1e08;--felt-1:#3c2c10;--felt-2:#503c18;
+  --cream:#f8f0dc;--cream-2:#eee0c4;--parchment:#fdf8ee;
+  --ink:#f4ead4;--ink-soft:rgba(220,195,150,.68);--ink-dim:rgba(170,145,100,.4);
+  --brass:#c09440;--brass-hi:#e0b860;--amber:#c89030;
+  --ember:#b84028;
+  --suit-red:#b83020;--suit-blk:#1e1408;
+  --ok:#60a050;--warn:#c4900e;--bad:#a83020;
+}
+[data-theme="parchment"] body{
+  background:radial-gradient(140% 80% at 50% -5%,#3c2c10 0%,var(--wood-1) 40%,var(--wood-0) 100%);
+}
+[data-theme="parchment"] body::before{
+  background:
+    repeating-linear-gradient(0deg,rgba(255,245,210,.025) 0 1px,transparent 1px 40px),
+    repeating-linear-gradient(90deg,rgba(255,245,210,.025) 0 1px,transparent 1px 40px);
+}
+[data-theme="parchment"] .btn{
+  background:linear-gradient(178deg,var(--brass-hi),var(--brass) 60%,#907020);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #604c10,0 9px 16px -6px rgba(0,0,0,.7);
+}
+[data-theme="parchment"] .btn:active{box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 2px 6px rgba(0,0,0,.4),0 1px 0 #604c10,0 4px 8px -5px rgba(0,0,0,.6)}
+[data-theme="parchment"] .btn.sm{box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 3px 0 #604c10,0 6px 10px -6px rgba(0,0,0,.5)}
+[data-theme="parchment"] .brand .glyph,[data-theme="parchment"] .hero .logo{background:linear-gradient(160deg,var(--brass-hi),var(--brass) 55%,#806020);color:#1e1408}
+[data-theme="parchment"] .seg button.on{background:linear-gradient(178deg,var(--brass-hi),var(--brass));color:#1e1408}
+[data-theme="parchment"] .panel,.panel.cream{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.1)),linear-gradient(170deg,#3e2e14,#2a1e0a);border-color:rgba(220,195,140,.15)}
+[data-theme="parchment"] .gamecard{background:linear-gradient(170deg,#3e2e14,#2a1e0a);border-color:rgba(220,195,140,.15)}
+[data-theme="parchment"] .roomtag{border-color:rgba(220,185,100,.28)}
+[data-theme="parchment"] .field{border-color:rgba(220,185,100,.35)}
+[data-theme="parchment"] .field:focus{border-color:var(--brass);box-shadow:inset 0 2px 6px rgba(0,0,0,.35),0 0 0 3px rgba(220,185,100,.3)}
+[data-theme="parchment"] .seat.me{border-color:rgba(220,185,100,.6);background:rgba(220,185,100,.12)}
+[data-theme="parchment"] .btn.ghost{background:linear-gradient(178deg,#3e2e14,#2a1e0a);box-shadow:inset 0 1px 0 rgba(220,195,140,.15),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #1e1408,0 9px 16px -8px rgba(0,0,0,.7)}
+
+/* ============================================================
+   Theme picker
+   ============================================================ */
+.theme-picker{display:flex;gap:8px;align-items:center;margin-top:4px}
+.theme-swatch{
+  width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;
+  transition:transform .1s,border-color .1s;flex:none;
+  box-shadow:0 2px 6px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.25);
+}
+.theme-swatch:hover{transform:scale(1.15)}
+.theme-swatch.active{border-color:var(--brass-hi);transform:scale(1.12)}
+.theme-swatch[data-t="midnight"]{background:radial-gradient(circle at 35% 35%,#4a6485,#0c1220)}
+.theme-swatch[data-t="velvet"]  {background:radial-gradient(circle at 35% 35%,#6e3c88,#170c20)}
+.theme-swatch[data-t="baize"]   {background:radial-gradient(circle at 35% 35%,#426850,#0c1810)}
+.theme-swatch[data-t="parchment"]{background:radial-gradient(circle at 35% 35%,#8a6e3c,#2c1e0c)}
+.theme-label{font-size:11.5px;color:var(--ink-soft);letter-spacing:.3px;min-width:68px}
+
+
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{

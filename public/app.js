@@ -66,6 +66,7 @@ const S = {
   rummyRoundTimer: null, // auto-dismiss setTimeout handle
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
+  theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
 
   discardOpen: false, // discard-pile popup open?
   dragId: null, // card id being dragged within the hand
@@ -131,6 +132,27 @@ function patch(html) {
   morphList(app, tpl.content);
 }
 Object.defineProperty(app, "__set", { configurable: true, set(html) { patch(html); } });
+
+// ---------- theme ----------
+const THEMES = [
+  { id: "midnight", label: "Midnight" },
+  { id: "velvet",   label: "Velvet"   },
+  { id: "baize",    label: "Baize"    },
+  { id: "parchment",label: "Parchment"},
+];
+function applyTheme(id) {
+  document.documentElement.setAttribute("data-theme", id);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  const colors = { midnight: "#060910", velvet: "#0d0610", baize: "#060c08", parchment: "#1e1408" };
+  if (meta) meta.content = colors[id] || colors.midnight;
+}
+function themePickerHTML() {
+  const swatches = THEMES.map(t =>
+    `<button class="theme-swatch${S.theme === t.id ? " active" : ""}" data-action="set-theme" data-t="${t.id}" title="${t.label}"></button>`
+  ).join("");
+  const cur = THEMES.find(t => t.id === S.theme);
+  return `<div class="theme-picker">${swatches}<span class="theme-label">${cur ? cur.label : ""}</span></div>`;
+}
 
 // ---------- utilities ----------
 const esc = (s) =>
@@ -588,6 +610,8 @@ function renderStart() {
           <span>Play offline vs bots <em>— no connection, you + computer players</em></span>
         </label>
         <div style="margin-top:18px"><button class="btn" style="width:100%" data-action="connect">${S.offline ? "Play offline" : "Take a seat"}</button></div>
+        <label style="margin-top:20px">Theme</label>
+        ${themePickerHTML()}
       </div>
     </div>`;
 }
@@ -1663,6 +1687,12 @@ app.addEventListener("click", (e) => {
     case "sort-toggle": { const m = S.rummySort === "suit" ? "rank" : "suit"; S.rummySort = m; return rummySort(v.yourHand, m); }
     case "pick-game": S.pickGame = t.dataset.game; return renderStart();
     case "toggle-offline": S.offline = !!t.checked; return renderStart();
+    case "set-theme": {
+      S.theme = t.dataset.t;
+      localStorage.setItem("cg_theme", S.theme);
+      applyTheme(S.theme);
+      return renderStart();
+    }
     case "toggle-log": S.showLog = !S.showLog; return render();
     case "log-tab": S.logTab = t.dataset.tab; return render();
     case "expand-log": { const eid = +t.dataset.entryid; S.logExpandedId = S.logExpandedId === eid ? null : eid; return render(); }
@@ -1821,6 +1851,8 @@ function init() {
     localStorage.setItem("cg_pid", S.pid);
   }
   S.name = localStorage.getItem("cg_name") || "";
+  S.theme = localStorage.getItem("cg_theme") || "midnight";
+  applyTheme(S.theme);
   const q = new URLSearchParams(location.search);
   const game = q.get("game");
   const room = q.get("room");
