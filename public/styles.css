@@ -1301,6 +1301,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   filter:blur(1px);
 }
 .trump-watermark.red{color:rgba(200,60,60,.07)}
+.trump-watermark.joker-placeholder{
+  color:rgba(255,255,255,0); /* strip native emoji color */
+  filter:blur(1px) sepia(1) saturate(3) hue-rotate(90deg) brightness(.55) opacity(.55);
+}
 
 /* self-extra strip between selfbar and actions */
 .self-extra{
@@ -1379,11 +1383,22 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-chip.blocked{opacity:.3;cursor:not-allowed}
 .hlj-chip:disabled{pointer-events:none}
 .hlj-pass-btn{
-  font-size:12px;font-weight:600;color:var(--ink-dim);background:none;
-  border:1px solid rgba(180,180,140,.2);border-radius:20px;padding:5px 16px;
-  cursor:pointer;transition:background .12s,color .12s,border-color .12s;
+  width:48px;height:48px;border-radius:50%;
+  font-family:"Hanken Grotesk",sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.04em;text-transform:uppercase;
+  border:3px solid rgba(180,180,180,.35);
+  background:radial-gradient(circle at 38% 35%, rgba(255,255,255,.14), transparent 55%),
+             linear-gradient(145deg,#3a3a3a,#1e1e1e);
+  color:rgba(200,200,200,.8);cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.1);
+  transition:transform .12s,box-shadow .12s;
+  display:grid;place-items:center;
 }
-.hlj-pass-btn:hover{background:rgba(255,255,255,.07);color:var(--ink);border-color:rgba(180,180,140,.4)}
+.hlj-pass-btn:hover{
+  transform:translateY(-3px) scale(1.08);
+  box-shadow:0 7px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.15);
+}
+.hlj-pass-btn:active{transform:translateY(0) scale(.97)}
 
 
 /* Signal segmented control */

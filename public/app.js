@@ -237,7 +237,7 @@ function podHTML(v, i, o = {}) {
     : "";
   const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
   return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""}">
-    ${o.team ? `<span class="teamchip t${o.team}">${o.team}</span>` : ""}
+    ${""/* team chip removed — color coding + seating order make it redundant */}
     ${o.dealer ? `<span class="dealer">D</span>` : ""}
     <div class="ministack">${mb}${avatarHTML(name)}</div>
     <div class="pod-info">
@@ -932,8 +932,7 @@ function renderHLJ(v) {
             dealer: i === v.dealerSeat,
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
-            count: v.handCounts[i],
-            note: null, // bid strength signals hidden for now
+            count: null, // all hands same size in HLJ
           }) },
     )
     .filter(Boolean);
@@ -958,10 +957,10 @@ function renderHLJ(v) {
   }
   const center = centerExtra;
 
-  // Trump watermark on felt fabric
+  // Trump watermark on felt fabric; joker placeholder when no trump yet
   const feltOverlay = v.trump
     ? `<span class="trump-watermark ${RED.has(v.trump) ? "red" : ""}">${SUIT[v.trump]}</span>`
-    : "";
+    : `<span class="trump-watermark joker-placeholder">🃏</span>`;
 
   // hand (fanned), sorted by suit then rank, dim non-legal cards while it's your turn to play
   const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
@@ -1016,7 +1015,7 @@ function renderHLJ(v) {
     : "";
 
   // Your chip buttons, rendered on the felt when it's your bidding turn
-  const feltBidPanel = v.phase === "bidding" && v.yourTurn && bids.length
+  const feltBidPanel = v.phase === "bidding" && v.yourTurn && (bids.length || canPass)
     ? `<div class="hlj-felt-bid">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
@@ -1024,12 +1023,10 @@ function renderHLJ(v) {
             const isCur = curHighAmt === n;
             return `<button class="hlj-chip${isCur ? " claimed" : ""}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${!legal ? "disabled" : ""}>${n}</button>`;
           }).join("")}
+          ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
         </div>
-        ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
       </div>`
-    : (v.phase === "bidding" && v.yourTurn && canPass && !bids.length
-        ? `<div class="hlj-felt-bid"><button class="hlj-pass-btn" data-action="move-pass">Pass</button></div>`
-        : "");
+    : "";
   const bidSlider = "";  // removed from selfExtra
 
   // Signal -- only shown for players who have bid (not passed)
@@ -1291,7 +1288,7 @@ function renderRummy(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
-            count: v.handCounts[i],
+            count: null, // all hands same size in Hearts
             pts: v.scores[i],
             note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
           }) },
