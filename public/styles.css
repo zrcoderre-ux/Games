@@ -653,14 +653,15 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .meld{flex-direction:column;align-items:center;gap:4px}
 .meld .owner{font-size:10px;color:var(--ink-soft);font-weight:600;letter-spacing:.3px}
 .meld.target{outline:2px solid var(--amber);outline-offset:2px;background:rgba(224,164,78,.12)}
+.meld.tappable{cursor:pointer;transition:transform .12s}
+.meld.tappable:hover{transform:translateY(-2px)}
 
 /* run display */
 .run-full,.run-compact{display:flex;align-items:flex-end;gap:0}
 .run-full .card{margin-left:-14px}
 .run-full .card:first-child{margin-left:0}
 .run-compact .card{margin-left:0}
-.run-full.tappable,.run-compact.tappable{cursor:pointer;transition:transform .12s}
-.run-full.tappable:hover,.run-compact.tappable:hover{transform:translateY(-2px)}
+.run-full.tappable,.run-compact.tappable{cursor:pointer}
 
 /* +N / − toggle button for run middle cards */
 .meld-toggle{
@@ -677,7 +678,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   display:grid;place-items:center;
 }
 .set-merged.tappable{cursor:pointer}
-.set-merged.tappable:hover{transform:translateY(-2px)}
 .sm-rank{font-size:15px;font-weight:800;font-family:"Fraunces",serif;color:var(--suit-blk);z-index:1}
 /* suit pips in the 4 corners of the set card */
 .sc-tl,.sc-tr,.sc-bl,.sc-br{
