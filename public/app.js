@@ -158,13 +158,22 @@ function cardHTML(c, o = {}) {
   if (o.draggable) a.push(`draggable="true"`);
   if (o.win) cls.push("win");
   if (c.joker) {
-    cls.push("red");
+    cls.push("joker");
     if (o.jokerAs) cls.push("joker-wild");
     const badge = o.jokerAs
       ? `<span class="joker-as-badge ${RED.has(o.jokerAs.suit) ? "red" : ""}">${rankLabel(o.jokerAs.rank)}${SUIT[o.jokerAs.suit]}</span>`
       : "";
     const action = o.jokerAs && !o.inMeld ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
-    return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl"><b>\u2605</b></span><span class="pip">\u2605</span><span class="corner br"><b>\u2605</b></span>${badge}</div>`;
+    const corner = `<b>J</b><i>kr</i>`;
+    if (o.mini) {
+      return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl">${corner}</span><span class="joker-hat">\ud83c\udccf</span>${badge}</div>`;
+    }
+    return `<div class="${cls.join(" ")}"${st}${action}>
+      <span class="corner tl">${corner}</span>
+      <span class="joker-art"><span class="joker-hat-big">\ud83c\udccf</span><span class="joker-bells">\u2726 \u2726 \u2726</span></span>
+      <span class="corner br">${corner}</span>
+      ${badge}
+    </div>`;
   }
   if (RED.has(c.suit)) cls.push("red");
   const r = rankLabel(c.rank);

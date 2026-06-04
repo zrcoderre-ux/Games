@@ -525,6 +525,31 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   cursor:default;
 }
 .card.red{color:var(--suit-red)}
+
+/* Joker card — split diagonal, purple/gold jester colors */
+.card.joker{
+  background:
+    linear-gradient(135deg, #3a1a5e 0% 50%, #7a4a00 50% 100%);
+  color:#f0d87a;
+  box-shadow:
+    0 2px 2px rgba(0,0,0,.35),
+    0 7px 14px -6px rgba(0,0,0,.65),
+    inset 0 0 0 1px rgba(240,216,122,.35);
+}
+.card.joker .corner{color:#f0d87a}
+.card.joker .corner b{font-size:calc(var(--w)*.32);letter-spacing:-.01em}
+.card.joker .corner i{font-size:calc(var(--w)*.17);color:rgba(240,216,122,.8);letter-spacing:.5px}
+.joker-art{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:3px;pointer-events:none;
+}
+.joker-hat-big{font-size:calc(var(--w)*.62);line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+.joker-bells{font-size:calc(var(--w)*.16);color:rgba(240,216,122,.6);letter-spacing:3px}
+.joker-hat{
+  position:absolute;inset:0;display:grid;place-items:center;
+  font-size:calc(var(--w)*.42);pointer-events:none;
+}
+.card.joker.mini .corner i{display:none}
 .card .corner{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:.86;font-weight:700}
 .card .corner b{font-size:calc(var(--w)*.28);font-weight:700}
 .card .corner i{font-size:calc(var(--w)*.2);font-style:normal;margin-top:1px}
