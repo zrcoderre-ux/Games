@@ -916,7 +916,7 @@ function renderHLJ(v) {
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             count: v.handCounts[i],
-            note: v.phase === "bidding" && v.signals[i] ? v.signals[i] : null,
+            note: null, // bid strength signals hidden for now
           }) },
     )
     .filter(Boolean);
@@ -1011,14 +1011,8 @@ function renderHLJ(v) {
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
   const sigIdx = curSignal ? signalLevels.indexOf(curSignal) : -1;
   const youHaveBid = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "bid");
-  const signalControl = v.phase === "bidding" && v.you != null && youHaveBid
-    ? `<div class="hlj-signal-row">
-        <span class="hlj-signal-label">Signal partner</span>
-        <div class="hlj-signal-seg">
-          ${signalLevels.map((l, i) => `<button class="hlj-sig-btn${i === sigIdx ? " active" : ""}" data-action="signal" data-level="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}
-        </div>
-      </div>`
-    : "";
+  // Signal control hidden for now — architecture kept for later
+  const signalControl = "";
 
   // Trump suit buttons \u2014 when you need to select
   const trumpControl = v.yourTurn && trumpChoices.length
