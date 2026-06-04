@@ -47,7 +47,7 @@ const S = {
   pid: null,
   name: "",
   party: null,
-  pickGame: "rummy500", // start-screen selection
+  pickGame: "high-low-jack", // start-screen selection
   room: null,
   ws: null,
   offline: false, // playing locally vs bots (no server)
@@ -66,11 +66,13 @@ const S = {
   rummyRoundTimer: null, // auto-dismiss setTimeout handle
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
+  theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
 
   discardOpen: false, // discard-pile popup open?
   dragId: null, // card id being dragged within the hand
   dropBeforeId: null, // drop target (insert before this card id; null = end)
   heartsPass: new Set(), // selected card ids to pass (Hearts)
+  hotseats: {}, // seat → name for pass-and-play reservations (pre-start, client-only)
   pjCard: null, // selected card id (Pegs & Jokers)
   pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
   showLog: false,
@@ -131,6 +133,27 @@ function patch(html) {
   morphList(app, tpl.content);
 }
 Object.defineProperty(app, "__set", { configurable: true, set(html) { patch(html); } });
+
+// ---------- theme ----------
+const THEMES = [
+  { id: "midnight", label: "Midnight" },
+  { id: "velvet",   label: "Velvet"   },
+  { id: "baize",    label: "Baize"    },
+  { id: "parchment",label: "Parchment"},
+];
+function applyTheme(id) {
+  document.documentElement.setAttribute("data-theme", id);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  const colors = { midnight: "#060910", velvet: "#0d0610", baize: "#060c08", parchment: "#1e1408" };
+  if (meta) meta.content = colors[id] || colors.midnight;
+}
+function themePickerHTML() {
+  const swatches = THEMES.map(t =>
+    `<button class="theme-swatch${S.theme === t.id ? " active" : ""}" data-action="set-theme" data-t="${t.id}" title="${t.label}"></button>`
+  ).join("");
+  const cur = THEMES.find(t => t.id === S.theme);
+  return `<div class="theme-picker">${swatches}<span class="theme-label">${cur ? cur.label : ""}</span></div>`;
+}
 
 // ---------- utilities ----------
 const esc = (s) =>
@@ -299,6 +322,19 @@ function onFrame(e) {
     if (newKey && newKey !== prevKey && newKey !== S.rummyRoundAcked) {
       if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
     }
+    // Auto-sort rummy hand on draw: whenever the hand gains card(s), re-apply the current sort.
+    const v = msg.view;
+    if (S.party === "rummy500" && v && v.yourHand && v.you != null) {
+      const prevHand = prev?.yourHand ?? [];
+      if (v.yourHand.length > prevHand.length) {
+        const rank = (c) => (c.joker ? 100 : c.rank);
+        const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
+        const by = S.rummySort === "suit"
+          ? (a, b) => (a.joker - b.joker) || (suitOrder[a.suit] - suitOrder[b.suit]) || (rank(a) - rank(b))
+          : (a, b) => (rank(a) - rank(b)) || (suitOrder[a.suit] - suitOrder[b.suit]);
+        S.rummyOrder = [...v.yourHand].sort(by).map((c) => c.id);
+      }
+    }
     maybePromptPass();
     render();
   }
@@ -371,7 +407,14 @@ async function connectLocal() {
   }
   const sock = localMod.createLocalSocket(S.party);
   S.ws = sock;
-  sock.onopen = joinOnOpen;
+  sock.onopen = () => {
+    joinOnOpen();
+    // Seat any pass-and-play players reserved before switching to local.
+    for (const [seat, name] of Object.entries(S.hotseats)) {
+      send({ t: "addHuman", seat: +seat, name });
+    }
+    S.hotseats = {};
+  };
   sock.onmessage = onFrame;
   sock.onclose = () => { S.connected = false; };
   render();
@@ -548,37 +591,75 @@ function renderPass() {
 }
 
 // ---------- start screen ----------
+
+const GAME_CARD_META = {
+  rummy500:          { suit: "♦", color: "red"   },
+  "high-low-jack":   { suit: "♠", color: "black" },
+  hearts:            { suit: "♥", color: "red"   },
+  "pegs-and-jokers": { suit: "♣", color: "black" },
+};
+
 function renderStart() {
   const g = S.pickGame;
-  const cards = Object.entries(GAMES)
-    .map(([id, info]) =>
-      `<button class="gamecard ${id === g ? "on" : ""}" data-action="pick-game" data-game="${id}">
-        <span class="ic" data-s="${info.suit}"></span>
-        <div class="meta"><h3>${esc(info.label)}</h3><p>${esc(info.blurb)}</p><p style="color:var(--ink-dim);margin-top:2px">${esc(info.range)}</p></div>
-        <span class="go">${id === g ? "\u25C9" : "\u25CB"}</span>
-      </button>`,
-    )
-    .join("");
+  // HLJ first (longest name, should be visible), then the rest
+  const gameIds = ["high-low-jack", "rummy500", "hearts", "pegs-and-jokers"];
+
+  // Wider spread so each card name is legible
+  const positions = [
+    { left: "0px",   top: "18px", rot: "-9deg" },
+    { left: "86px",  top: "6px",  rot: "-2deg" },
+    { left: "172px", top: "6px",  rot: "4deg"  },
+    { left: "258px", top: "16px", rot: "10deg" },
+  ];
+
+  const gameCards = gameIds.map((id, i) => {
+    const info = GAMES[id];
+    const meta = GAME_CARD_META[id];
+    const sel = id === g;
+    const pos = positions[i];
+    const posStyle = sel
+      ? `left:${pos.left};z-index:10`
+      : `left:${pos.left};top:${pos.top};transform:rotate(${pos.rot});z-index:${i + 1}`;
+    return `<button class="tbl-card${sel ? " selected" : ""} ${meta.color}"
+        style="${posStyle}" data-action="pick-game" data-game="${id}">
+      <span class="tbl-card-corner tl">${meta.suit}</span>
+      <span class="tbl-card-suit">${meta.suit}</span>
+      <span class="tbl-card-name">${esc(info.label)}</span>
+      <span class="tbl-card-corner br">${meta.suit}</span>
+    </button>`;
+  }).join("");
+
   app.__set = `
-    <div class="stage" style="justify-content:center;padding-top:6vh">
-      <div class="panel cream">
-        <div class="hero"><div class="logo">\u2660</div><h1>Parlor</h1><p class="tag">a cozy room for cards</p></div>
-        <input type="hidden" id="f-game" value="${esc(g)}" />
-        <label>Your name</label>
-        <input class="field" id="f-name" value="${esc(S.name || "")}" placeholder="e.g. Alex" autocomplete="off" />
-        <label>Pick a game</label>
-        <div class="games">${cards}</div>
-        <label>Room code</label>
-        <input class="field" id="f-room" value="${esc(S.room || "")}" placeholder="blank = new room" autocomplete="off" ${S.offline ? "disabled" : ""} />
-        <label class="toggle">
-          <input type="checkbox" id="f-offline" ${S.offline ? "checked" : ""} data-action="toggle-offline" />
-          <span>Play offline vs bots <em>— no connection, you + computer players</em></span>
-        </label>
-        <div style="margin-top:18px"><button class="btn" style="width:100%" data-action="connect">${S.offline ? "Play offline" : "Take a seat"}</button></div>
+    <div class="felt-table">
+      <div class="cb cb1"></div><div class="cb cb2"></div>
+      <div class="cb cb3"></div><div class="cb cb4"></div>
+      <div class="cb cb5"></div><div class="cb cb6"></div>
+
+      <div class="felt-content">
+        <h1 class="felt-title">Parlor</h1>
+        <p class="felt-sub">a cozy room for cards</p>
+        <div class="felt-rule"></div>
+
+        <label class="felt-label">Your Name</label>
+        <input class="felt-input" id="f-name" value="${esc(S.name || "")}"
+          placeholder="e.g. Alex" autocomplete="off" />
+
+        <label class="felt-label">Choose a Game</label>
+        <div class="tbl-fan">
+          <input type="hidden" id="f-game" value="${esc(g)}" />
+          ${gameCards}
+        </div>
+
+        <label class="felt-label">Room Code</label>
+        <input class="felt-input" id="f-room" value="${esc(S.room || "")}"
+          placeholder="blank = new room" autocomplete="off" />
+
+        <button class="felt-cta" data-action="connect">Take a Seat</button>
+
+        <div class="felt-theme-row">${themePickerHTML()}</div>
       </div>
     </div>`;
 }
-
 // ---------- lobby ----------
 function renderLobby(v) {
   const isHost = v.you !== null && v.you === v.hostSeat;
@@ -602,12 +683,18 @@ function renderLobby(v) {
       const isRummyLobby = S.party === "rummy500" && v.phase === "lobby";
       const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
       const DIFF_LABELS = ["Easy", "Medium", "Hard", "Expert"];
+      // Hotseat reservation: a seat the host has earmarked for a local human
+      // player (pass-and-play). Stored client-side in S.hotseats until start.
+      const reserved = !you && isHost && S.hotseats[i];
+
       let ctrl = "";
-      if (isEmpty) {
+      if (reserved) {
+        ctrl = `<button class="btn sm danger" data-action="clear-hotseat" data-seat="${i}">Remove</button>`;
+      } else if (isEmpty) {
         ctrl =
           (S.offline ? "" : `<button class="btn sm" data-action="sit" data-seat="${i}">Sit</button>`) +
-          (S.offline ? `<button class="btn sm" data-action="addhuman" data-seat="${i}">+ Player</button>` : "") +
-          (isHost ? `<button class="btn sm ghost" data-action="addbot" data-seat="${i}">+ Bot</button>` : "");
+          (isHost ? `<button class="btn sm ghost" data-action="addbot" data-seat="${i}">+ Bot</button>` : "") +
+          (isHost ? `<button class="btn sm ghost" data-action="reserve-hotseat" data-seat="${i}">+ Pass &amp; Play</button>` : "");
       } else if (s.kind === "bot" && isHost) {
         const diffPicker = isRummyLobby
           ? `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`
@@ -616,9 +703,13 @@ function renderLobby(v) {
       } else if (S.offline && s.kind === "human" && i !== v.hostSeat) {
         ctrl = `<button class="btn sm danger" data-action="clearseat" data-seat="${i}">Remove</button>`;
       }
+
+      const displayName = reserved ? S.hotseats[i] : (isEmpty ? `Seat ${i + 1}` : esc(s.name || "Player"));
+      const displayRole = reserved ? "pass & play" : role;
+      const reservedChip = reserved ? `<span class="chip bot" style="background:rgba(100,160,240,.16);color:#88b8f0;border-color:rgba(100,160,240,.35)">local</span>` : "";
       return `<div class="seat ${you ? "me" : ""}">${av}
-        <div><div class="nm">${isEmpty ? `Seat ${i + 1}` : esc(s.name || "Player")}</div><div class="rl">${role}</div></div>
-        <div class="tags">${tags.join("")}${ctrl}</div></div>`;
+        <div><div class="nm">${displayName}</div><div class="rl">${displayRole}</div></div>
+        <div class="tags">${tags.join("")}${reservedChip}${ctrl}</div></div>`;
     })
     .join("");
 
@@ -650,10 +741,16 @@ function renderLobby(v) {
        </div>`
     : `<div class="panel" style="text-align:center"><p class="sub">Waiting for the host to deal…</p></div>`;
 
+  const hasHotseats = Object.keys(S.hotseats).length > 0;
   const sharePanel = S.offline
     ? `<div class="panel cream">
         <h2>Offline game</h2>
         <p class="sub">All on this device. Add bots to play solo, or add more <b>players</b> for pass-and-play — each gets their own hidden hand, and the device asks you to hand it over between turns.</p>
+      </div>`
+    : hasHotseats
+    ? `<div class="panel cream">
+        <h2>Pass &amp; Play</h2>
+        <p class="sub">Local players share this device. When the game starts it'll run offline — each player's hand stays hidden until it's their turn.</p>
       </div>`
     : `<div class="panel cream">
         <h2>Lobby</h2>
@@ -1566,18 +1663,12 @@ function doConnect() {
   let room = document.getElementById("f-room").value.trim();
   if (!name) return toast("Enter a name first.");
   if (!GAMES[game]) return toast("Pick a game.");
-  S.offline = !!document.getElementById("f-offline")?.checked;
   S.name = name;
   S.party = game;
   localStorage.setItem("cg_name", name);
-  if (S.offline) {
-    S.room = "solo";
-    history.replaceState(null, "", `/?game=${game}`);
-  } else {
-    if (!room) room = Math.random().toString(36).slice(2, 7);
-    S.room = room;
-    history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
-  }
+  if (!room) room = Math.random().toString(36).slice(2, 7);
+  S.room = room;
+  history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
   connect();
 }
 
@@ -1595,6 +1686,7 @@ function doLeave() {
   S.party = null;
   S.offline = false;
   S.hotseat = false;
+  S.hotseats = {};
   S.awaitingPass = false;
   S.revealedSeat = null;
   history.replaceState(null, "", "/");
@@ -1602,13 +1694,24 @@ function doLeave() {
 }
 
 function doStart() {
-  // The setup person holds the device, so seat 0 is already "revealed" — others
-  // get the privacy hand-off as the turn reaches them.
   S.revealedSeat = 0;
   S.awaitingPass = false;
-  if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: S.view.players, marbles: S.view.marbles } });
+  const v = S.view;
+  const hasHotseats = Object.keys(S.hotseats).length > 0;
+  // If the only human is the host (no remote humans) OR the host has added
+  // pass-and-play seats, drop the server and run locally.
+  const nonHostHumans = v.seats.filter((s, i) => s.kind === "human" && i !== v.you).length;
+  if (nonHostHumans === 0 || hasHotseats) {
+    S.intentionalClose = true;
+    try { S.ws?.close(); } catch {}
+    S.connected = false;
+    S.view = null;
+    connectLocal();
+    return;
+  }
+  if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: v.players, marbles: v.marbles } });
   const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-  send({ t: "start", config: { players: S.view.players, target, botDifficulty: S.view.botDifficulty } });
+  send({ t: "start", config: { players: v.players, target, botDifficulty: v.botDifficulty } });
 }
 
 function toggleSel(id) {
@@ -1649,7 +1752,12 @@ app.addEventListener("click", (e) => {
     case "close-discard": S.discardOpen = false; return render();
     case "sort-toggle": { const m = S.rummySort === "suit" ? "rank" : "suit"; S.rummySort = m; return rummySort(v.yourHand, m); }
     case "pick-game": S.pickGame = t.dataset.game; return renderStart();
-    case "toggle-offline": S.offline = !!t.checked; return renderStart();
+    case "set-theme": {
+      S.theme = t.dataset.t;
+      localStorage.setItem("cg_theme", S.theme);
+      applyTheme(S.theme);
+      return renderStart();
+    }
     case "toggle-log": S.showLog = !S.showLog; return render();
     case "log-tab": S.logTab = t.dataset.tab; return render();
     case "expand-log": { const eid = +t.dataset.entryid; S.logExpandedId = S.logExpandedId === eid ? null : eid; return render(); }
@@ -1673,6 +1781,17 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "clearseat": return send({ t: "clearSeat", seat: +t.dataset.seat });
+    case "reserve-hotseat": {
+      const seat = +t.dataset.seat;
+      const name = (prompt("Player name?", `Player ${seat + 1}`) || "").trim();
+      if (!name) return;
+      S.hotseats[seat] = name;
+      return render();
+    }
+    case "clear-hotseat": {
+      delete S.hotseats[+t.dataset.seat];
+      return render();
+    }
     case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
     case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
@@ -1808,6 +1927,8 @@ function init() {
     localStorage.setItem("cg_pid", S.pid);
   }
   S.name = localStorage.getItem("cg_name") || "";
+  S.theme = localStorage.getItem("cg_theme") || "midnight";
+  applyTheme(S.theme);
   const q = new URLSearchParams(location.search);
   const game = q.get("game");
   const room = q.get("room");

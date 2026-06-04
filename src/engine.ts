@@ -158,6 +158,24 @@ export type HandResult = {
   };
 };
 
+// Per-seat statistics accumulated across hands, observable by the AI.
+// Only public information is recorded: signals, bids, and outcomes.
+export type PlayerProfile = {
+  handsPlayed: number;
+  // Signal calibration: for each signal level, how often did the bidder win the bid
+  // and make it? Helps the AI judge whether a player's signal is trustworthy.
+  signalRecord: {
+    weak:   { bid: number; made: number };
+    medium: { bid: number; made: number };
+    strong: { bid: number; made: number };
+  };
+  // Bidding tendencies: total bids won and bids made (vs. set back).
+  bidsWon: number;
+  bidsMade: number;
+  // Average points captured per hand (team points / hands), proxy for hand quality.
+  totalTeamPoints: number;
+};
+
 export type GameState = {
   players: PlayerCount;
   target: number; // 21
@@ -187,6 +205,9 @@ export type GameState = {
   tricksWon: { seat: number; cards: Card[] }[]; // resolved tricks this hand
 
   lastHand: HandResult | null;
+
+  // Cross-hand player profiles, updated after each hand scores.
+  profiles: PlayerProfile[];
 };
 
 export const teamOf = (seat: number): number => seat % 2;
@@ -200,6 +221,20 @@ export type Move =
   | { type: "play"; seat: number; card: Card };
 
 // ---------- Setup / dealing ----------
+
+function emptyProfile(): PlayerProfile {
+  return {
+    handsPlayed: 0,
+    signalRecord: {
+      weak:   { bid: 0, made: 0 },
+      medium: { bid: 0, made: 0 },
+      strong: { bid: 0, made: 0 },
+    },
+    bidsWon: 0,
+    bidsMade: 0,
+    totalTeamPoints: 0,
+  };
+}
 
 export function createGame(players: PlayerCount, seed: number, target = 21): GameState {
   if (!SUPPORTED_PLAYERS.includes(players)) {
@@ -227,6 +262,7 @@ export function createGame(players: PlayerCount, seed: number, target = 21): Gam
     currentTrick: [],
     tricksWon: [],
     lastHand: null,
+    profiles: Array.from({ length: players }, emptyProfile),
   };
   return deal(base);
 }
@@ -538,8 +574,31 @@ export function scoreHand(state: GameState): GameState {
     else if (otherOut) winner = other;
   }
 
+  // Update per-seat profiles with this hand's observable data.
+  const profiles = state.profiles.map((prof, seat): PlayerProfile => {
+    const p = {
+      ...prof,
+      signalRecord: {
+        weak:   { ...prof.signalRecord.weak },
+        medium: { ...prof.signalRecord.medium },
+        strong: { ...prof.signalRecord.strong },
+      },
+      handsPlayed: prof.handsPlayed + 1,
+      totalTeamPoints: prof.totalTeamPoints + pointsByTeam[teamOf(seat)],
+    };
+    const sig = state.signals[seat];
+    const level = sig ?? "medium";
+    if (seat === bidderSeat) {
+      p.bidsWon++;
+      if (made) p.bidsMade++;
+      p.signalRecord[level].bid++;
+      if (made) p.signalRecord[level].made++;
+    }
+    return p;
+  });
+
   if (winner !== null) {
-    return { ...state, scores, phase: "gameOver", winner, lastHand: result };
+    return { ...state, scores, phase: "gameOver", winner, lastHand: result, profiles };
   }
 
   // Otherwise rotate the dealer to the left and deal the next hand.
@@ -547,6 +606,7 @@ export function scoreHand(state: GameState): GameState {
     ...state,
     scores,
     lastHand: result,
+    profiles,
     dealerSeat: (state.dealerSeat + 1) % state.players,
   };
   return deal(next);
