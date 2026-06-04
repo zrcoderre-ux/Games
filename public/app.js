@@ -417,7 +417,7 @@ function logSheet() {
     }).join("");
   };
 
-  const isRummy = S.party === "rummy-500";
+  const isRummy = S.party === "rummy500";
   const tabs = (t) => `<div class="log-tabs">
     <button class="log-tab${t === "log" ? " active" : ""}" data-action="log-tab" data-tab="log">Log</button>
     ${isRummy ? `<button class="log-tab${t === "melds" ? " active" : ""}" data-action="log-tab" data-tab="melds">Melds</button>` : ""}
@@ -588,7 +588,7 @@ function renderLobby(v) {
       else if (i === v.hostSeat && !isEmpty) tags.push(`<span class="chip host">host</span>`);
       if (s.kind === "bot") tags.push(`<span class="chip bot">bot</span>`);
       if (isEmpty) tags.push(`<span class="chip empty">empty</span>`);
-      const isRummyLobby = S.party === "rummy-500" && v.phase === "lobby";
+      const isRummyLobby = S.party === "rummy500" && v.phase === "lobby";
       const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
       const DIFF_LABELS = ["Easy", "Medium", "Hard", "Expert"];
       let ctrl = "";
