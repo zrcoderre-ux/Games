@@ -658,12 +658,12 @@ type AiPersonality = {
 };
 
 const PERSONALITIES: AiPersonality[] = [
-  // 0 · Balanced — solid, makes occasional mistakes
-  { pickupThreshold: 8,  earlyDiscount: 0.35, endgameHandSize: 3, dangerWeight: 1.8, misplayRate: 0.03 },
-  // 1 · Aggressive — decisive and sharp, rarely misplays but takes big risks
-  { pickupThreshold: 3,  earlyDiscount: 0.70, endgameHandSize: 2, dangerWeight: 0.8, misplayRate: 0.01 },
-  // 2 · Conservative — careful but occasionally over-cautious / slow to pivot
-  { pickupThreshold: 16, earlyDiscount: 0.10, endgameHandSize: 5, dangerWeight: 2.5, misplayRate: 0.02 },
+  // 0 · Balanced — reliable execution, moderate risk tolerance
+  { pickupThreshold: 6,  earlyDiscount: 0.68, endgameHandSize: 3, dangerWeight: 1.8, misplayRate: 0.03 },
+  // 1 · Aggressive — highest pile appetite, sharpest execution, rarely misplays
+  { pickupThreshold: 3,  earlyDiscount: 0.76, endgameHandSize: 2, dangerWeight: 0.8, misplayRate: 0.01 },
+  // 2 · Conservative — very selective pickups, strongest danger avoidance, patient
+  { pickupThreshold: 9,  earlyDiscount: 0.65, endgameHandSize: 5, dangerWeight: 3.5, misplayRate: 0.02 },
   // 3 · Opportunist — erratic: swings between brilliance and blunder
   { pickupThreshold: 5,  earlyDiscount: 0.60, endgameHandSize: 4, dangerWeight: 1.2, misplayRate: 0.05 },
 ];
