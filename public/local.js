@@ -1424,23 +1424,147 @@ function layoffOnto(state, m, c, seat) {
   const ok = m.kind === "set" ? isSet(combined) : isRun(combined);
   return ok ? { type: "layoff", seat, meldId: m.id, cards: [c.id] } : null;
 }
-function worstDiscard(hand) {
+function handPoints(hand) {
+  return hand.reduce((s, c) => s + cardValue(c), 0);
+}
+function simulatePlayPoints(hand, melds) {
+  let h = [...hand];
+  for (let pass = 0; pass < 12; pass++) {
+    const before = h.length;
+    const set = findSet(h);
+    if (set) {
+      h = h.filter((c) => !set.includes(c));
+      continue;
+    }
+    const run = findRun(h);
+    if (run) {
+      h = h.filter((c) => !run.includes(c));
+      continue;
+    }
+    let laid = false;
+    for (const m of melds) {
+      for (const c of h) {
+        const combined = [...m.cards, c];
+        if (m.kind === "set" ? isSet(combined) : isRun(combined)) {
+          h = h.filter((x) => x !== c);
+          laid = true;
+          break;
+        }
+      }
+      if (laid) break;
+    }
+    if (!laid && h.length === before) break;
+  }
+  return handPoints(h);
+}
+function meldPotential(hand) {
+  let score = 0;
+  for (const c of hand) {
+    if (c.joker) {
+      score += 20;
+      continue;
+    }
+    const sameRank = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
+    const inSuitAdj = hand.filter(
+      (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2
+    ).length;
+    score += sameRank * 3 + inSuitAdj * 2;
+  }
+  return score;
+}
+function opponentDanger(state, card, seat) {
+  if (card.joker) return 0;
+  let danger2 = 0;
+  for (const m of state.melds) {
+    const combined = [...m.cards, card];
+    if (m.kind === "set" ? isSet(combined) : isRun(combined)) {
+      danger2 += 4;
+      break;
+    }
+  }
+  const sameRankOnTable = state.melds.flatMap((m) => m.cards).filter((c) => !c.joker && c.rank === card.rank).length;
+  if (sameRankOnTable >= 1) danger2 += 2;
+  danger2 += Math.floor(cardValue(card) / 5);
+  return Math.min(danger2, 10);
+}
+function minOpponentHandSize(state, seat) {
+  let min = Infinity;
+  for (let i = 0; i < state.players; i++) {
+    if (i !== seat) min = Math.min(min, state.hands[i].length);
+  }
+  return min === Infinity ? 99 : min;
+}
+function evaluateDeepPickup(state, seat, targetCardId) {
+  const discardPile = state.discard;
+  const targetIdx = discardPile.findIndex((c) => c.id === targetCardId);
+  if (targetIdx < 0) return { gain: -Infinity, cards: [] };
+  const taken = discardPile.slice(targetIdx);
+  const combined = [...state.hands[seat], ...taken];
+  const leftoverPts = simulatePlayPoints(combined, state.melds);
+  const takenPts = taken.reduce((s, c) => s + cardValue(c), 0);
+  const handPts = handPoints(state.hands[seat]);
+  const meldedFromPile = takenPts - Math.max(0, leftoverPts - handPts);
+  const extraHeld = Math.max(0, leftoverPts - handPts);
+  const depthPenalty = taken.length * 1.5;
+  return { gain: meldedFromPile - extraHeld * 0.5 - depthPenalty, cards: taken };
+}
+function bestDiscard(state, hand, seat) {
+  const opponentLow = minOpponentHandSize(state, seat) <= 3;
   const score = (c) => {
-    if (c.joker) return -100;
-    let keep = 0;
-    const mates = hand.filter((x) => x.rank === c.rank && x.id !== c.id).length;
-    keep += mates >= 2 ? 8 : mates === 1 ? 3 : 0;
-    keep += hand.filter((x) => x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2).length * 2;
-    return cardValue(c) - keep;
+    if (c.joker) return -200;
+    let discardScore = cardValue(c);
+    const mates = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
+    const adjInSuit = hand.filter(
+      (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2
+    ).length;
+    discardScore -= mates >= 2 ? 12 : mates === 1 ? 5 : 0;
+    discardScore -= adjInSuit * 3;
+    const danger2 = opponentDanger(state, c, seat);
+    discardScore -= danger2 * (opponentLow ? 1 : 2);
+    if (opponentLow) discardScore += cardValue(c) * 0.5;
+    return discardScore;
   };
   return [...hand].sort((a, b) => score(b) - score(a))[0];
 }
+function allMeldsInHand(hand) {
+  const melds = [];
+  let remaining = [...hand];
+  for (let pass = 0; pass < 20; pass++) {
+    const run = findRun(remaining);
+    const set = findSet(remaining);
+    const runPts = run ? run.reduce((s, c) => s + cardValue(c), 0) : -1;
+    const setPts = set ? set.reduce((s, c) => s + cardValue(c), 0) : -1;
+    const pick2 = runPts >= setPts ? run : set;
+    if (!pick2) break;
+    melds.push(pick2);
+    remaining = remaining.filter((c) => !pick2.includes(c));
+  }
+  return melds;
+}
 function aiMove2(state, seat) {
   const hand = state.hands[seat];
+  const opponentLow = minOpponentHandSize(state, seat) <= 3;
   if (state.turnPhase === "draw") {
-    const top = state.discard[state.discard.length - 1];
+    const discard = state.discard;
+    const top = discard[discard.length - 1];
     if (top && (canFormMeldWith([...hand, top], top) || canLayoff(state, top)))
       return { type: "drawDiscard", seat, cardId: top.id };
+    if (!opponentLow && discard.length >= 2) {
+      let bestGain = 8;
+      let bestTarget = null;
+      const maxDepth = Math.min(discard.length, 6);
+      for (let depth = 1; depth < maxDepth; depth++) {
+        const candidate = discard[discard.length - 1 - depth];
+        const combined = [...hand, ...discard.slice(discard.length - 1 - depth)];
+        if (!canFormMeldWith(combined, candidate) && !canLayoff(state, candidate)) continue;
+        const { gain: gain2 } = evaluateDeepPickup(state, seat, candidate.id);
+        if (gain2 > bestGain) {
+          bestGain = gain2;
+          bestTarget = candidate;
+        }
+      }
+      if (bestTarget) return { type: "drawDiscard", seat, cardId: bestTarget.id };
+    }
     if (state.stock.length > 0) return { type: "drawStock", seat };
     if (top) return { type: "drawDiscard", seat, cardId: top.id };
     return { type: "drawStock", seat };
@@ -1458,15 +1582,27 @@ function aiMove2(state, seat) {
       }
     }
   }
-  const set = findSet(hand);
-  const run = findRun(hand);
-  const pick2 = run && (!set || run.length >= set.length) ? run : set;
-  if (pick2) return { type: "meld", seat, cards: pick2.map((c) => c.id) };
-  for (const m of state.melds) for (const c of hand) {
-    const lo = layoffOnto(state, m, c, seat);
-    if (lo) return lo;
+  const allMelds = allMeldsInHand(hand);
+  if (allMelds.length > 0) return { type: "meld", seat, cards: allMelds[0].map((c) => c.id) };
+  const layoffCandidates = [];
+  for (const m of state.melds) {
+    for (const c of hand) {
+      const lo = layoffOnto(state, m, c, seat);
+      if (lo) layoffCandidates.push({ move: lo, value: cardValue(c) });
+    }
   }
-  return { type: "discard", seat, cardId: worstDiscard(hand).id };
+  if (layoffCandidates.length > 0) {
+    layoffCandidates.sort((a, b) => {
+      if (opponentLow) return b.value - a.value;
+      const aCard = hand.find((c) => c.id === a.move.cards[0]);
+      const bCard = hand.find((c) => c.id === b.move.cards[0]);
+      const aPot = meldPotential([aCard, ...hand.filter((c) => c !== aCard)]);
+      const bPot = meldPotential([bCard, ...hand.filter((c) => c !== bCard)]);
+      return aPot - bPot;
+    });
+    return layoffCandidates[0].move;
+  }
+  return { type: "discard", seat, cardId: bestDiscard(state, hand, seat).id };
 }
 var rummy500Module = {
   meta: { id: "rummy-500", name: "Rummy 500", supportedPlayerCounts: [2, 3, 4, 5, 6, 7, 8] },

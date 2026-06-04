@@ -158,13 +158,22 @@ function cardHTML(c, o = {}) {
   if (o.draggable) a.push(`draggable="true"`);
   if (o.win) cls.push("win");
   if (c.joker) {
-    cls.push("red");
+    cls.push("joker");
     if (o.jokerAs) cls.push("joker-wild");
     const badge = o.jokerAs
       ? `<span class="joker-as-badge ${RED.has(o.jokerAs.suit) ? "red" : ""}">${rankLabel(o.jokerAs.rank)}${SUIT[o.jokerAs.suit]}</span>`
       : "";
     const action = o.jokerAs && !o.inMeld ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
-    return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl"><b>\u2605</b></span><span class="pip">\u2605</span><span class="corner br"><b>\u2605</b></span>${badge}</div>`;
+    const corner = `<b>J</b><i>kr</i>`;
+    if (o.mini) {
+      return `<div class="${cls.join(" ")}"${st}${action}><span class="corner tl">${corner}</span><span class="joker-hat">\ud83c\udccf</span>${badge}</div>`;
+    }
+    return `<div class="${cls.join(" ")}"${st}${action}>
+      <span class="corner tl">${corner}</span>
+      <span class="joker-art"><span class="joker-hat-big">\ud83c\udccf</span><span class="joker-bells">\u2726 \u2726 \u2726</span></span>
+      <span class="corner br">${corner}</span>
+      ${badge}
+    </div>`;
   }
   if (RED.has(c.suit)) cls.push("red");
   const r = rankLabel(c.rank);
@@ -417,9 +426,10 @@ function logSheet() {
     }).join("");
   };
 
+  const isRummy = S.party === "rummy-500";
   const tabs = (t) => `<div class="log-tabs">
     <button class="log-tab${t === "log" ? " active" : ""}" data-action="log-tab" data-tab="log">Log</button>
-    <button class="log-tab${t === "melds" ? " active" : ""}" data-action="log-tab" data-tab="melds">Melds</button>
+    ${isRummy ? `<button class="log-tab${t === "melds" ? " active" : ""}" data-action="log-tab" data-tab="melds">Melds</button>` : ""}
   </div>`;
 
   return `<div class="logsheet">
@@ -477,7 +487,8 @@ function tableShell(v, parts) {
         <div><div class="name">${esc(myName)}</div><div class="me-pts">${parts.selfMeta || ""}</div></div>
         ${parts.selfTurn || ""}
       </div>
-      <div class="actions">${parts.actions || `<span class="hint">Watching the table…</span>`}</div>`;
+      ${parts.selfExtra ? `<div class="self-extra">${parts.selfExtra}</div>` : ""}
+      ${parts.actions !== null ? `<div class="actions">${parts.actions || `<span class="hint">Watching the table…</span>`}</div>` : ""}`;
   } else {
     self = `<div class="selfbar"><div class="name">Spectating</div><div class="me-pts">${parts.selfMeta || ""}</div></div>`;
   }
@@ -485,6 +496,7 @@ function tableShell(v, parts) {
     ${appbar(v, { log: true })}
     <div class="felt">
       ${feltPods}
+      ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
       <div class="center">${parts.center}</div>
       ${parts.trick || ""}
       ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
@@ -751,28 +763,28 @@ function renderHLJ(v) {
     )
     .filter(Boolean);
 
-  // center: trump + team scores, then the trick (or the last completed trick)
+  // center: trick area (trump watermark on felt separately)
   const you = v.you;
   const myTeam = you != null ? you % 2 : null;
-  const trumpCrest = `<span class="crest"><span class="suit ${v.trump && RED.has(v.trump) ? "red" : "blk"}">${v.trump ? SUIT[v.trump] : "\u2014"}</span> trump</span>`;
-  const teamCrest = (t) =>
-    `<span class="crest score t${t === 0 ? "A" : "B"} ${myTeam === t ? "mine" : ""}"><span class="teamdot t${t === 0 ? "A" : "B"}"></span>Team ${t === 0 ? "A" : "B"} ${v.scores[t]}${myTeam === t ? " \u00b7 you" : ""}</span>`;
-  const bidCrest = v.phase === "bidding" ? `<span class="crest">high bid: ${highBid}</span>` : "";
   let hljTrick;
   let centerExtra = "";
   if (v.currentTrick.length) {
-    const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-    hljTrick = trickHTML(plays, you, v.seats.length);
+    const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+    hljTrick = trickHTML(trickPlays, you, v.seats.length);
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
-    // lastTrick has no per-card seat, so render inline in center
     centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
       .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
       .join("")}</div></div>`;
   } else {
     centerExtra = `<div class="callout">${v.phase === "bidding" ? "The table is bidding." : "Lead a card to open the trick."}</div>`;
   }
-  const center = `<div class="crestrow">${trumpCrest}${teamCrest(0)}${teamCrest(1)}${bidCrest}</div>${centerExtra}`;
+  const center = centerExtra;
+
+  // Trump watermark on felt fabric
+  const feltOverlay = v.trump
+    ? `<span class="trump-watermark ${RED.has(v.trump) ? "red" : ""}">${SUIT[v.trump]}</span>`
+    : "";
 
   // hand (fanned), dim non-legal cards while it's your turn to play
   const hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => ({
@@ -782,37 +794,75 @@ function renderHLJ(v) {
     key: cardKey(c),
   }))}</div>`;
 
-  // actions
-  const acts = [];
-  if (v.yourTurn) {
-    bids.forEach((m) => acts.push(`<button class="btn sm" data-action="move-bid" data-amount="${m.amount}">Bid ${m.amount}</button>`));
-    if (canPass) acts.push(`<button class="btn ghost sm" data-action="move-pass">Pass</button>`);
-    if (trumpChoices.length) {
-      acts.push(`<span class="hint">Choose trump:</span>`);
-      trumpChoices.forEach((m) =>
-        acts.push(`<button class="btn sm" data-action="move-trump" data-suit="${m.suit}"><span style="font-size:18px;color:${RED.has(m.suit) ? "var(--suit-red)" : "#2a2018"}">${SUIT[m.suit]}</span></button>`),
-      );
-    }
-    if (plays.size) acts.push(`<span class="hint">Tap a glowing card to play.</span>`);
-  }
-  if (v.phase === "bidding" && v.you != null) {
-    acts.push(`<span class="hint">Signal partner:</span>`);
-    ["strong", "medium", "weak"].forEach((l) =>
-      acts.push(`<button class="btn ghost sm" data-action="signal" data-level="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`),
-    );
-  }
+  // Bid slider \u2014 shown only on your bidding turn
+  const minBid = bids.length ? bids[0].amount : 2;
+  const maxBid = 6;
+  const curHighAmt = v.highBid ? v.highBid.amount : null;
+  const sliderVal = bids.length ? bids[0].amount : minBid; // default to minimum legal bid
+  const bidSlider = v.yourTurn && bids.length
+    ? `<div class="hlj-bid-row">
+        <span class="hlj-bid-label">Bid: <b id="hlj-bid-display">${sliderVal}</b></span>
+        <input class="hlj-slider" type="range" id="hlj-bid-slider" min="${minBid}" max="${maxBid}" value="${sliderVal}"
+          oninput="document.getElementById('hlj-bid-display').textContent=this.value" />
+        <div class="hlj-bid-pips">${Array.from({length: maxBid - 1}, (_, i) => {
+          const n = i + 2;
+          const isCur = curHighAmt === n;
+          return `<span class="${isCur ? "pip-cur" : ""}">${isCur ? `${n}\u2605` : n}</span>`;
+        }).join("")}</div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button class="btn" data-action="hlj-bid-confirm">Bid</button>
+          ${canPass ? `<button class="btn ghost" data-action="move-pass">Pass</button>` : ""}
+        </div>
+      </div>`
+    : (v.yourTurn && canPass && !bids.length ? `<button class="btn ghost sm" data-action="move-pass">Pass</button>` : "");
+
+  // Signal slider \u2014 shown during bidding when you have a seat
+  const signalLevels = ["weak", "medium", "strong"];
+  const curSignal = v.you != null ? v.signals?.[v.you] : null;
+  const sigIdx = curSignal ? signalLevels.indexOf(curSignal) : -1;
+  const signalControl = v.phase === "bidding" && v.you != null
+    ? `<div class="hlj-signal-row">
+        <span class="hlj-signal-label">Signal partner</span>
+        <div class="hlj-signal-seg">
+          ${signalLevels.map((l, i) => `<button class="hlj-sig-btn${i === sigIdx ? " active" : ""}" data-action="signal" data-level="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}
+        </div>
+      </div>`
+    : "";
+
+  // Trump suit buttons \u2014 when you need to select
+  const trumpControl = v.yourTurn && trumpChoices.length
+    ? `<div class="hlj-trump-row">
+        <span class="hint">Choose trump:</span>
+        <div style="display:flex;gap:10px;justify-content:center">
+          ${trumpChoices.map((m) => `<button class="btn" data-action="move-trump" data-suit="${m.suit}" style="font-size:22px;min-width:54px;color:${RED.has(m.suit) ? "var(--suit-red)" : "#2a2018"}">${SUIT[m.suit]}</button>`).join("")}
+        </div>
+      </div>`
+    : "";
+
+  const playHint = v.yourTurn && plays.size ? `<span class="hint">Tap a glowing card to play.</span>` : "";
+
+  // Team score strip below hand
+  const myTeamIdx = you != null ? you % 2 : 0; // 0=A, 1=B
+  const oppTeamIdx = 1 - myTeamIdx;
+  const myTeamLetter = myTeamIdx === 0 ? "A" : "B";
+  const oppTeamLetter = myTeamIdx === 0 ? "B" : "A";
+  const teamScores = `<div class="hlj-scores">
+    <span class="hlj-score-chip t${myTeamLetter} mine"><span class="teamdot t${myTeamLetter}"></span>Team ${myTeamLetter}&nbsp;<b>${v.scores[myTeamIdx]}</b></span>
+    <span class="hlj-score-chip t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
+  </div>`;
+
+  const selfExtra = `${teamScores}${bidSlider}${signalControl}${trumpControl}${playHint}`;
 
   const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
   const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
-  const selfMeta =
-    you != null
-      ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>`
-      : `play to ${v.target}`;
+  const selfMeta = you != null
+    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>`
+    : `play to ${v.target}`;
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, trick: hljTrick, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, trick: hljTrick, feltOverlay, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
@@ -1609,6 +1659,10 @@ app.addEventListener("click", (e) => {
     case "start": return doStart();
     case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
     case "move-bid": return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
+    case "hlj-bid-confirm": {
+      const amt = +(document.getElementById("hlj-bid-slider")?.value ?? 2);
+      return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
+    }
     case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
     case "move-trump": return send({ t: "move", move: { type: "selectTrump", seat: v.you, suit: t.dataset.suit } });
     case "signal": return send({ t: "aux", payload: t.dataset.level });
