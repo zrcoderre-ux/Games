@@ -862,12 +862,22 @@ function renderGameOver(v, title, scoresHTML) {
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
 function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
+  // Mirror the pod LAYOUTS table so cards land near each player's pod
+  const TRICK_LAYOUTS = {
+    1: ["pos-top"],
+    2: ["pos-left","pos-right"],
+    3: ["pos-left","pos-top","pos-right"],
+    4: ["pos-left","pos-top","pos-top pos-tl","pos-right"],
+    5: ["pos-left","pos-tl","pos-top","pos-tr","pos-right"],
+    6: ["pos-left","pos-tl","pos-top","pos-top","pos-tr","pos-right"],
+    7: ["pos-left","pos-tl","pos-top","pos-top","pos-top","pos-tr","pos-right"],
+  };
   const posClass = (seat) => {
     if (you == null) return "pos-top";
     const off = (seat - you + n) % n;
     if (off === 0) return "pos-bottom";
-    if (off === Math.floor(n / 2)) return "pos-top";
-    return off < n / 2 ? "pos-left" : "pos-right";
+    const layout = TRICK_LAYOUTS[n - 1] || TRICK_LAYOUTS[7];
+    return layout[off - 1] || "pos-top";
   };
   const inner = plays.map((p, idx) =>
     `<div class="play ${posClass(p.seat)}${idx === 0 ? " lead" : ""}">${cardHTML(p.card, { mini: true, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
@@ -974,15 +984,24 @@ function renderHLJ(v) {
   const bidHistory = Array.isArray(v.bidHistory) ? v.bidHistory : [];
 
   // Build a positioned overlay: one token per player who has bid/passed
+  // Edge-anchored positions match .trick.positioned .play.pos-* CSS
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    if (you == null) return "transform:translate(-50%, calc(-50% - min(30vh, 180px)))";
+    if (you == null) return "top:8%;left:50%;transform:translateX(-50%)";
     const off = (seat - you + n) % n;
-    if (off === 0) return "transform:translate(-50%, calc(-50% + min(26vh, 140px)))";
-    if (off === Math.floor(n / 2)) return "transform:translate(-50%, calc(-50% - min(30vh, 180px)))";
-    return off < n / 2
-      ? "transform:translate(calc(-50% - min(36vw, 200px)), -50%)"
-      : "transform:translate(calc(-50% + min(36vw, 200px)), -50%)";
+    if (off === 0) return "bottom:8%;left:50%;transform:translateX(-50%)";
+    const TRICK_LAYOUTS = {
+      1:["pos-top"],2:["pos-left","pos-right"],3:["pos-left","pos-top","pos-right"],
+      4:["pos-left","pos-top","pos-top","pos-right"],5:["pos-left","pos-tl","pos-top","pos-tr","pos-right"],
+      6:["pos-left","pos-tl","pos-top","pos-top","pos-tr","pos-right"],
+      7:["pos-left","pos-tl","pos-top","pos-top","pos-top","pos-tr","pos-right"],
+    };
+    const pos = (TRICK_LAYOUTS[n-1]||TRICK_LAYOUTS[7])[off-1]||"pos-top";
+    if (pos.includes("pos-left")) return "left:6%;top:50%;transform:translateY(-50%)";
+    if (pos.includes("pos-right")) return "right:6%;top:50%;transform:translateY(-50%)";
+    if (pos.includes("pos-tl")) return "top:14%;left:22%;transform:none";
+    if (pos.includes("pos-tr")) return "top:14%;right:22%;transform:none";
+    return "top:8%;left:50%;transform:translateX(-50%)";
   };
   const bidTokens = v.phase === "bidding"
     ? bidHistory.map(b => {
