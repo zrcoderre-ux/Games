@@ -146,6 +146,164 @@
 [data-theme="parchment"] .btn.ghost{background:linear-gradient(178deg,#3e2e14,#2a1e0a);box-shadow:inset 0 1px 0 rgba(220,195,140,.15),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 0 #1e1408,0 9px 16px -8px rgba(0,0,0,.7)}
 
 /* ============================================================
+   Felt Table home screen
+   ============================================================ */
+
+/* Outer oak rail — body becomes the wood surround */
+body:has(.felt-table){
+  background:linear-gradient(135deg,#7a5030 0%,#5c3a1e 25%,#3e2510 50%,#5c3a1e 75%,#7a5030 100%);
+  background-attachment:fixed;
+}
+body:has(.felt-table)::before{
+  background:linear-gradient(135deg,rgba(140,100,50,.4) 0%,transparent 40%,transparent 60%,rgba(140,100,50,.3) 100%);
+}
+
+.felt-table{
+  position:relative;
+  margin:12px;
+  border-radius:20px;
+  overflow:hidden;
+  min-height:calc(100dvh - 24px);
+  background-color:#1a4a2e;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='%231a4a2e'/%3E%3Cpath d='M0 10L10 0L20 10L10 20Z' fill='none' stroke='%23163d26' stroke-width='0.9' opacity='0.8'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(45deg,transparent,transparent 9px,rgba(0,0,0,.02) 9px,rgba(0,0,0,.02) 10px),
+    repeating-linear-gradient(-45deg,transparent,transparent 9px,rgba(0,0,0,.02) 9px,rgba(0,0,0,.02) 10px);
+  box-shadow:
+    inset 0 0 60px rgba(0,0,0,.5),
+    inset 0 0 0 2px rgba(0,0,0,.4),
+    0 0 0 3px #2a1508,
+    0 0 0 5px rgba(160,120,60,.5);
+}
+/* Overhead lamp glow */
+.felt-table::before{
+  content:"";position:absolute;top:-80px;left:50%;transform:translateX(-50%);
+  width:600px;height:480px;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at 50% 0%,rgba(220,150,40,.24) 0%,rgba(200,130,30,.1) 35%,transparent 65%);
+}
+/* Inner vignette */
+.felt-table::after{
+  content:"";position:absolute;inset:0;border-radius:20px;pointer-events:none;z-index:20;
+  box-shadow:inset 0 0 40px rgba(0,0,0,.4),inset 0 10px 25px rgba(0,0,0,.3);
+}
+
+/* Scattered face-down card backs */
+.cb{
+  position:absolute;width:40px;height:56px;border-radius:5px;z-index:1;
+  background:linear-gradient(135deg,#8b1a1a 0%,#6b1010 100%);
+  border:1.5px solid rgba(255,255,255,.15);
+  box-shadow:2px 3px 8px rgba(0,0,0,.55),inset 0 0 0 3px rgba(255,255,255,.05);
+}
+.cb::after{
+  content:"";position:absolute;inset:4px;border-radius:2px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M0 4L4 0L8 4L4 8Z' fill='none' stroke='rgba(255,255,255,0.1)' stroke-width='0.8'/%3E%3C/svg%3E");
+  background-size:8px 8px;
+}
+.cb1{top:24px;left:-12px;transform:rotate(-18deg);opacity:.65}
+.cb2{top:48px;left:-4px;transform:rotate(-10deg);opacity:.45}
+.cb3{top:20px;right:-8px;transform:rotate(16deg);opacity:.6}
+.cb4{top:48px;right:-2px;transform:rotate(8deg);opacity:.42}
+.cb5{bottom:80px;left:-6px;transform:rotate(22deg);opacity:.38}
+.cb6{bottom:100px;right:-10px;transform:rotate(-19deg);opacity:.42}
+
+.felt-content{
+  position:relative;z-index:5;
+  padding:32px 24px 28px;
+  display:flex;flex-direction:column;align-items:center;
+}
+
+.felt-title{
+  font-family:"Fraunces",serif;font-style:italic;font-weight:500;
+  font-size:52px;letter-spacing:.02em;line-height:1;margin-bottom:6px;
+  color:#122e1d;
+  text-shadow:0 1px 0 rgba(255,255,255,.07),0 -1px 0 rgba(0,0,0,.6),0 2px 5px rgba(0,0,0,.35);
+}
+.felt-sub{
+  font-size:10.5px;font-weight:400;letter-spacing:.13em;text-transform:uppercase;
+  color:rgba(248,244,232,.28);margin-bottom:26px;
+}
+.felt-rule{
+  width:100%;height:1px;margin-bottom:22px;
+  background:linear-gradient(90deg,transparent,rgba(201,144,30,.25) 20%,rgba(201,144,30,.4) 50%,rgba(201,144,30,.25) 80%,transparent);
+}
+
+.felt-label{
+  font-size:9.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;
+  color:#c9901e;margin-bottom:7px;align-self:flex-start;width:100%;
+  display:block;
+}
+.felt-input{
+  width:100%;background:transparent;border:none;
+  border-bottom:1.5px solid rgba(201,144,30,.38);
+  padding:9px 2px;font-family:"Hanken Grotesk",sans-serif;
+  font-size:15px;color:#f8f4e8;outline:none;margin-bottom:22px;
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.22);
+  transition:border-color .2s;caret-color:#e0a830;
+}
+.felt-input::placeholder{color:rgba(248,244,232,.26)}
+.felt-input:focus{border-bottom-color:#e0a830}
+.felt-input:disabled{opacity:.4}
+
+/* Game card fan */
+.tbl-fan{
+  width:100%;height:136px;position:relative;margin-bottom:26px;
+}
+.tbl-card{
+  position:absolute;width:84px;height:116px;border-radius:7px;
+  background:linear-gradient(160deg,#fdfaf2 0%,#ede6d0 100%);
+  border:1px solid rgba(255,255,255,.88);cursor:pointer;
+  box-shadow:2px 4px 14px rgba(0,0,0,.5),1px 2px 4px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,255,255,.55);
+  transition:transform .28s cubic-bezier(.34,1.56,.64,1),box-shadow .28s ease;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:8px 6px;user-select:none;appearance:none;
+}
+.tbl-card.red .tbl-card-suit,
+.tbl-card.red .tbl-card-corner{color:#b91c1c}
+.tbl-card.black .tbl-card-suit,
+.tbl-card.black .tbl-card-corner{color:#1c1c1c}
+.tbl-card-suit{font-size:22px;line-height:1;margin-bottom:5px}
+.tbl-card-name{
+  font-family:"Fraunces",serif;font-size:10.5px;font-weight:500;
+  text-align:center;line-height:1.3;color:#2a1a0a;
+}
+.tbl-card-corner{
+  position:absolute;font-size:10px;font-family:"Fraunces",serif;font-weight:700;line-height:1;
+}
+.tbl-card-corner.tl{top:5px;left:6px}
+.tbl-card-corner.br{bottom:5px;right:6px;transform:rotate(180deg)}
+.tbl-card.selected{
+  transform:translateY(-12px) rotate(0deg) !important;
+  z-index:10 !important;
+  box-shadow:0 16px 32px rgba(0,0,0,.6),0 6px 12px rgba(0,0,0,.4),
+    inset 0 0 0 1px rgba(255,255,255,.7),0 0 0 2px rgba(201,144,30,.55) !important;
+}
+
+.felt-toggle{
+  display:flex;align-items:center;gap:8px;width:100%;
+  font-size:13px;color:rgba(248,244,232,.5);margin-bottom:20px;cursor:pointer;
+}
+.felt-toggle input{accent-color:#c9901e}
+
+.felt-cta{
+  width:100%;padding:15px 24px;border:none;border-radius:8px;cursor:pointer;
+  font-family:"Fraunces",serif;font-size:18px;font-weight:500;font-style:italic;
+  letter-spacing:.03em;color:#251500;
+  background:linear-gradient(180deg,#dcaa28 0%,#c9901e 38%,#b07810 62%,#c08018 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 -2px 0 rgba(0,0,0,.25),
+    0 4px 0 #7a5010,0 6px 14px rgba(0,0,0,.55);
+  transition:transform .1s,box-shadow .1s,filter .15s;
+}
+.felt-cta:hover{filter:brightness(1.07)}
+.felt-cta:active{
+  transform:translateY(3px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -1px 0 rgba(0,0,0,.2),
+    0 1px 0 #7a5010,0 3px 8px rgba(0,0,0,.4);
+}
+
+.felt-theme-row{margin-top:18px;width:100%}
+.felt-theme-row .theme-picker{justify-content:center}
+
+/* ============================================================
    Theme picker
    ============================================================ */
 .theme-picker{display:flex;gap:8px;align-items:center;margin-top:4px}

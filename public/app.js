@@ -583,39 +583,78 @@ function renderPass() {
 }
 
 // ---------- start screen ----------
+
+const GAME_CARD_META = {
+  rummy500:          { suit: "♦", color: "red"   },
+  "high-low-jack":   { suit: "♠", color: "black" },
+  hearts:            { suit: "♥", color: "red"   },
+  "pegs-and-jokers": { suit: "♣", color: "black" },
+};
+
 function renderStart() {
   const g = S.pickGame;
-  const cards = Object.entries(GAMES)
-    .map(([id, info]) =>
-      `<button class="gamecard ${id === g ? "on" : ""}" data-action="pick-game" data-game="${id}">
-        <span class="ic" data-s="${info.suit}"></span>
-        <div class="meta"><h3>${esc(info.label)}</h3><p>${esc(info.blurb)}</p><p style="color:var(--ink-dim);margin-top:2px">${esc(info.range)}</p></div>
-        <span class="go">${id === g ? "\u25C9" : "\u25CB"}</span>
-      </button>`,
-    )
-    .join("");
+  const gameIds = Object.keys(GAMES);
+
+  const positions = [
+    { left: "2px",   top: "16px", rot: "-7deg" },
+    { left: "72px",  top: "6px",  rot: "-2deg" },
+    { left: "142px", top: "6px",  rot: "3deg"  },
+    { left: "212px", top: "14px", rot: "8deg"  },
+  ];
+
+  const gameCards = gameIds.map((id, i) => {
+    const info = GAMES[id];
+    const meta = GAME_CARD_META[id];
+    const sel = id === g;
+    const pos = positions[i];
+    const posStyle = sel
+      ? `left:${pos.left};z-index:10`
+      : `left:${pos.left};top:${pos.top};transform:rotate(${pos.rot});z-index:${i + 1}`;
+    return `<button class="tbl-card${sel ? " selected" : ""} ${meta.color}"
+        style="${posStyle}" data-action="pick-game" data-game="${id}">
+      <span class="tbl-card-corner tl">${meta.suit}</span>
+      <span class="tbl-card-suit">${meta.suit}</span>
+      <span class="tbl-card-name">${esc(info.label)}</span>
+      <span class="tbl-card-corner br">${meta.suit}</span>
+    </button>`;
+  }).join("");
+
   app.__set = `
-    <div class="stage" style="justify-content:center;padding-top:6vh">
-      <div class="panel cream">
-        <div class="hero"><div class="logo">\u2660</div><h1>Parlor</h1><p class="tag">a cozy room for cards</p></div>
-        <input type="hidden" id="f-game" value="${esc(g)}" />
-        <label>Your name</label>
-        <input class="field" id="f-name" value="${esc(S.name || "")}" placeholder="e.g. Alex" autocomplete="off" />
-        <label>Pick a game</label>
-        <div class="games">${cards}</div>
-        <label>Room code</label>
-        <input class="field" id="f-room" value="${esc(S.room || "")}" placeholder="blank = new room" autocomplete="off" ${S.offline ? "disabled" : ""} />
-        <label class="toggle">
+    <div class="felt-table">
+      <div class="cb cb1"></div><div class="cb cb2"></div>
+      <div class="cb cb3"></div><div class="cb cb4"></div>
+      <div class="cb cb5"></div><div class="cb cb6"></div>
+
+      <div class="felt-content">
+        <h1 class="felt-title">Parlor</h1>
+        <p class="felt-sub">a cozy room for cards</p>
+        <div class="felt-rule"></div>
+
+        <label class="felt-label">Your Name</label>
+        <input class="felt-input" id="f-name" value="${esc(S.name || "")}"
+          placeholder="e.g. Alex" autocomplete="off" />
+
+        <label class="felt-label">Choose a Game</label>
+        <div class="tbl-fan">
+          <input type="hidden" id="f-game" value="${esc(g)}" />
+          ${gameCards}
+        </div>
+
+        <label class="felt-label">Room Code</label>
+        <input class="felt-input" id="f-room" value="${esc(S.room || "")}"
+          placeholder="blank = new room" autocomplete="off" ${S.offline ? "disabled" : ""} />
+
+        <label class="felt-toggle">
           <input type="checkbox" id="f-offline" ${S.offline ? "checked" : ""} data-action="toggle-offline" />
-          <span>Play offline vs bots <em>— no connection, you + computer players</em></span>
+          <span>Play offline vs bots</span>
         </label>
-        <div style="margin-top:18px"><button class="btn" style="width:100%" data-action="connect">${S.offline ? "Play offline" : "Take a seat"}</button></div>
-        <label style="margin-top:20px">Theme</label>
-        ${themePickerHTML()}
+
+        <button class="felt-cta" data-action="connect">${S.offline ? "Play offline" : "Take a Seat"}</button>
+
+        <div class="felt-theme-row">${themePickerHTML()}</div>
       </div>
     </div>`;
 }
-
 // ---------- lobby ----------
 function renderLobby(v) {
   const isHost = v.you !== null && v.you === v.hostSeat;
