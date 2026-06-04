@@ -295,6 +295,18 @@ const competeProb = (myConf: number, theirConf: number, stretchProb: number): nu
   return gap <= 0 ? stretchProb * 0.6 : gap === 1 ? stretchProb + 0.1 : stretchProb + 0.3;
 };
 
+// How dangerous it is to let the opponent keep their bid.
+//   2 = game-winning: they reach or exceed the target if they make it
+//   1 = game-threatening: within 2 of the target after the bid
+//   0 = non-critical
+function opponentThreatLevel(state: GameState, opponentSeat: number, bidAmount: number): 0 | 1 | 2 {
+  const team = teamOf(opponentSeat);
+  const after = state.scores[team] + bidAmount;
+  if (after >= state.target) return 2;
+  if (after >= state.target - 2) return 1;
+  return 0;
+}
+
 // ---------- decisions ----------
 
 function decideBid(state: GameState, seat: number, rng: () => number, p: Personality): Move {
@@ -314,21 +326,37 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
 
   if (willing >= needed) return { type: "bid", seat, amount: needed };
 
-  // Marginal stretch — use calibrated signal and aggression index.
-  if (high !== null && needed <= willing + 1) {
+  // Evaluate the threat posed by the current bid before deciding whether to stretch.
+  if (high !== null) {
     const sameTeam = teamOf(high.seat) === teamOf(seat);
     const holderProf = state.profiles[high.seat];
-    // Calibrated strength of the current bid-holder's signal.
     const theirConf = calibratedSignal(state.signals[high.seat], holderProf);
-    // If the holder is a known over-bidder, their calibrated signal will be
-    // deflated and we'll be more willing to contest.
-    if (!sameTeam && myConf >= theirConf) {
-      // Boost stretch probability if the opponent bids aggressively (bluffs often).
-      const aggBonus = Math.max(0, aggressionIndex(holderProf) - 0.4) * 0.3;
-      if (rng() < competeProb(myConf, theirConf, p.stretchProb + aggBonus))
-        return { type: "bid", seat, amount: needed };
+
+    if (!sameTeam) {
+      const threat = opponentThreatLevel(state, high.seat, high.amount);
+
+      // A game-winning opponent bid must be contested regardless of hand strength.
+      // Taking a setback hurts; losing the game is worse.
+      if (threat === 2 && needed <= 6) return { type: "bid", seat, amount: needed };
+
+      // Game-threatening bid: contest if we have any reasonable hand (willing >= 1)
+      // OR if the opponent's signal/profile suggests they'll actually make it —
+      // in which case a setback is still preferable to handing them near-victory.
+      if (threat === 1 && needed <= willing + 2) {
+        // More willing to block a reliable opponent; still reluctant against an
+        // unknown or bluffing opponent where they might get set for us.
+        const blockProb = clamp(0.5 + theirConf * 0.2 - (2 - myConf) * 0.1, 0.2, 0.95);
+        if (rng() < blockProb) return { type: "bid", seat, amount: needed };
+      }
+
+      // Non-critical stretch: standard logic, weighted by aggression and signal.
+      if (needed <= willing + 1 && myConf >= theirConf) {
+        const aggBonus = Math.max(0, aggressionIndex(holderProf) - 0.4) * 0.3;
+        if (rng() < competeProb(myConf, theirConf, p.stretchProb + aggBonus))
+          return { type: "bid", seat, amount: needed };
+      }
     } else if (sameTeam && myConf === 2 && theirConf <= 0.5) {
-      // Partner holds it but profile says they over-claim on weak signals: take over.
+      // Partner holds it but signals weak while we're strong: occasionally take over.
       if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
     }
   }

@@ -809,6 +809,13 @@ var competeProb = (myConf, theirConf, stretchProb) => {
   const gap = myConf - theirConf;
   return gap <= 0 ? stretchProb * 0.6 : gap === 1 ? stretchProb + 0.1 : stretchProb + 0.3;
 };
+function opponentThreatLevel(state, opponentSeat, bidAmount) {
+  const team = teamOf(opponentSeat);
+  const after = state.scores[team] + bidAmount;
+  if (after >= state.target) return 2;
+  if (after >= state.target - 2) return 1;
+  return 0;
+}
 function decideBid(state, seat, rng, p) {
   const hand = state.hands[seat];
   const best = bestSuit(hand, state.players);
@@ -821,14 +828,22 @@ function decideBid(state, seat, rng, p) {
   const needed = highAmt === null ? 2 : isDealer ? highAmt : highAmt + 1;
   if (needed > 6) return { type: "pass", seat };
   if (willing >= needed) return { type: "bid", seat, amount: needed };
-  if (high !== null && needed <= willing + 1) {
+  if (high !== null) {
     const sameTeam = teamOf(high.seat) === teamOf(seat);
     const holderProf = state.profiles[high.seat];
     const theirConf = calibratedSignal(state.signals[high.seat], holderProf);
-    if (!sameTeam && myConf >= theirConf) {
-      const aggBonus = Math.max(0, aggressionIndex(holderProf) - 0.4) * 0.3;
-      if (rng() < competeProb(myConf, theirConf, p.stretchProb + aggBonus))
-        return { type: "bid", seat, amount: needed };
+    if (!sameTeam) {
+      const threat = opponentThreatLevel(state, high.seat, high.amount);
+      if (threat === 2 && needed <= 6) return { type: "bid", seat, amount: needed };
+      if (threat === 1 && needed <= willing + 2) {
+        const blockProb = clamp(0.5 + theirConf * 0.2 - (2 - myConf) * 0.1, 0.2, 0.95);
+        if (rng() < blockProb) return { type: "bid", seat, amount: needed };
+      }
+      if (needed <= willing + 1 && myConf >= theirConf) {
+        const aggBonus = Math.max(0, aggressionIndex(holderProf) - 0.4) * 0.3;
+        if (rng() < competeProb(myConf, theirConf, p.stretchProb + aggBonus))
+          return { type: "bid", seat, amount: needed };
+      }
     } else if (sameTeam && myConf === 2 && theirConf <= 0.5) {
       if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
     }
