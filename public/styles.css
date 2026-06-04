@@ -1302,6 +1302,41 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-score-chip.mine{border-color:var(--brass-hi);box-shadow:0 0 0 1px var(--brass-hi)}
 .hlj-score-chip b{font-family:"Fraunces",serif;font-size:17px}
 
+/* Bid result tokens — positioned on the felt near each player */
+.hlj-bid-overlay{position:absolute;inset:0;pointer-events:none;z-index:3}
+.hlj-bid-token{
+  position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:all;
+  font-family:"Fraunces",serif;font-size:15px;font-weight:700;
+  display:grid;place-items:center;
+  animation:dropin .35s cubic-bezier(.2,.8,.2,1) both;
+}
+.hlj-bid-token.chip{
+  width:42px;height:42px;border-radius:50%;
+  background:radial-gradient(circle at 38% 35%,rgba(255,255,255,.18),transparent 55%),
+             linear-gradient(145deg,#2a5a2a,#1a3a1a);
+  border:3px solid rgba(205,160,90,.6);color:var(--brass-hi);
+  box-shadow:0 4px 10px rgba(0,0,0,.5);
+}
+.hlj-bid-token.pass{
+  font-family:"Hanken Grotesk",sans-serif;font-size:11px;font-weight:700;
+  color:var(--ink-dim);letter-spacing:.05em;text-transform:uppercase;
+  background:rgba(0,0,0,.35);border:1px solid rgba(180,180,140,.2);
+  border-radius:20px;padding:4px 10px;width:auto;height:auto;
+}
+/* position offsets matching .trick.positioned */
+.hlj-bid-token.pos-top   {transform:translate(-50%, calc(-50% - min(30vh, 180px)))}
+.hlj-bid-token.pos-bottom{transform:translate(-50%, calc(-50% + min(26vh, 140px)))}
+.hlj-bid-token.pos-left  {transform:translate(calc(-50% - min(36vw, 200px)), -50%)}
+.hlj-bid-token.pos-right {transform:translate(calc(-50% + min(36vw, 200px)), -50%)}
+
+/* Felt-anchored chip panel — your bid turn, sits above the selfwrap */
+.hlj-felt-bid{
+  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  z-index:4;display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+
 /* Poker chip bid buttons */
 .hlj-bid-row{
   display:flex;flex-direction:column;align-items:center;gap:10px;
@@ -1338,19 +1373,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .hlj-pass-btn:hover{background:rgba(255,255,255,.07);color:var(--ink);border-color:rgba(180,180,140,.4)}
 
-/* Bid history on table during bidding */
-.hlj-table-bids{
-  display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;
-  padding:4px;
-}
-.hlj-table-bid{
-  font-size:12px;font-weight:600;color:var(--brass-hi);
-  background:rgba(0,0,0,.35);border:1px solid rgba(205,160,90,.3);
-  border-radius:20px;padding:4px 10px;
-}
-.hlj-table-bid b{font-family:"Fraunces",serif;font-size:14px}
-.hlj-table-bid.passed{color:var(--ink-dim);border-color:rgba(180,180,140,.18);font-style:italic}
-.callout-sm{font-size:13px;color:var(--ink-dim);font-style:italic}
 
 /* Signal segmented control */
 .hlj-signal-row{

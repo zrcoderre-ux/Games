@@ -563,6 +563,7 @@ function tableShell(v, parts) {
       ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
       <div class="center">${parts.center}</div>
       ${parts.trick || ""}
+      ${parts.feltBid || ""}
       ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
     </div>
     <div class="selfwrap">${self}</div>
@@ -933,14 +934,7 @@ function renderHLJ(v) {
       .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
       .join("")}</div></div>`;
   } else if (v.phase === "bidding") {
-    // Show bid history on the table as mini chips
-    const bidLog = Array.isArray(v.bidHistory) ? v.bidHistory : [];
-    const bidItems = bidLog.map(b => {
-      const name = esc(seatName(v, b.seat));
-      if (b.type === "pass") return `<span class="hlj-table-bid passed">${name}: Pass</span>`;
-      return `<span class="hlj-table-bid">${name}: <b>${b.amount}</b></span>`;
-    }).join("");
-    centerExtra = `<div class="hlj-table-bids">${bidItems || '<span class="callout-sm">Bidding&hellip;</span>'}</div>`;
+    centerExtra = "";
   } else {
     centerExtra = `<div class="callout">Lead a card to open the trick.</div>`;
   }
@@ -965,11 +959,36 @@ function renderHLJ(v) {
     key: cardKey(c),
   }))}</div>`;
 
-  // Poker chip bid buttons -- shown only on your bidding turn
+  // Bid result tokens positioned on the felt near each player
+  // plus your chip buttons anchored at the bottom of the felt
   const minBid = bids.length ? bids[0].amount : 2;
   const curHighAmt = v.highBid ? v.highBid.amount : null;
-  const bidSlider = v.yourTurn && bids.length
-    ? `<div class="hlj-bid-row">
+  const bidHistory = Array.isArray(v.bidHistory) ? v.bidHistory : [];
+
+  // Build a positioned overlay: one token per player who has bid/passed
+  const posClass = (seat) => {
+    const n = v.seats.length;
+    if (you == null) return "pos-top";
+    const off = (seat - you + n) % n;
+    if (off === 0) return "pos-bottom";
+    if (off === Math.floor(n / 2)) return "pos-top";
+    return off < n / 2 ? "pos-left" : "pos-right";
+  };
+  const bidTokens = v.phase === "bidding"
+    ? bidHistory.map(b => {
+        const pos = posClass(b.seat);
+        const label = b.type === "pass" ? "Pass" : String(b.amount);
+        const cls = b.type === "pass" ? "pass" : "chip";
+        return `<div class="hlj-bid-token ${pos} ${cls}">${label}</div>`;
+      }).join("")
+    : "";
+  const bidOverlay = bidTokens
+    ? `<div class="hlj-bid-overlay">${bidTokens}</div>`
+    : "";
+
+  // Your chip buttons, rendered on the felt when it's your bidding turn
+  const feltBidPanel = v.phase === "bidding" && v.yourTurn && bids.length
+    ? `<div class="hlj-felt-bid">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
             const legal = n >= minBid;
@@ -979,7 +998,10 @@ function renderHLJ(v) {
         </div>
         ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
       </div>`
-    : (v.yourTurn && canPass && !bids.length ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : "");
+    : (v.phase === "bidding" && v.yourTurn && canPass && !bids.length
+        ? `<div class="hlj-felt-bid"><button class="hlj-pass-btn" data-action="move-pass">Pass</button></div>`
+        : "");
+  const bidSlider = "";  // removed from selfExtra
 
   // Signal -- only shown for players who have bid (not passed)
   const signalLevels = ["weak", "medium", "strong"];
@@ -1017,7 +1039,7 @@ function renderHLJ(v) {
     <span class="hlj-score-chip t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
   </div>`;
 
-  const selfExtra = `${teamScores}${bidSlider}${signalControl}${trumpControl}${playHint}`;
+  const selfExtra = `${teamScores}${signalControl}${trumpControl}${playHint}`;
 
   const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
   const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
@@ -1028,7 +1050,7 @@ function renderHLJ(v) {
     ? `<span class="turnflag">Your turn</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, trick: hljTrick, feltOverlay, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
