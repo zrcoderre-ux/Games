@@ -461,9 +461,25 @@ function logSheet() {
   // --- Log tab ---
   const logBody = () => {
     const entries = v && v.log ? v.log : [];
+    // Append dealt-hand rows at the end of the log list (they appear at bottom = start of hand)
+    // Only revealed once the hand is over (lastDealtHands is set)
+    let dealtRows = "";
+    if (S.party === "high-low-jack" && v && v.lastDealtHands) {
+      const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
+      dealtRows = v.lastDealtHands.map((hand, seat) => {
+        const name = esc(seatName(v, seat));
+        const sorted = [...hand].sort((a, b) =>
+          (a.joker ? 1 : 0) - (b.joker ? 1 : 0) ||
+          (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
+          a.rank - b.rank
+        );
+        const cards = sorted.map(c => cardHTML(c, { mini: true })).join("");
+        return `<div class="logrow hlj-dealt-row"><span class="hlj-dealt-name">${name}</span><div class="hlj-dealt-cards">${cards}</div></div>`;
+      }).join("");
+    }
     const rows = entries.length
-      ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("")
-      : `<div class="logrow" style="color:var(--ink-dim)">No moves yet.</div>`;
+      ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("") + dealtRows
+      : dealtRows || `<div class="logrow" style="color:var(--ink-dim)">No moves yet.</div>`;
     return `<div class="loglist">${rows}</div>`;
   };
 
@@ -684,7 +700,6 @@ function renderStart() {
 
         <button class="felt-cta" data-action="connect">Take a Seat</button>
 
-        <div class="felt-theme-row">${themePickerHTML()}</div>
       </div>
     </div>`;
 }
@@ -917,7 +932,7 @@ function renderHLJ(v) {
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             count: v.handCounts[i],
-            note: v.phase === "bidding" && v.signals[i] ? v.signals[i] : null,
+            note: null, // bid strength signals hidden for now
           }) },
     )
     .filter(Boolean);
@@ -968,20 +983,22 @@ function renderHLJ(v) {
   const bidHistory = Array.isArray(v.bidHistory) ? v.bidHistory : [];
 
   // Build a positioned overlay: one token per player who has bid/passed
-  const posClass = (seat) => {
+  const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    if (you == null) return "pos-top";
+    if (you == null) return "transform:translate(-50%, calc(-50% - min(30vh, 180px)))";
     const off = (seat - you + n) % n;
-    if (off === 0) return "pos-bottom";
-    if (off === Math.floor(n / 2)) return "pos-top";
-    return off < n / 2 ? "pos-left" : "pos-right";
+    if (off === 0) return "transform:translate(-50%, calc(-50% + min(26vh, 140px)))";
+    if (off === Math.floor(n / 2)) return "transform:translate(-50%, calc(-50% - min(30vh, 180px)))";
+    return off < n / 2
+      ? "transform:translate(calc(-50% - min(36vw, 200px)), -50%)"
+      : "transform:translate(calc(-50% + min(36vw, 200px)), -50%)";
   };
   const bidTokens = v.phase === "bidding"
     ? bidHistory.map(b => {
-        const pos = posClass(b.seat);
+        const style = bidPosStyle(b.seat);
         const label = b.type === "pass" ? "Pass" : String(b.amount);
         const cls = b.type === "pass" ? "pass" : "chip";
-        return `<div class="hlj-bid-token ${pos} ${cls}">${label}</div>`;
+        return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("")
     : "";
   const bidOverlay = bidTokens
@@ -1010,14 +1027,8 @@ function renderHLJ(v) {
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
   const sigIdx = curSignal ? signalLevels.indexOf(curSignal) : -1;
   const youHaveBid = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "bid");
-  const signalControl = v.phase === "bidding" && v.you != null && youHaveBid
-    ? `<div class="hlj-signal-row">
-        <span class="hlj-signal-label">Signal partner</span>
-        <div class="hlj-signal-seg">
-          ${signalLevels.map((l, i) => `<button class="hlj-sig-btn${i === sigIdx ? " active" : ""}" data-action="signal" data-level="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}
-        </div>
-      </div>`
-    : "";
+  // Signal control hidden for now — architecture kept for later
+  const signalControl = "";
 
   // Trump suit buttons \u2014 when you need to select
   const trumpControl = v.yourTurn && trumpChoices.length

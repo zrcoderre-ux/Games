@@ -360,6 +360,10 @@ button{font-family:inherit}
   height:100dvh;overflow:hidden;padding:0;
   background:var(--wood-0);
 }
+/* When lobby is present: same lock so lby-wrap can scroll */
+#app:has(.lby-wrap){
+  height:100dvh;overflow:hidden;padding:0;
+}
 
 /* ---------- App bar ---------- */
 .appbar{
@@ -532,7 +536,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 
 /* ---------- Lobby redesign ---------- */
-.lby-wrap{overflow-y:auto;display:flex;justify-content:center;padding:16px 16px 48px}
+.lby-wrap{overflow-y:auto;min-height:0;display:flex;justify-content:center;padding:16px 16px 48px}
 .lby-wrap .felt-content{
   position:relative;z-index:1;
   max-width:480px;width:100%;padding:24px 20px 28px;align-items:stretch;
@@ -1178,7 +1182,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* move-log slide-up sheet */
 .logsheet{position:fixed;left:0;right:0;bottom:0;z-index:120;max-height:62vh;display:flex;flex-direction:column;
-  background:linear-gradient(180deg,#3a2616,#221408);border-top:1px solid rgba(205,160,90,.4);
+  background:linear-gradient(180deg,#0e1a12,#080f0a);border-top:1px solid rgba(205,160,90,.35);
   border-radius:18px 18px 0 0;box-shadow:0 -16px 44px -16px rgba(0,0,0,.85);
   padding:10px max(12px,env(safe-area-inset-left)) max(14px,env(safe-area-inset-bottom));
   animation:slideup .28s cubic-bezier(.2,.8,.2,1) both}
@@ -1306,7 +1310,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-bid-overlay{position:absolute;inset:0;pointer-events:none;z-index:3}
 .hlj-bid-token{
   position:absolute;left:50%;top:50%;
-  transform:translate(-50%,-50%);
   pointer-events:all;
   font-family:"Fraunces",serif;font-size:15px;font-weight:700;
   display:grid;place-items:center;
@@ -1325,11 +1328,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   background:rgba(0,0,0,.35);border:1px solid rgba(180,180,140,.2);
   border-radius:20px;padding:4px 10px;width:auto;height:auto;
 }
-/* position offsets matching .trick.positioned */
-.hlj-bid-token.pos-top   {transform:translate(-50%, calc(-50% - min(30vh, 180px)))}
-.hlj-bid-token.pos-bottom{transform:translate(-50%, calc(-50% + min(26vh, 140px)))}
-.hlj-bid-token.pos-left  {transform:translate(calc(-50% - min(36vw, 200px)), -50%)}
-.hlj-bid-token.pos-right {transform:translate(calc(-50% + min(36vw, 200px)), -50%)}
 
 /* Felt-anchored chip panel — your bid turn, sits above the selfwrap */
 .hlj-felt-bid{
@@ -1427,3 +1425,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-rr-scoreteam.tB{color:var(--teamB)}
 .hlj-rr-scoredelta{font-family:"Fraunces",serif;font-size:18px;font-weight:700;color:var(--brass-hi);min-width:36px;text-align:right}
 .hlj-rr-scoretotal{font-size:12px;color:var(--ink-dim);white-space:nowrap}
+
+/* HLJ dealt hand rows in log (revealed at end of hand) */
+.hlj-dealt-row{display:flex;flex-direction:column;gap:5px;padding:6px 0;border-top:1px solid rgba(180,180,140,.12)}
+.hlj-dealt-name{font-size:11px;font-weight:700;color:var(--ink-dim);letter-spacing:.04em}
+.hlj-dealt-cards{display:flex;flex-wrap:wrap;gap:4px}

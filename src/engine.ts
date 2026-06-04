@@ -156,6 +156,7 @@ export type HandResult = {
     bonhomme: number | null; // null if joker not in play
     game: number | null; // null on a tie
   };
+  dealtHands: Card[][]; // each player's starting hand, revealed post-hand
 };
 
 // Per-seat statistics accumulated across hands, observable by the AI.
@@ -205,6 +206,7 @@ export type GameState = {
   tricksWon: { seat: number; cards: Card[] }[]; // resolved tricks this hand
 
   lastHand: HandResult | null;
+  dealtHands: Card[][] | null; // starting hands this round, revealed at end of hand
   bidHistory: { seat: number; type: "bid" | "pass"; amount?: number }[];
 
   // Cross-hand player profiles, updated after each hand scores.
@@ -263,6 +265,7 @@ export function createGame(players: PlayerCount, seed: number, target = 21): Gam
     currentTrick: [],
     tricksWon: [],
     lastHand: null,
+    dealtHands: null,
     bidHistory: [],
     profiles: Array.from({ length: players }, emptyProfile),
   };
@@ -288,6 +291,7 @@ function deal(state: GameState): GameState {
     seed: nextSeed,
     phase: "bidding",
     hands,
+    dealtHands: hands.map(h => [...h]),
     kitty,
     trump: null,
     bidTurn: firstBidder,
@@ -566,6 +570,7 @@ export function scoreHand(state: GameState): GameState {
     made,
     deltaByTeam,
     detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam },
+    dealtHands: state.dealtHands ?? [],
   };
 
   // Win conditions.
