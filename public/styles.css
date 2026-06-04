@@ -246,7 +246,7 @@ body:has(.felt-table)::before{
 
 /* Game card fan */
 .tbl-fan{
-  width:100%;height:136px;position:relative;margin-bottom:26px;
+  width:100%;height:148px;position:relative;margin-bottom:26px;
 }
 .tbl-card{
   position:absolute;width:84px;height:116px;border-radius:7px;

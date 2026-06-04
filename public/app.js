@@ -47,7 +47,7 @@ const S = {
   pid: null,
   name: "",
   party: null,
-  pickGame: "rummy500", // start-screen selection
+  pickGame: "high-low-jack", // start-screen selection
   room: null,
   ws: null,
   offline: false, // playing locally vs bots (no server)
@@ -593,13 +593,15 @@ const GAME_CARD_META = {
 
 function renderStart() {
   const g = S.pickGame;
-  const gameIds = Object.keys(GAMES);
+  // HLJ first (longest name, should be visible), then the rest
+  const gameIds = ["high-low-jack", "rummy500", "hearts", "pegs-and-jokers"];
 
+  // Wider spread so each card name is legible
   const positions = [
-    { left: "2px",   top: "16px", rot: "-7deg" },
-    { left: "72px",  top: "6px",  rot: "-2deg" },
-    { left: "142px", top: "6px",  rot: "3deg"  },
-    { left: "212px", top: "14px", rot: "8deg"  },
+    { left: "0px",   top: "18px", rot: "-9deg" },
+    { left: "86px",  top: "6px",  rot: "-2deg" },
+    { left: "172px", top: "6px",  rot: "4deg"  },
+    { left: "258px", top: "16px", rot: "10deg" },
   ];
 
   const gameCards = gameIds.map((id, i) => {
