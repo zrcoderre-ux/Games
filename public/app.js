@@ -398,7 +398,9 @@ function connect() {
 }
 
 let localMod = null;
-async function connectLocal() {
+// serverSeats: if provided, replicate this seat layout and auto-start (Pass & Play / bot-only handoff).
+// startConfig: { target?, marbles?, botDifficulty? } mirroring the server lobby settings.
+async function connectLocal(serverSeats = null, startConfig = null) {
   S.offline = true;
   try {
     if (!localMod) localMod = await import("/local.js");
@@ -409,11 +411,31 @@ async function connectLocal() {
   S.ws = sock;
   sock.onopen = () => {
     joinOnOpen();
-    // Seat any pass-and-play players reserved before switching to local.
-    for (const [seat, name] of Object.entries(S.hotseats)) {
-      send({ t: "addHuman", seat: +seat, name });
+    if (serverSeats) {
+      // Replicate server seat config into the local room.
+      for (let i = 1; i < serverSeats.length; i++) {
+        const hotseatName = S.hotseats[i];
+        if (hotseatName) {
+          send({ t: "addHuman", seat: i, name: hotseatName });
+        } else if (serverSeats[i].kind === "bot" || serverSeats[i].kind === "empty") {
+          // Fill every non-host seat with a bot so the game can start immediately.
+          send({ t: "addBot", seat: i });
+        }
+      }
+      S.hotseats = {};
+      // Auto-start with the same config that was in the server lobby.
+      if (S.party === "pegs-and-jokers") {
+        send({ t: "start", config: { players: serverSeats.length, marbles: startConfig?.marbles ?? 5 } });
+      } else {
+        send({ t: "start", config: { players: serverSeats.length, target: startConfig?.target ?? GAMES[S.party]?.target ?? 21, botDifficulty: startConfig?.botDifficulty } });
+      }
+    } else {
+      // Fallback / reconnect path: restore any hotseat reservations only.
+      for (const [seat, name] of Object.entries(S.hotseats)) {
+        send({ t: "addHuman", seat: +seat, name });
+      }
+      S.hotseats = {};
     }
-    S.hotseats = {};
   };
   sock.onmessage = onFrame;
   sock.onclose = () => { S.connected = false; };
@@ -1706,7 +1728,8 @@ function doStart() {
     try { S.ws?.close(); } catch {}
     S.connected = false;
     S.view = null;
-    connectLocal();
+    const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party]?.target;
+    connectLocal(v.seats, { target, marbles: v.marbles, botDifficulty: v.botDifficulty });
     return;
   }
   if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: v.players, marbles: v.marbles } });
