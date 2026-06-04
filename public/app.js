@@ -1060,7 +1060,7 @@ function renderRummy(v) {
               suits.includes(s) ? `<span class="${cls}${RED.has(s)?" red":""}">${SUIT[s]}</span>` : ""
             ).join("");
             const jkBadge = jk ? `<span class="set-jk">★×${jk}</span>` : "";
-            inner = `<div class="card mini set-merged tappable">${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
+            inner = `<div class="card mini set-merged tappable" ${meldAttrs}>${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
           } else {
             // Run: fixed total width of 2 mini cards; margin shrinks as count grows
             const n = m.cards.length;
