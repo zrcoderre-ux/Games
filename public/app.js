@@ -597,6 +597,9 @@ function renderLobby(v) {
       else if (i === v.hostSeat && !isEmpty) tags.push(`<span class="chip host">host</span>`);
       if (s.kind === "bot") tags.push(`<span class="chip bot">bot</span>`);
       if (isEmpty) tags.push(`<span class="chip empty">empty</span>`);
+      const isRummyLobby = S.party === "rummy-500" && v.phase === "lobby";
+      const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
+      const DIFF_LABELS = ["Easy", "Medium", "Hard", "Expert"];
       let ctrl = "";
       if (isEmpty) {
         ctrl =
@@ -604,7 +607,10 @@ function renderLobby(v) {
           (S.offline ? `<button class="btn sm" data-action="addhuman" data-seat="${i}">+ Player</button>` : "") +
           (isHost ? `<button class="btn sm ghost" data-action="addbot" data-seat="${i}">+ Bot</button>` : "");
       } else if (s.kind === "bot" && isHost) {
-        ctrl = `<button class="btn sm danger" data-action="removebot" data-seat="${i}">Remove</button>`;
+        const diffPicker = isRummyLobby
+          ? `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`
+          : "";
+        ctrl = diffPicker + `<button class="btn sm danger" data-action="removebot" data-seat="${i}">Remove</button>`;
       } else if (S.offline && s.kind === "human" && i !== v.hostSeat) {
         ctrl = `<button class="btn sm danger" data-action="clearseat" data-seat="${i}">Remove</button>`;
       }
@@ -1641,6 +1647,13 @@ app.addEventListener("click", (e) => {
     case "leave": return doLeave();
     case "sit": return send({ t: "sit", seat: +t.dataset.seat });
     case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
+    case "set-bot-difficulty": {
+      const seat = +t.dataset.seat;
+      const diff = +t.value;
+      const cur = v.botDifficulty ? [...v.botDifficulty] : Array(v.players).fill(2);
+      cur[seat] = diff;
+      return send({ t: "setConfig", config: { players: v.players, target: v.target, botDifficulty: cur } });
+    }
     case "removebot": return send({ t: "removeBot", seat: +t.dataset.seat });
     case "addhuman": {
       const seat = +t.dataset.seat;
@@ -1654,7 +1667,9 @@ app.addEventListener("click", (e) => {
     case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
     case "setcount": {
       const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-      return send({ t: "setConfig", config: { players: +t.dataset.count, target } });
+      const config = { players: +t.dataset.count, target };
+      if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
+      return send({ t: "setConfig", config });
     }
     case "start": return doStart();
     case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
@@ -1766,7 +1781,11 @@ app.addEventListener("dragend", endDrag);
 app.addEventListener("change", (e) => {
   if (e.target.id === "f-target" && S.view && S.view.phase === "lobby") {
     const target = parseInt(e.target.value, 10);
-    if (target > 0) send({ t: "setConfig", config: { players: S.view.players, target } });
+    if (target > 0) {
+      const cfg = { players: S.view.players, target };
+      if (S.view.botDifficulty) cfg.botDifficulty = S.view.botDifficulty;
+      send({ t: "setConfig", config: cfg });
+    }
   }
 });
 

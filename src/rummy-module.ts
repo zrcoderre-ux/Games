@@ -195,6 +195,9 @@ export type RummyState = {
   winner: number | null;
   lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][] } | null;
 
+  // Per-seat bot difficulty: 0=Easy, 1=Medium, 2=Hard, 3=Expert. Default 2 (Hard/Aggressive).
+  botDifficulty: number[];
+
   nextMeldId: number;
   log: LogEntry[]; // authoritative move log
   logSeq: number; // monotonic id source for log entries
@@ -207,7 +210,12 @@ export type RummyMove =
   | { type: "layoff"; seat: number; meldId: number; cards: number[] } // card ids onto an existing meld
   | { type: "discard"; seat: number; cardId: number }; // ends the turn
 
-export type RummyConfig = { players: number; target: number };
+export type RummyConfig = {
+  players: number;
+  target: number;
+  // Per-seat bot difficulty: 0=Easy, 1=Medium, 2=Hard, 3=Expert. Omit to default all to Hard.
+  botDifficulty?: number[];
+};
 
 export type RummyView = {
   you: number | null;
@@ -232,6 +240,7 @@ export type RummyView = {
   melds: { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] }[];
   mustMeldCardId: number | null; // meaningful only on your own turn
   lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][] } | null;
+  botDifficulty: number[]; // per-seat difficulty (public, for lobby display)
   log: LogEntry[]; // authoritative move log (public)
 };
 
@@ -267,6 +276,8 @@ function dealRound(prev: RummyState): RummyState {
 function createGame(config: RummyConfig, seed: number): RummyState {
   if (config.players < 2 || config.players > 8) throw new Error(`Unsupported player count: ${config.players}`);
   if (config.target <= 0) throw new Error("Target must be positive");
+  // Default all seats to Hard (2 = Aggressive) when not specified.
+  const botDifficulty = Array.from({ length: config.players }, (_, i) => config.botDifficulty?.[i] ?? 2);
   const base: RummyState = {
     players: config.players,
     target: config.target,
@@ -284,6 +295,7 @@ function createGame(config: RummyConfig, seed: number): RummyState {
     scores: Array(config.players).fill(0),
     winner: null,
     lastRound: null,
+    botDifficulty,
     nextMeldId: 0,
     log: [],
     logSeq: 0,
@@ -597,21 +609,23 @@ function redact(state: RummyState, seat: number | null, meta: RoomMeta): RummyVi
     melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: state.cardOwner[m.cards[0].id] ?? -1, cards: m.cards })),
     mustMeldCardId: yours ? state.mustMeldCardId : null,
     lastRound: state.lastRound,
+    botDifficulty: state.botDifficulty,
     log: state.log,
   };
 }
 
 function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): RummyView {
+  const players = config.players;
   return {
     you: seat,
-    players: config.players,
+    players,
     phase: "lobby",
     target: config.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
     botReplacement: meta.botReplacement,
     disconnectedSeats: meta.disconnectedSeats,
-    scores: Array(config.players).fill(0),
+    scores: Array(players).fill(0),
     winner: null,
     dealerSeat: 0,
     toAct: null,
@@ -619,12 +633,13 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
     yourTurn: false,
     legalMoves: [],
     yourHand: [],
-    handCounts: Array(config.players).fill(0),
+    handCounts: Array(players).fill(0),
     stockCount: 0,
     discard: [],
     melds: [],
     mustMeldCardId: null,
     lastRound: null,
+    botDifficulty: Array.from({ length: players }, (_, i) => config.botDifficulty?.[i] ?? 2),
     log: [],
   };
 }
@@ -668,8 +683,14 @@ const PERSONALITIES: AiPersonality[] = [
   { pickupThreshold: 5,  earlyDiscount: 0.60, endgameHandSize: 4, dangerWeight: 1.2, misplayRate: 0.05 },
 ];
 
-function getPersonality(seat: number): AiPersonality {
-  return PERSONALITIES[seat % PERSONALITIES.length];
+// Difficulty → personality index mapping.
+// 0=Easy→Conservative, 1=Medium→Balanced, 2=Hard→Aggressive, 3=Expert→Opportunist
+const DIFFICULTY_TO_PERSONALITY = [2, 0, 1, 3] as const;
+export const DIFFICULTY_LABELS = ["Easy", "Medium", "Hard", "Expert"] as const;
+
+function getPersonality(seat: number, state: RummyState): AiPersonality {
+  const difficulty = state.botDifficulty?.[seat] ?? 2;
+  return PERSONALITIES[DIFFICULTY_TO_PERSONALITY[difficulty]];
 }
 
 // 0 = very start of round, 1 = stock exhausted.
@@ -1290,7 +1311,7 @@ function evaluateGoOutSurprise(
 
 function aiMove(state: RummyState, seat: number): RummyMove {
   const hand = state.hands[seat];
-  const personality = getPersonality(seat);
+  const personality = getPersonality(seat, state);
   const opponentLow = minOpponentHandSize(state, seat) <= personality.endgameHandSize;
   const rng = aiRng(state, seat);
   const model = buildOpponentModel(state, seat);
