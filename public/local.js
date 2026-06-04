@@ -608,7 +608,38 @@ function scoreHand(state) {
 }
 
 // src/ai.ts
-var BID_SAFETY = 0.75;
+var PERSONALITIES = {
+  conservative: {
+    name: "Conservative",
+    bidSafety: 1.25,
+    stretchProb: 0.15,
+    trumpPullFrac: 0.5,
+    lowKeepBonus: 40,
+    endgameCutoff: 3,
+    loadSignalThreshold: 2,
+    tenProtectMargin: 5
+  },
+  balanced: {
+    name: "Balanced",
+    bidSafety: 0.75,
+    stretchProb: 0.35,
+    trumpPullFrac: 0.35,
+    lowKeepBonus: 25,
+    endgameCutoff: 2,
+    loadSignalThreshold: 1,
+    tenProtectMargin: 10
+  },
+  aggressive: {
+    name: "Aggressive",
+    bidSafety: 0.25,
+    stretchProb: 0.6,
+    trumpPullFrac: 0.2,
+    lowKeepBonus: 10,
+    endgameCutoff: 1,
+    loadSignalThreshold: 0,
+    tenProtectMargin: 20
+  }
+};
 var clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 function suitValue(hand, suit, players) {
   const trumps = hand.filter((c) => isTrump(c, suit));
@@ -652,14 +683,34 @@ function bossTrumpValue(state, trump) {
   const unseen = all.map((c) => trumpValue(c, trump)).filter((v) => !seenVals.has(v));
   return unseen.length ? Math.max(...unseen) : -1;
 }
-function keepValue(c, trump) {
+function unseenTrumpCount(state, trump, myCards) {
+  const low = lowRankFor(state.players);
+  const totalTrumps = 1 + (14 - low + 1);
+  const seenInTricks = state.tricksWon.flatMap((t) => t.cards).filter((c) => isTrump(c, trump)).length + state.currentTrick.filter((p) => isTrump(p.card, trump)).length;
+  const myTrumps = myCards.filter((c) => isTrump(c, trump)).length;
+  return totalTrumps - seenInTricks - myTrumps;
+}
+function tricksRemaining(state) {
+  const handSize3 = state.hands[0].length + state.tricksWon.length + (state.currentTrick.length > 0 ? 1 : 0);
+  return handSize3 - state.tricksWon.length;
+}
+function gamePipTotals(state) {
+  const totals = [0, 0];
+  for (const t of state.tricksWon) {
+    const team = teamOf(t.seat);
+    for (const c of t.cards) totals[team] += gameValue(c);
+  }
+  return totals;
+}
+function keepValue(c, trump, low, p, myTeamAhead) {
   if (isJoker(c)) return 100;
   if (c.suit === trump) {
     if (c.rank === 11) return 90;
     if (c.rank === 14) return 85;
+    if (c.rank === low) return 40 + c.rank + p.lowKeepBonus;
     return 40 + c.rank;
   }
-  if (c.rank === 10) return 30;
+  if (c.rank === 10) return myTeamAhead ? 30 + p.tenProtectMargin : 30;
   if (c.rank === 14) return 25;
   return c.rank;
 }
@@ -673,6 +724,18 @@ function pick(items, score, mode) {
   return items.reduce(
     (best, t) => mode === "max" ? score(t) > score(best) ? t : best : score(t) < score(best) ? t : best
   );
+}
+function bestDiscard(cards, trump, low, p, myTeamAhead) {
+  const offSuit = cards.filter((c) => !isTrump(c, trump) && !isJoker(c));
+  if (!offSuit.length) return pick(cards, (c) => keepValue(c, trump, low, p, myTeamAhead), "min");
+  const suitCounts = {};
+  for (const c of offSuit) suitCounts[c.suit] = (suitCounts[c.suit] ?? 0) + 1;
+  const sorted = offSuit.slice().sort((a, b) => {
+    const byLen = suitCounts[a.suit] - suitCounts[b.suit];
+    if (byLen !== 0) return byLen;
+    return keepValue(a, trump, low, p, myTeamAhead) - keepValue(b, trump, low, p, myTeamAhead);
+  });
+  return sorted[0];
 }
 function mulberry322(seed) {
   let a = seed >>> 0;
@@ -690,14 +753,14 @@ function stateRng(state, seat) {
 }
 var confFromScore = (score) => score >= 3 ? 2 : score >= 1.5 ? 1 : 0;
 var signalToNum = (sig) => sig === "strong" ? 2 : sig === "weak" ? 0 : 1;
-var competeProb = (myConf, theirConf) => {
+var competeProb = (myConf, theirConf, stretchProb) => {
   const gap = myConf - theirConf;
-  return gap <= 0 ? 0.35 : gap === 1 ? 0.6 : 0.85;
+  return gap <= 0 ? stretchProb * 0.6 : gap === 1 ? stretchProb + 0.1 : stretchProb + 0.3;
 };
-function decideBid(state, seat, rng) {
+function decideBid(state, seat, rng, p) {
   const hand = state.hands[seat];
   const best = bestSuit(hand, state.players);
-  const willing = clamp(Math.round(best.score - BID_SAFETY), 0, 6);
+  const willing = clamp(Math.round(best.score - p.bidSafety), 0, 6);
   const myConf = confFromScore(best.score);
   const isDealer = seat === state.dealerSeat;
   const high = state.highBid;
@@ -710,55 +773,90 @@ function decideBid(state, seat, rng) {
     const sameTeam = teamOf(high.seat) === teamOf(seat);
     const theirConf = signalToNum(state.signals[high.seat]);
     if (!sameTeam && myConf >= theirConf) {
-      if (rng() < competeProb(myConf, theirConf)) return { type: "bid", seat, amount: needed };
+      if (rng() < competeProb(myConf, theirConf, p.stretchProb))
+        return { type: "bid", seat, amount: needed };
     } else if (sameTeam && myConf === 2 && theirConf === 0) {
-      if (rng() < 0.2) return { type: "bid", seat, amount: needed };
+      if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
     }
   }
   return { type: "pass", seat };
 }
-function decidePlay(state, seat) {
+function decidePlay(state, seat, p) {
   const trump = state.trump;
   const players = state.players;
+  const low = lowRankFor(players);
   const cards = legalMoves(state).filter((m) => m.type === "play").map((m) => m.card);
   const boss = bossTrumpValue(state, trump);
   const asMove = (card) => ({ type: "play", seat, card });
+  const pips = gamePipTotals(state);
+  const myTeam = teamOf(seat);
+  const myTeamAhead = pips[myTeam] - pips[1 - myTeam] >= p.tenProtectMargin;
+  const kv = (c) => keepValue(c, trump, low, p, myTeamAhead);
+  const remaining = tricksRemaining(state);
+  const unseenTrumps = unseenTrumpCount(state, trump, cards);
+  const myTrumps = cards.filter((c) => isTrump(c, trump));
+  const isLast = state.currentTrick.length === players - 1;
   if (state.currentTrick.length === 0) {
-    const myTrumps = cards.filter((c) => isTrump(c, trump));
+    const shouldPullTrumps = myTrumps.length > 0 && unseenTrumps > 0 && unseenTrumps / (remaining * (players - 1)) >= p.trumpPullFrac;
     if (myTrumps.length) {
       const top = pick(myTrumps, (c) => trumpValue(c, trump), "max");
-      if (trumpValue(top, trump) === boss) return asMove(top);
+      const topVal = trumpValue(top, trump);
+      const conserve = remaining <= p.endgameCutoff;
+      if (topVal === boss && !conserve) return asMove(top);
+      if (shouldPullTrumps) {
+        const nonBoss = myTrumps.filter((c) => trumpValue(c, trump) !== boss);
+        if (nonBoss.length) {
+          const hasProtection = myTrumps.some((c) => !isJoker(c) && c.rank > 11);
+          const jack = myTrumps.find((c) => !isJoker(c) && c.rank === 11);
+          const safe = nonBoss.filter((c) => !(c === jack && !hasProtection));
+          if (safe.length) return asMove(pick(safe, (c) => trumpValue(c, trump), "max"));
+        }
+      }
+      const myLow = myTrumps.find((c) => !isJoker(c) && c.rank === low);
+      if (!myLow && shouldPullTrumps && myTrumps.length >= 2) {
+        const byVal = myTrumps.slice().sort((a, b) => trumpValue(a, trump) - trumpValue(b, trump));
+        return asMove(byVal[1]);
+      }
     }
     const sideAces = cards.filter((c) => !isTrump(c, trump) && !isJoker(c) && c.rank === 14);
     if (sideAces.length) return asMove(sideAces[0]);
-    return asMove(pick(cards, (c) => keepValue(c, trump), "min"));
+    return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
   }
   const winnerSeat = trickWinner(state.currentTrick, trump);
-  const winnerCard = state.currentTrick.find((p) => p.seat === winnerSeat).card;
+  const winnerCard = state.currentTrick.find((p2) => p2.seat === winnerSeat).card;
   const partnerWinning = teamOf(winnerSeat) === teamOf(seat);
-  const isLast = state.currentTrick.length === players - 1;
+  const trickHasValue = state.currentTrick.some((p2) => isTrump(p2.card, trump) || gameValue(p2.card) >= 4);
   const wouldWin = (c) => trickWinner([...state.currentTrick, { seat, card: c }], trump) === seat;
   const winners = cards.filter(wouldWin);
-  const trickHasValue = state.currentTrick.some((p) => isTrump(p.card, trump) || gameValue(p.card) >= 4);
   if (partnerWinning) {
-    const strong = isTrump(winnerCard, trump) && (trumpValue(winnerCard, trump) === boss || trumpValue(winnerCard, trump) >= 12);
+    const partnerSeat = seat % 2 === 0 ? 1 : 0;
+    const partnerSignal = signalToNum(state.signals[partnerSeat]);
+    const winVal = trumpValue(winnerCard, trump);
+    const partnerStrong = winVal !== null ? winVal === boss || winVal >= 12 || partnerSignal >= p.loadSignalThreshold : partnerSignal >= p.loadSignalThreshold;
     const safe = cards.filter((c) => !wouldWin(c));
     const pool = safe.length ? safe : cards;
-    if (strong || isLast) return asMove(pick(pool, (c) => loadValue(c, trump), "max"));
-    return asMove(pick(pool, (c) => keepValue(c, trump), "min"));
+    if (partnerStrong || isLast) {
+      return asMove(pick(pool, (c) => loadValue(c, trump), "max"));
+    }
+    return asMove(bestDiscard(pool, trump, low, p, myTeamAhead));
   }
   if (winners.length && trickHasValue) {
+    const opponentConf = state.signals.map((s, i) => teamOf(i) !== myTeam ? signalToNum(s) : -1).reduce((a, b) => Math.max(a, b), -1);
+    if (opponentConf >= 2 && winners.every((c) => !isTrump(c, trump))) {
+      return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
+    }
     return asMove(pick(winners, (c) => winCost(c, trump), "min"));
   }
-  return asMove(pick(cards, (c) => keepValue(c, trump), "min"));
+  return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
 }
-function aiMove(state, seat, rng = stateRng(state, seat)) {
+function aiMove(state, seat, rng = stateRng(state, seat), personality = PERSONALITIES.balanced) {
   if (state.phase === "gameOver") throw new Error("game is over");
   const turnSeat = state.phase === "bidding" ? state.bidTurn : state.turn;
   if (turnSeat !== seat) throw new Error(`not seat ${seat}'s turn (it is seat ${turnSeat}'s)`);
-  if (state.phase === "bidding") return decideBid(state, seat, rng);
-  if (state.trump === null) return { type: "selectTrump", seat, suit: bestSuit(state.hands[seat], state.players).suit };
-  return decidePlay(state, seat);
+  if (state.phase === "bidding") return decideBid(state, seat, rng, personality);
+  if (state.trump === null)
+    return { type: "selectTrump", seat, suit: bestSuit(state.hands[seat], state.players).suit };
+  return decidePlay(state, seat, personality);
 }
 function handConfidence(hand, players) {
   const score = bestSuit(hand, players).score;
@@ -1338,7 +1436,7 @@ function lobbyView(config, seat, meta) {
     log: []
   };
 }
-var PERSONALITIES = [
+var PERSONALITIES2 = [
   // 0 · Balanced — reliable execution, moderate risk tolerance
   { pickupThreshold: 6, earlyDiscount: 0.68, endgameHandSize: 3, dangerWeight: 1.8, misplayRate: 0.03 },
   // 1 · Aggressive — highest pile appetite, sharpest execution, rarely misplays
@@ -1351,7 +1449,7 @@ var PERSONALITIES = [
 var DIFFICULTY_TO_PERSONALITY = [2, 0, 1, 3];
 function getPersonality(seat, state) {
   const difficulty = state.botDifficulty?.[seat] ?? 2;
-  return PERSONALITIES[DIFFICULTY_TO_PERSONALITY[difficulty]];
+  return PERSONALITIES2[DIFFICULTY_TO_PERSONALITY[difficulty]];
 }
 function roundProgress(state) {
   const deckSize = 54 * decksFor(state.players);
