@@ -650,14 +650,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .meld.tappable{cursor:pointer;transition:transform .12s}
 .meld.tappable:hover{transform:translateY(-2px)}
 
-/* run display — all cards shown, densely stacked */
+/* run display — all cards shown, densely stacked (margins set inline per card count) */
 .run-dense{display:flex;align-items:flex-end;gap:0}
-.run-dense .card{margin-left:-30px}
-.run-dense .card:first-child{margin-left:0}
 .run-dense .card .corner{display:none}
 .run-dense .card:first-child .corner.tl{display:block}
 .run-dense .card:last-child .corner.tl{display:block}
 .run-dense.tappable{cursor:pointer}
+/* meld popup card row */
+.meld-modal-cards{display:flex;flex-wrap:wrap;gap:4px}
 
 /* set: single merged card with corner suit pips */
 .set-merged{
