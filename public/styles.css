@@ -446,14 +446,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .felt-bottom{
   position:absolute;bottom:10px;left:6%;right:6%;z-index:2;
   display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:flex-end;
+  /* prevent overlap with the centre pile area */
+  max-height:38%;overflow-y:auto;
 }
 .melds{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:100%}
 .meld{
   display:flex;background:rgba(0,0,0,.18);padding:6px;border-radius:11px;
   border:1px solid rgba(205,160,90,.18);
 }
-.meld .card{margin-left:-22px}
-.meld .card:first-child{margin-left:0}
 
 /* ---------- Self rail (you) — anchored to screen bottom ---------- */
 .selfwrap{
@@ -649,15 +649,50 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .gamecard.on{border-color:var(--brass);box-shadow:0 0 0 2px rgba(205,160,90,.45),inset 0 1px 0 rgba(205,160,90,.2),0 8px 18px -10px rgba(0,0,0,.7)}
 .gamecard.on .go{color:var(--brass-hi)}
 
-/* melds: cards in a row, owner beneath */
+/* melds: owner label beneath */
 .meld{flex-direction:column;align-items:center;gap:4px}
-.meld .row{display:flex}
-.meld .row .card{margin-left:-22px}
-.meld .row .card:first-child{margin-left:0}
 .meld .owner{font-size:10px;color:var(--ink-soft);font-weight:600;letter-spacing:.3px}
-.meld.tappable{cursor:pointer;transition:transform .12s, box-shadow .12s}
-.meld.tappable:hover{transform:translateY(-2px);box-shadow:0 8px 16px -8px rgba(0,0,0,.6)}
 .meld.target{outline:2px solid var(--amber);outline-offset:2px;background:rgba(224,164,78,.12)}
+
+/* run display */
+.run-full,.run-compact{display:flex;align-items:flex-end;gap:0}
+.run-full .card{margin-left:-14px}
+.run-full .card:first-child{margin-left:0}
+.run-compact .card{margin-left:0}
+.run-full.tappable,.run-compact.tappable{cursor:pointer;transition:transform .12s}
+.run-full.tappable:hover,.run-compact.tappable:hover{transform:translateY(-2px)}
+
+/* +N / − toggle button for run middle cards */
+.meld-toggle{
+  background:rgba(180,210,255,.12);border:1px solid rgba(180,210,255,.22);
+  border-radius:6px;color:var(--ink-soft);font-size:10px;font-weight:700;
+  padding:2px 6px;cursor:pointer;align-self:center;flex-shrink:0;margin:0 3px;
+  transition:background .12s,color .12s;
+}
+.meld-toggle:hover{background:rgba(180,210,255,.22);color:var(--ink)}
+
+/* set: single merged card with corner suit pips */
+.set-merged{
+  position:relative;cursor:default;
+  display:grid;place-items:center;
+}
+.set-merged.tappable{cursor:pointer}
+.set-merged.tappable:hover{transform:translateY(-2px)}
+.sm-rank{font-size:15px;font-weight:800;font-family:"Fraunces",serif;color:var(--suit-blk);z-index:1}
+/* suit pips in the 4 corners of the set card */
+.sc-tl,.sc-tr,.sc-bl,.sc-br{
+  position:absolute;font-size:9px;line-height:1;font-weight:700;
+  color:var(--suit-blk);
+}
+.sc-tl,.sc-tr{top:4px}
+.sc-bl,.sc-br{bottom:4px}
+.sc-tl,.sc-bl{left:4px}
+.sc-tr,.sc-br{right:4px}
+.sc-tl.red,.sc-tr.red,.sc-bl.red,.sc-br.red{color:var(--suit-red)}
+.set-jk{
+  position:absolute;bottom:2px;right:2px;font-size:8px;
+  color:var(--brass-hi);font-weight:700;
+}
 
 .pile .pts{font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:2px}
 
