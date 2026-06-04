@@ -650,17 +650,22 @@ type AiPersonality = {
    * Low = more willing to dump dangerous cards for the point reduction.
    */
   dangerWeight: number;
+  /**
+   * Probability [0,1] of making a suboptimal choice on any given decision.
+   * Applied to discard selection and draw choices; produces human-like imperfection.
+   */
+  misplayRate: number;
 };
 
 const PERSONALITIES: AiPersonality[] = [
-  // 0 · Balanced — reasonable defaults, middle of the road
-  { pickupThreshold: 8,  earlyDiscount: 0.35, endgameHandSize: 3, dangerWeight: 1.8 },
-  // 1 · Aggressive — picks up big piles early, holds high-value cards hoping to meld
-  { pickupThreshold: 3,  earlyDiscount: 0.70, endgameHandSize: 2, dangerWeight: 0.8 },
-  // 2 · Conservative — prefers a clean hand, dumps liabilities fast, avoids risk
-  { pickupThreshold: 16, earlyDiscount: 0.10, endgameHandSize: 5, dangerWeight: 2.5 },
-  // 3 · Opportunist — aggressive early but pivots to safety once opponents get low
-  { pickupThreshold: 5,  earlyDiscount: 0.60, endgameHandSize: 4, dangerWeight: 1.2 },
+  // 0 · Balanced — solid, makes occasional mistakes
+  { pickupThreshold: 8,  earlyDiscount: 0.35, endgameHandSize: 3, dangerWeight: 1.8, misplayRate: 0.03 },
+  // 1 · Aggressive — decisive and sharp, rarely misplays but takes big risks
+  { pickupThreshold: 3,  earlyDiscount: 0.70, endgameHandSize: 2, dangerWeight: 0.8, misplayRate: 0.01 },
+  // 2 · Conservative — careful but occasionally over-cautious / slow to pivot
+  { pickupThreshold: 16, earlyDiscount: 0.10, endgameHandSize: 5, dangerWeight: 2.5, misplayRate: 0.02 },
+  // 3 · Opportunist — erratic: swings between brilliance and blunder
+  { pickupThreshold: 5,  earlyDiscount: 0.60, endgameHandSize: 4, dangerWeight: 1.2, misplayRate: 0.05 },
 ];
 
 function getPersonality(seat: number): AiPersonality {
@@ -673,6 +678,140 @@ function roundProgress(state: RummyState): number {
   const hs = handSize(state.players);
   const initialStock = Math.max(1, deckSize - state.players * hs - 1);
   return Math.min(1, Math.max(0, 1 - state.stock.length / initialStock));
+}
+
+// ---------- deterministic per-decision RNG ----------
+// Derived from game seed + seat + log sequence so it's stable across replays
+// but differs each decision and each seat.
+function aiRng(state: RummyState, seat: number): () => number {
+  const seed = ((state.seed >>> 0) ^ (seat * 0x9e3779b9) ^ (state.logSeq * 0x517cc1b7)) >>> 0;
+  return mulberry32(seed);
+}
+
+// ---------- opponent hand modelling ----------
+
+// A suspected card in an opponent's hand, with a confidence [0,1].
+type SuspectedCard = { card: RummyCard; confidence: number };
+
+// Build a probabilistic model of what each opponent seat is likely holding.
+// Two information sources:
+//   1. Deduction: when the stock is empty every unseen card must be in an
+//      opponent's hand.  In a 2-player game that gives perfect knowledge;
+//      in 3+ it gives a shared pool partitioned by hand-size ratio.
+//   2. Log inference: discard-pile pickups reveal the bottom card taken and
+//      therefore what the opponent was building toward (set or run in that
+//      rank/suit). Cards adjacent to known pickups get elevated confidence.
+function buildOpponentModel(state: RummyState, seat: number): Map<number, SuspectedCard[]> {
+  const model = new Map<number, SuspectedCard[]>();
+  for (let i = 0; i < state.players; i++) if (i !== seat) model.set(i, []);
+
+  const fullDeck = buildDeck(decksFor(state.players));
+  const visibleIds = new Set(visibleCards(state, seat).map((c) => c.id));
+  const unknownPool = fullDeck.filter((c) => !visibleIds.has(c.id));
+
+  // ── 1. Deduction when stock is exhausted ──────────────────────────────────
+  if (state.stock.length === 0 && unknownPool.length > 0) {
+    const opponentSeats = Array.from({ length: state.players }, (_, i) => i).filter((i) => i !== seat);
+    const totalOppCards = opponentSeats.reduce((s, i) => s + state.hands[i].length, 0);
+
+    for (const opp of opponentSeats) {
+      const fraction = totalOppCards > 0 ? state.hands[opp].length / totalOppCards : 0;
+      // 2-player: fraction = 1.0 → perfect knowledge of the one opponent's hand.
+      // 3+ players: proportional confidence by relative hand size.
+      model.set(opp, unknownPool.map((card) => ({ card, confidence: fraction })));
+    }
+    return model; // deduction dominates; log inference isn't needed here
+  }
+
+  // ── 2. Log inference from observed discard-pile pickups ───────────────────
+  // The log entry for a discard pickup records the bottom card taken.
+  // From that we infer:
+  //   - The opponent was building toward a meld containing that rank/suit.
+  //   - Cards of the same rank (set) or adjacent in suit (run) that are still
+  //     unknown may be in their hand.
+  // Confidence decays with turns elapsed since the pickup (they may have melded
+  // or discarded the relevant cards since then) and with speculative distance.
+
+  // Count total log entries so we can estimate "turns ago" for each pickup.
+  const totalEntries = state.log.length;
+
+  for (const entry of state.log) {
+    const opp = entry.seat;
+    if (opp === null || opp === seat) continue;
+    if (!model.has(opp)) continue;
+    if (entry.msg !== "took" || !entry.cards || entry.cards.length === 0) continue;
+
+    const lc = entry.cards[0]; // the bottom card they took
+    if ("joker" in lc) continue; // joker pickup — no directional inference
+    const { rank, suit } = lc as { rank: number; suit: string };
+
+    // Recency: how many log entries ago was this? Older = lower confidence.
+    const turnsAgo = totalEntries - entry.id;
+    const recency = Math.max(0.1, 1 - turnsAgo / 30); // decays to 0.1 after ~30 entries
+
+    const suspected = model.get(opp)!;
+
+    for (const uc of unknownPool) {
+      if (uc.joker) continue;
+      let conf = 0;
+      // Set inference: they likely hold other cards of the same rank.
+      if (uc.rank === rank && uc.suit !== suit) conf = Math.max(conf, 0.45 * recency);
+      // Run inference: adjacent rank in same suit.
+      const ucR = uc.rank === 14 ? 1 : uc.rank; // treat Ace as 1 for adjacency
+      const tR = rank === 14 ? 1 : rank;
+      if (uc.suit === suit && Math.abs(ucR - tR) <= 2 && uc.rank !== rank) conf = Math.max(conf, 0.30 * recency);
+      if (conf > 0) suspected.push({ card: uc, confidence: conf });
+    }
+  }
+
+  // Deduplicate: if the same card appears multiple times keep highest confidence.
+  for (const [opp, list] of model) {
+    const best = new Map<number, SuspectedCard>();
+    for (const s of list) {
+      const prev = best.get(s.card.id);
+      if (!prev || s.confidence > prev.confidence) best.set(s.card.id, s);
+    }
+    model.set(opp, [...best.values()]);
+  }
+
+  return model;
+}
+
+// Opponent danger score augmented by the model.
+// Base: extends a visible meld, same rank on table, high face value.
+// Model bonus: other opponents likely hold cards that meld with this discard.
+function opponentDangerWithModel(
+  state: RummyState,
+  card: RummyCard,
+  seat: number,
+  model: Map<number, SuspectedCard[]>,
+): number {
+  if (card.joker) return 0;
+  let danger = 0;
+
+  // Extends an existing table meld (any player can lay off)
+  for (const m of state.melds) {
+    const combined = [...m.cards, card];
+    if (m.kind === "set" ? isSet(combined) : isRun(combined)) { danger += 4; break; }
+  }
+  const sameRankOnTable = state.melds.flatMap((m) => m.cards).filter((c) => !c.joker && c.rank === card.rank).length;
+  if (sameRankOnTable >= 1) danger += 2;
+  danger += Math.floor(cardValue(card) / 5);
+
+  // Model: how confident are we that some opponent is building toward this card?
+  for (const suspected of model.values()) {
+    let modelDanger = 0;
+    for (const { card: sc, confidence } of suspected) {
+      if (sc.joker) continue;
+      // Partner for a set (same rank)
+      if (sc.rank === card.rank) modelDanger = Math.max(modelDanger, confidence * 4);
+      // Partner for a run (same suit, adjacent rank)
+      if (sc.suit === card.suit && Math.abs(sc.rank - card.rank) <= 2) modelDanger = Math.max(modelDanger, confidence * 3);
+    }
+    danger += modelDanger;
+  }
+
+  return Math.min(danger, 10);
 }
 
 // The AI spends its wild jokers, but sparingly: it always prefers a meld made
@@ -949,6 +1088,20 @@ function opponentDanger(state: RummyState, card: RummyCard, seat: number): numbe
   return Math.min(danger, 10);
 }
 
+// Connectivity score for a card within a hand — how many meld partners does it have?
+function meldPotential(hand: RummyCard[]): number {
+  let score = 0;
+  for (const c of hand) {
+    if (c.joker) { score += 20; continue; }
+    const sameRank = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
+    const inSuitAdj = hand.filter(
+      (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2,
+    ).length;
+    score += sameRank * 3 + inSuitAdj * 2;
+  }
+  return score;
+}
+
 // Minimum cards remaining across all opponents.
 function minOpponentHandSize(state: RummyState, seat: number): number {
   let min = Infinity;
@@ -1000,23 +1153,36 @@ function evaluateDeepPickup(
 
 // Choose the best discard from `hand`.
 // Uses probability-weighted meld EV so the AI pivots away from stranded high-value
-// cards (e.g. lone Ace with no partners visible or likely) even late in the round.
-function bestDiscard(state: RummyState, hand: RummyCard[], seat: number, personality: AiPersonality): RummyCard {
+// cards. Uses the opponent model to avoid feeding suspected builds.
+function bestDiscard(
+  state: RummyState,
+  hand: RummyCard[],
+  seat: number,
+  personality: AiPersonality,
+  model: Map<number, SuspectedCard[]>,
+): RummyCard {
   const opponentLow = minOpponentHandSize(state, seat) <= personality.endgameHandSize;
-  const score = (c: RummyCard): number => {
-    if (c.joker) return -200; // never discard a wild
-    // Probability-aware meld EV: negative means this card is more likely deadweight.
+  const ranked = [...hand].map((c) => {
+    if (c.joker) return { card: c, score: -200 };
     const mev = cardMeldEV(state, seat, c);
-    // Base discard score: high-value deadweight → discard; high-value secured → keep.
-    let discardScore = -mev; // invert: high mev = keep = low discard score
-    // Opponent danger: avoid giving them useful cards.
-    const danger = opponentDanger(state, c, seat);
+    let discardScore = -mev;
+    const danger = opponentDangerWithModel(state, c, seat, model);
     discardScore += danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
-    // Endgame: amplify the pressure to shed deadweight quickly.
     if (opponentLow) discardScore += Math.max(0, -mev) * 0.5;
-    return discardScore;
-  };
-  return [...hand].sort((a, b) => score(b) - score(a))[0];
+    return { card: c, score: discardScore };
+  }).sort((a, b) => b.score - a.score);
+
+  return ranked[0].card;
+}
+
+// Apply misplay: with probability personality.misplayRate, return a suboptimal choice.
+// Uses a deterministic per-decision RNG so replays are consistent.
+// `ranked` must be sorted best-first; we pick randomly from the bottom two-thirds.
+function maybeMisplay<T>(ranked: T[], rng: () => number, misplayRate: number): T {
+  if (ranked.length <= 1 || rng() >= misplayRate) return ranked[0];
+  // Pick a random card from the non-optimal portion of the ranking.
+  const worstZone = ranked.slice(Math.max(1, Math.floor(ranked.length / 3)));
+  return worstZone[Math.floor(rng() * worstZone.length)];
 }
 
 // Speculative top-card value: should we take the top discard even without an
@@ -1059,32 +1225,37 @@ function aiMove(state: RummyState, seat: number): RummyMove {
   const hand = state.hands[seat];
   const personality = getPersonality(seat);
   const opponentLow = minOpponentHandSize(state, seat) <= personality.endgameHandSize;
+  const rng = aiRng(state, seat);
+  const model = buildOpponentModel(state, seat);
 
   // ── Draw phase ──────────────────────────────────────────────────────────────
   if (state.turnPhase === "draw") {
     const discard = state.discard;
     const top = discard[discard.length - 1];
 
-    // Always take the top card if it immediately enables a meld or layoff.
-    if (top && (canFormMeldWith([...hand, top], top) || canLayoff(state, top)))
+    // Always take the top card if it immediately enables a meld or layoff
+    // (misplay doesn't apply to clear forced-win situations).
+    if (top && (canFormMeldWith([...hand, top], top) || canLayoff(state, top))) {
+      // Only misplay by sometimes missing the opportunity entirely (draw stock instead).
+      if (rng() < personality.misplayRate && state.stock.length > 0)
+        return { type: "drawStock", seat };
       return { type: "drawDiscard", seat, cardId: top.id };
+    }
 
-    // Speculative top-card grab: take it even without an immediate use when the
-    // expected value is positive (connectivity outweighs holding risk).
-    // Only in non-endgame; when opponents are close to going out, load up nothing.
+    // Speculative top-card grab: take it even without an immediate use when EV > 0.
     if (!opponentLow && top) {
       const specScore = speculativeTopValue(hand, top, state, personality);
-      if (specScore > 0) return { type: "drawDiscard", seat, cardId: top.id };
+      if (specScore > 0) {
+        // Misplay: occasionally skip a good speculative grab and draw stock instead.
+        if (rng() >= personality.misplayRate) return { type: "drawDiscard", seat, cardId: top.id };
+      }
     }
 
     // Evaluate deep pile pickups across the full pile (no arbitrary depth cap).
-    // In endgame, only aggressive bots still consider deep pickups — a conservative
-    // or balanced bot won't risk loading up when opponents are almost out.
     const deepAllowed = !opponentLow || personality.pickupThreshold <= 5;
     if (deepAllowed && discard.length >= 2) {
-      let bestGain = personality.pickupThreshold; // must beat drawing an unknown stock card
+      let bestGain = personality.pickupThreshold;
       let bestTarget: RummyCard | null = null;
-      // Scan bottom-up; the target card must be immediately meldable given the full pickup.
       for (let i = 0; i < discard.length - 1; i++) {
         const candidate = discard[i];
         const combined = [...hand, ...discard.slice(i)];
@@ -1092,17 +1263,21 @@ function aiMove(state: RummyState, seat: number): RummyMove {
         const { gain } = evaluateDeepPickup(state, seat, candidate.id, personality);
         if (gain > bestGain) { bestGain = gain; bestTarget = candidate; }
       }
-      if (bestTarget) return { type: "drawDiscard", seat, cardId: bestTarget.id };
+      if (bestTarget) {
+        // Misplay: occasionally pass on a profitable deep pickup.
+        if (rng() >= personality.misplayRate) return { type: "drawDiscard", seat, cardId: bestTarget.id };
+      }
     }
 
     if (state.stock.length > 0) return { type: "drawStock", seat };
-    if (top) return { type: "drawDiscard", seat, cardId: top.id }; // stock empty, take top
+    if (top) return { type: "drawDiscard", seat, cardId: top.id };
     return { type: "drawStock", seat };
   }
 
   // ── Play phase ───────────────────────────────────────────────────────────────
 
-  // 1. Handle the forced card from a deep discard pickup first.
+  // 1. Handle the forced card from a deep discard pickup first (no misplay here —
+  //    failing to resolve it would leave the AI stuck and unable to discard).
   if (state.mustMeldCardId != null) {
     const mc = hand.find((c) => c.id === state.mustMeldCardId);
     if (mc) {
@@ -1114,12 +1289,11 @@ function aiMove(state: RummyState, seat: number): RummyMove {
     }
   }
 
-  // 2. Lay down all complete melds, highest value first (max scoring + hand reduction).
+  // 2. Lay down all complete melds, highest value first.
   const allMelds = allMeldsInHand(hand);
   if (allMelds.length > 0) return { type: "meld", seat, cards: allMelds[0].map((c) => c.id) };
 
   // 3. Lay off cards onto existing table melds.
-  //    Prioritise layoffs that shed high-value isolated cards (no other meld home).
   const layoffCandidates: Array<{ move: RummyMove; value: number }> = [];
   for (const m of state.melds) {
     for (const c of hand) {
@@ -1129,18 +1303,30 @@ function aiMove(state: RummyState, seat: number): RummyMove {
   }
   if (layoffCandidates.length > 0) {
     layoffCandidates.sort((a, b) => {
-      if (opponentLow) return b.value - a.value; // shed points fast in endgame
+      if (opponentLow) return b.value - a.value;
       const aCard = hand.find((c) => c.id === (a.move as { cards: number[] }).cards[0])!;
       const bCard = hand.find((c) => c.id === (b.move as { cards: number[] }).cards[0])!;
       const aPot = meldPotential([aCard, ...hand.filter((c) => c !== aCard)]);
       const bPot = meldPotential([bCard, ...hand.filter((c) => c !== bCard)]);
-      return aPot - bPot; // lay off low-potential cards first
+      return aPot - bPot;
     });
     return layoffCandidates[0].move;
   }
 
-  // 4. Discard the least valuable / most dangerous card.
-  return { type: "discard", seat, cardId: bestDiscard(state, hand, seat, personality).id };
+  // 4. Discard the best card according to probability + opponent model.
+  //    Apply misplay: occasionally pick from the suboptimal end of the ranking.
+  const discardRanked = [...hand].map((c) => {
+    if (c.joker) return { card: c, score: -200 };
+    const mev = cardMeldEV(state, seat, c);
+    const danger = opponentDangerWithModel(state, c, seat, model);
+    let score = -mev;
+    score += danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
+    if (opponentLow) score += Math.max(0, -mev) * 0.5;
+    return { card: c, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const chosen = maybeMisplay(discardRanked, rng, personality.misplayRate);
+  return { type: "discard", seat, cardId: chosen.card.id };
 }
 
 // ---------- the module ----------
