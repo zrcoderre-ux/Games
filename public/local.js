@@ -1100,9 +1100,12 @@ function meldedValue(state, seat) {
 }
 var heldValue = (state, seat) => state.hands[seat].reduce((a, c) => a + cardValue(c), 0);
 function endRound(state, outSeat) {
-  const delta = state.scores.map((_, s) => meldedValue(state, s) - heldValue(state, s));
+  const meldedPts = state.scores.map((_, s) => meldedValue(state, s));
+  const heldPts = state.scores.map((_, s) => heldValue(state, s));
+  const delta = state.scores.map((_, s) => meldedPts[s] - heldPts[s]);
+  const heldCards = state.hands.map((h) => [...h]);
   const scores = state.scores.map((v, s) => v + delta[s]);
-  const lastRound = { delta, outSeat };
+  const lastRound = { delta, outSeat, meldedPts, heldPts, heldCards };
   const max = Math.max(...scores);
   if (max >= state.target) {
     return { ...state, scores, phase: "gameOver", winner: scores.indexOf(max), lastRound };

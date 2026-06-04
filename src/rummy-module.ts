@@ -193,7 +193,7 @@ export type RummyState = {
 
   scores: number[]; // running totals per seat
   winner: number | null;
-  lastRound: { delta: number[]; outSeat: number | null } | null;
+  lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][] } | null;
 
   nextMeldId: number;
   log: LogEntry[]; // authoritative move log
@@ -229,7 +229,7 @@ export type RummyView = {
   discard: RummyCard[]; // public
   melds: { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] }[];
   mustMeldCardId: number | null; // meaningful only on your own turn
-  lastRound: { delta: number[]; outSeat: number | null } | null;
+  lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][] } | null;
   log: LogEntry[]; // authoritative move log (public)
 };
 
@@ -353,9 +353,12 @@ const heldValue = (state: RummyState, seat: number): number =>
   state.hands[seat].reduce((a, c) => a + cardValue(c), 0);
 
 function endRound(state: RummyState, outSeat: number | null): RummyState {
-  const delta = state.scores.map((_, s) => meldedValue(state, s) - heldValue(state, s));
+  const meldedPts = state.scores.map((_, s) => meldedValue(state, s));
+  const heldPts = state.scores.map((_, s) => heldValue(state, s));
+  const delta = state.scores.map((_, s) => meldedPts[s] - heldPts[s]);
+  const heldCards = state.hands.map((h) => [...h]);
   const scores = state.scores.map((v, s) => v + delta[s]);
-  const lastRound = { delta, outSeat };
+  const lastRound = { delta, outSeat, meldedPts, heldPts, heldCards };
   const max = Math.max(...scores);
   if (max >= state.target) {
     return { ...state, scores, phase: "gameOver", winner: scores.indexOf(max), lastRound };

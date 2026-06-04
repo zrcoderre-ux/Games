@@ -650,14 +650,24 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .meld.tappable{cursor:pointer;transition:transform .12s}
 .meld.tappable:hover{transform:translateY(-2px)}
 
-/* run display — all cards shown, densely stacked */
+/* run display — all cards shown, densely stacked (margins set inline per card count) */
 .run-dense{display:flex;align-items:flex-end;gap:0}
-.run-dense .card{margin-left:-30px}
-.run-dense .card:first-child{margin-left:0}
 .run-dense .card .corner{display:none}
 .run-dense .card:first-child .corner.tl{display:block}
 .run-dense .card:last-child .corner.tl{display:block}
 .run-dense.tappable{cursor:pointer}
+/* meld popup card row */
+.meld-modal-cards{display:flex;flex-wrap:wrap;gap:4px}
+/* round-end summary popup */
+.rr-body{display:flex;flex-direction:column;gap:10px;padding-bottom:4px}
+.rr-row{background:rgba(0,0,0,.22);border:1px solid rgba(205,160,90,.12);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.rr-row.rr-out{border-color:rgba(205,160,90,.5);background:rgba(205,160,90,.08)}
+.rr-name{font-weight:700;font-size:14px;color:var(--brass-hi);display:flex;align-items:center;gap:6px}
+.rr-badge{font-size:10px;font-weight:600;background:var(--brass);color:#1a0e00;border-radius:999px;padding:1px 7px;letter-spacing:.3px}
+.rr-math{font-size:13px;color:var(--ink-soft)}
+.rr-math b{color:var(--ink);font-weight:700}
+.rr-total{font-size:12px;color:var(--ink-dim)}
+.rr-held{display:flex;flex-wrap:wrap;gap:3px;margin-top:2px}
 
 /* set: single merged card with corner suit pips */
 .set-merged{

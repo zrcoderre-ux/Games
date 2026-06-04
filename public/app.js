@@ -61,6 +61,9 @@ const S = {
   view: null,
   rummySel: new Set(), // selected card ids
   rummyLayoff: null, // selected meld id for layoff
+  rummyMeldOpen: null, // meld id whose popup is open
+  rummyRoundAcked: null, // JSON key of the lastRound already dismissed
+  rummyRoundTimer: null, // auto-dismiss setTimeout handle
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
 
@@ -269,7 +272,18 @@ function send(m) {
 function onFrame(e) {
   let msg;
   try { msg = JSON.parse(e.data); } catch { return; }
-  if (msg.t === "view") { S.view = msg.view; maybePromptPass(); render(); }
+  if (msg.t === "view") {
+    const prev = S.view;
+    S.view = msg.view;
+    // If the round result changed (new round ended), reset the ack so the popup shows again.
+    const prevKey = prev?.lastRound ? JSON.stringify(prev.scores) : null;
+    const newKey  = msg.view?.lastRound ? JSON.stringify(msg.view.scores) : null;
+    if (newKey && newKey !== prevKey && newKey !== S.rummyRoundAcked) {
+      if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
+    }
+    maybePromptPass();
+    render();
+  }
   else if (msg.t === "error") { toast(msg.message); }
 }
 
@@ -962,7 +976,7 @@ function renderRummy(v) {
     ? `<div class="melds">${v.melds.map((m) => {
           const active = S.rummyLayoff === m.id;
           const jokerRes = resolveJokers(m);
-          const meldAttrs = inPlay ? `data-action="select-meld" data-meldid="${m.id}"` : "";
+          const meldAttrs = `data-action="open-meld" data-meldid="${m.id}"`;
           let inner;
           if (m.kind === "set") {
             // Compact: one card showing rank + a pip per suit present
@@ -975,13 +989,18 @@ function renderRummy(v) {
               suits.includes(s) ? `<span class="${cls}${RED.has(s)?" red":""}">${SUIT[s]}</span>` : ""
             ).join("");
             const jkBadge = jk ? `<span class="set-jk">★×${jk}</span>` : "";
-            inner = `<div class="card mini set-merged${inPlay?" tappable":""}">${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
+            inner = `<div class="card mini set-merged tappable">${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
           } else {
-            // Run: all cards shown densely stacked; no toggle needed
-            const allCards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true })).join("");
-            inner = `<div class="run-dense${inPlay?" tappable":""}">${allCards}</div>`;
+            // Run: fixed total width of 2 mini cards; margin shrinks as count grows
+            const n = m.cards.length;
+            const negMargin = n <= 1 ? 0 : Math.round(44 * (n - 2) / (n - 1));
+            const allCards = m.cards.map((c, ci) => {
+              const ml = ci === 0 ? "" : `margin-left:-${negMargin}px`;
+              return cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true, style: ml });
+            }).join("");
+            inner = `<div class="run-dense tappable">${allCards}</div>`;
           }
-          return `<div class="meld ${inPlay?"tappable":""} ${active ? "target" : ""}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
+          return `<div class="meld tappable ${active ? "target" : ""}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         }).join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
   // Piles hide during the play phase so the meld area can expand into that space.
@@ -1062,7 +1081,87 @@ function renderRummy(v) {
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, feltBottom: melds, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v);
+  app.__set = tableShell(v, { pods, center, feltBottom: melds, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
+}
+
+// Round-end summary popup: shown after a round finishes, auto-dismisses after 20s.
+function rummyRoundModal(v) {
+  if (!v.lastRound || v.phase === "gameOver") return "";
+  const lr = v.lastRound;
+  const roundKey = JSON.stringify(v.scores); // unique per round result
+  if (S.rummyRoundAcked === roundKey) return "";
+
+  // Start the 20s auto-dismiss timer once per round popup.
+  if (S.rummyRoundTimer === null) {
+    S.rummyRoundTimer = setTimeout(() => {
+      S.rummyRoundAcked = roundKey;
+      S.rummyRoundTimer = null;
+      render();
+    }, 20000);
+  }
+
+  const rows = v.seats.map((_, i) => {
+    const name = esc(seatName(v, i));
+    const melded = lr.meldedPts[i] ?? 0;
+    const held = lr.heldPts[i] ?? 0;
+    const net = lr.delta[i] ?? 0;
+    const total = v.scores[i];
+    const wentOut = i === lr.outSeat;
+    const mathStr = wentOut
+      ? `${melded > 0 ? `+${melded}` : melded}`
+      : `${melded > 0 ? `+${melded}` : melded} − ${held}`;
+    const netStr = net >= 0 ? `+${net}` : `${net}`;
+    const heldHand = lr.heldCards?.[i] ?? [];
+    const heldCardEls = !wentOut && heldHand.length
+      ? `<div class="rr-held">${heldHand.map((c) => cardText(c)).join(" ")}</div>`
+      : "";
+    return `<div class="rr-row${wentOut ? " rr-out" : ""}">
+      <div class="rr-name">${name}${wentOut ? " <span class='rr-badge'>went out</span>" : ""}</div>
+      <div class="rr-math">${mathStr} = <b>${netStr}</b></div>
+      <div class="rr-total">Total: ${total}</div>
+      ${heldCardEls}
+    </div>`;
+  }).join("");
+
+  return `<div class="modal-back" data-action="ack-round">
+    <div class="modal" data-stop="1">
+      <div class="modalhead"><span>Round over</span></div>
+      <div class="modalbody rr-body">${rows}</div>
+      <div style="padding:8px 14px 4px;text-align:right">
+        <button class="btn" data-action="ack-round">Next hand</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Popup showing all cards in a single meld. Reachable by tapping any meld on the felt.
+function rummyMeldModal(v) {
+  if (!S.rummyMeldOpen) return "";
+  const m = v.melds.find((x) => x.id === S.rummyMeldOpen);
+  if (!m) { S.rummyMeldOpen = null; return ""; }
+  const inPlay = v.yourTurn && v.turnPhase === "play";
+  const jokerRes = resolveJokers(m);
+  const cards = m.cards.map((c, ci) =>
+    cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined })
+  ).join("");
+  const kind = m.kind === "set" ? "Set" : "Run";
+  const owner = esc(seatName(v, m.owner));
+  const isTargeted = S.rummyLayoff === m.id;
+  const layBtn = inPlay
+    ? (isTargeted
+        ? `<button class="btn ghost sm" data-action="unlayoff-meld">Remove lay-off target</button>`
+        : `<button class="btn" data-action="layoff-meld" data-meldid="${m.id}">Lay off here</button>`)
+    : "";
+  return `<div class="modal-back" data-action="close-meld">
+      <div class="modal" data-stop="1">
+        <div class="modalhead"><span>${kind} — ${owner}</span>
+          <button class="btn sm ghost" data-action="close-meld">Close</button></div>
+        <div class="modalbody">
+          <div class="meld-modal-cards">${cards}</div>
+          ${layBtn ? `<div style="margin-top:10px">${layBtn}</div>` : ""}
+        </div>
+      </div>
+    </div>`;
 }
 
 // Popup listing the whole discard pile. During draw phase, cards are clickable
@@ -1443,7 +1542,7 @@ function doMeld() {
   S.rummySel.clear();
 }
 function doLayoff() {
-  if (S.rummyLayoff === null) return toast("Tap a table meld to lay onto.");
+  if (S.rummyLayoff === null) return toast("Tap a meld and choose “Lay off here”.");
   const cards = [...S.rummySel];
   if (!cards.length) return toast("Select cards to lay off.");
   send({ t: "move", move: { type: "layoff", seat: S.view.you, meldId: S.rummyLayoff, cards } });
@@ -1509,7 +1608,16 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "toggle-card": return toggleSel(+t.dataset.cardid);
-    case "select-meld": S.rummyLayoff = S.rummyLayoff === +t.dataset.meldid ? null : +t.dataset.meldid; return render();
+    case "ack-round": {
+      const lr = S.view && S.view.lastRound;
+      if (lr) S.rummyRoundAcked = JSON.stringify(S.view.scores);
+      if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
+      return render();
+    }
+    case "open-meld": S.rummyMeldOpen = +t.dataset.meldid; return render();
+    case "close-meld": S.rummyMeldOpen = null; return render();
+    case "layoff-meld": S.rummyLayoff = +t.dataset.meldid; S.rummyMeldOpen = null; return render();
+    case "unlayoff-meld": S.rummyLayoff = null; S.rummyMeldOpen = null; return render();
 
     case "meld-selected": return doMeld();
     case "layoff-selected": return doLayoff();
