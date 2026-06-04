@@ -859,23 +859,30 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick .who{font-size:11px;color:var(--ink-soft);font-weight:600;max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trick .play.lead .who{color:var(--brass-hi)}
 
-/* Positioned trick layout — cards radiate toward their player's edge of the felt */
+/* Positioned trick layout — cards placed near each player's edge of the felt */
 .trick.positioned{position:absolute;inset:0;pointer-events:none;z-index:2}
 .trick.positioned .play{
-  position:absolute;left:50%;top:50%;pointer-events:all;
-  transform:translate(-50%,-50%);
+  position:absolute;pointer-events:all;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
 }
 .trick.positioned .play.pos-top{
-  transform:translate(-50%, calc(-50% - min(30vh, 180px)));
+  top:8%;left:50%;transform:translateX(-50%);
 }
 .trick.positioned .play.pos-bottom{
-  transform:translate(-50%, calc(-50% + min(26vh, 140px)));
+  bottom:8%;left:50%;transform:translateX(-50%);
 }
 .trick.positioned .play.pos-left{
-  transform:translate(calc(-50% - min(36vw, 200px)), -50%);
+  left:6%;top:50%;transform:translateY(-50%);
 }
 .trick.positioned .play.pos-right{
-  transform:translate(calc(-50% + min(36vw, 200px)), -50%);
+  right:6%;top:50%;transform:translateY(-50%);
+}
+/* diagonal positions for 5-8 player games */
+.trick.positioned .play.pos-tl{
+  top:14%;left:22%;transform:none;
+}
+.trick.positioned .play.pos-tr{
+  top:14%;right:22%;transform:none;
 }
 
 /* piles (Rummy) */
@@ -1316,7 +1323,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* Bid result tokens — positioned on the felt near each player */
 .hlj-bid-overlay{position:absolute;inset:0;pointer-events:none;z-index:3}
 .hlj-bid-token{
-  position:absolute;left:50%;top:50%;
+  position:absolute;
   pointer-events:all;
   font-family:"Fraunces",serif;font-size:15px;font-weight:700;
   display:grid;place-items:center;
@@ -1338,7 +1345,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* Felt-anchored chip panel — your bid turn, sits above the selfwrap */
 .hlj-felt-bid{
-  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  position:absolute;bottom:8%;left:50%;transform:translateX(-50%);
   z-index:4;display:flex;flex-direction:column;align-items:center;gap:8px;
 }
 
