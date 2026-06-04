@@ -299,6 +299,19 @@ function onFrame(e) {
     if (newKey && newKey !== prevKey && newKey !== S.rummyRoundAcked) {
       if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
     }
+    // Auto-sort rummy hand on draw: whenever the hand gains card(s), re-apply the current sort.
+    const v = msg.view;
+    if (S.party === "rummy500" && v && v.yourHand && v.you != null) {
+      const prevHand = prev?.yourHand ?? [];
+      if (v.yourHand.length > prevHand.length) {
+        const rank = (c) => (c.joker ? 100 : c.rank);
+        const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
+        const by = S.rummySort === "suit"
+          ? (a, b) => (a.joker - b.joker) || (suitOrder[a.suit] - suitOrder[b.suit]) || (rank(a) - rank(b))
+          : (a, b) => (rank(a) - rank(b)) || (suitOrder[a.suit] - suitOrder[b.suit]);
+        S.rummyOrder = [...v.yourHand].sort(by).map((c) => c.id);
+      }
+    }
     maybePromptPass();
     render();
   }
