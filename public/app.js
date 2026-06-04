@@ -387,7 +387,8 @@ function connect() {
   ws.onopen = () => { opened = true; clearTimeout(fbTimer); joinOnOpen(); };
   ws.onmessage = onFrame;
   ws.onclose = () => {
-    S.connected = false;
+    // Don't clobber S.connected if we've already switched to a local socket.
+    if (!S.offline) S.connected = false;
     if (S.intentionalClose || S.offline) return;
     if (!opened) return fallback();
     render();
@@ -410,31 +411,27 @@ async function connectLocal(serverSeats = null, startConfig = null) {
   const sock = localMod.createLocalSocket(S.party);
   S.ws = sock;
   sock.onopen = () => {
-    joinOnOpen();
-    if (serverSeats) {
-      // Replicate server seat config into the local room.
-      for (let i = 1; i < serverSeats.length; i++) {
-        const hotseatName = S.hotseats[i];
-        if (hotseatName) {
-          send({ t: "addHuman", seat: i, name: hotseatName });
-        } else if (serverSeats[i].kind === "bot" || serverSeats[i].kind === "empty") {
-          // Fill every non-host seat with a bot so the game can start immediately.
-          send({ t: "addBot", seat: i });
-        }
-      }
-      S.hotseats = {};
-      // Auto-start with the same config that was in the server lobby.
-      if (S.party === "pegs-and-jokers") {
-        send({ t: "start", config: { players: serverSeats.length, marbles: startConfig?.marbles ?? 5 } });
-      } else {
-        send({ t: "start", config: { players: serverSeats.length, target: startConfig?.target ?? GAMES[S.party]?.target ?? 21, botDifficulty: startConfig?.botDifficulty } });
-      }
-    } else {
-      // Fallback / reconnect path: restore any hotseat reservations only.
+    try {
+      joinOnOpen();
+      // Place any pass-and-play humans first; start() auto-fills remaining seats with bots.
       for (const [seat, name] of Object.entries(S.hotseats)) {
         send({ t: "addHuman", seat: +seat, name });
       }
       S.hotseats = {};
+      if (serverSeats) {
+        // Auto-start using the config captured from the server lobby.
+        const players = serverSeats.length;
+        if (S.party === "pegs-and-jokers") {
+          send({ t: "start", config: { players, marbles: startConfig?.marbles ?? 5 } });
+        } else {
+          const cfg = { players, target: startConfig?.target ?? GAMES[S.party]?.target ?? 21 };
+          if (startConfig?.botDifficulty) cfg.botDifficulty = startConfig.botDifficulty;
+          send({ t: "start", config: cfg });
+        }
+      }
+    } catch (err) {
+      console.error("connectLocal onopen failed:", err);
+      toast("Couldn't start game: " + (err?.message || err));
     }
   };
   sock.onmessage = onFrame;
@@ -686,107 +683,128 @@ function renderStart() {
 function renderLobby(v) {
   const isHost = v.you !== null && v.you === v.hostSeat;
   const isPJ = S.party === "pegs-and-jokers";
+  const isHLJ = S.party === "high-low-jack";
+  const isTeamGame = isHLJ || isPJ;
   const counts = isPJ ? [4] : GAMES[S.party].players;
   const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
+  const isRummyLobby = S.party === "rummy500";
+  const DIFF_LABELS = ["Easy", "Medium", "Hard", "Expert"];
 
-  const seats = v.seats
-    .map((s, i) => {
-      const you = i === v.you;
-      const isEmpty = s.kind === "empty";
-      const av = isEmpty
-        ? `<div class="avatar" style="--av-1:#5a3c22;--av-2:#3f2a17;color:var(--ink-dim);font-size:14px">${i + 1}</div>`
-        : avatarHTML(s.name || "Player", { host: i === v.hostSeat });
-      const role = isEmpty ? "open seat" : s.kind === "bot" ? "computer" : i === v.hostSeat ? "host" : "player";
-      const tags = [];
-      if (you) tags.push(`<span class="chip you">you</span>`);
-      else if (i === v.hostSeat && !isEmpty) tags.push(`<span class="chip host">host</span>`);
-      if (s.kind === "bot") tags.push(`<span class="chip bot">bot</span>`);
-      if (isEmpty) tags.push(`<span class="chip empty">empty</span>`);
-      const isRummyLobby = S.party === "rummy500" && v.phase === "lobby";
-      const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
-      const DIFF_LABELS = ["Easy", "Medium", "Hard", "Expert"];
-      // Hotseat reservation: a seat the host has earmarked for a local human
-      // player (pass-and-play). Stored client-side in S.hotseats until start.
-      const reserved = !you && isHost && S.hotseats[i];
+  const renderSeat = (s, i) => {
+    const you = i === v.you;
+    const isEmpty = s.kind === "empty";
+    const reserved = !you && isHost && S.hotseats[i];
+    const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
+    const tc = isTeamGame ? (i % 2 === 0 ? "tA" : "tB") : "";
 
-      let ctrl = "";
-      if (reserved) {
-        ctrl = `<button class="btn sm danger" data-action="clear-hotseat" data-seat="${i}">Remove</button>`;
-      } else if (isEmpty) {
-        ctrl =
-          (S.offline ? "" : `<button class="btn sm" data-action="sit" data-seat="${i}">Sit</button>`) +
-          (isHost ? `<button class="btn sm ghost" data-action="addbot" data-seat="${i}">+ Bot</button>` : "") +
-          (isHost ? `<button class="btn sm ghost" data-action="reserve-hotseat" data-seat="${i}">+ Pass &amp; Play</button>` : "");
-      } else if (s.kind === "bot" && isHost) {
-        const diffPicker = isRummyLobby
-          ? `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`
-          : "";
-        ctrl = diffPicker + `<button class="btn sm danger" data-action="removebot" data-seat="${i}">Remove</button>`;
-      } else if (S.offline && s.kind === "human" && i !== v.hostSeat) {
-        ctrl = `<button class="btn sm danger" data-action="clearseat" data-seat="${i}">Remove</button>`;
-      }
+    let actions = "";
+    if (reserved) {
+      actions = `<button class="btn sm danger" data-action="clear-hotseat" data-seat="${i}" title="Remove">✕</button>`;
+    } else if (isEmpty && isHost) {
+      actions =
+        `<button class="lby-act" data-action="addbot" data-seat="${i}">+ Bot</button>` +
+        `<button class="lby-act" data-action="reserve-hotseat" data-seat="${i}">+ Pass &amp; Play</button>`;
+    } else if (s.kind === "bot" && isHost) {
+      const diffPicker = isRummyLobby
+        ? `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`
+        : "";
+      actions = diffPicker + `<button class="btn sm danger" data-action="removebot" data-seat="${i}" title="Remove">✕</button>`;
+    } else if (S.offline && s.kind === "human" && !you) {
+      actions = `<button class="btn sm danger" data-action="clearseat" data-seat="${i}" title="Remove">✕</button>`;
+    }
 
-      const displayName = reserved ? S.hotseats[i] : (isEmpty ? `Seat ${i + 1}` : esc(s.name || "Player"));
-      const displayRole = reserved ? "pass & play" : role;
-      const reservedChip = reserved ? `<span class="chip bot" style="background:rgba(100,160,240,.16);color:#88b8f0;border-color:rgba(100,160,240,.35)">local</span>` : "";
-      return `<div class="seat ${you ? "me" : ""}">${av}
-        <div><div class="nm">${displayName}</div><div class="rl">${displayRole}</div></div>
-        <div class="tags">${tags.join("")}${reservedChip}${ctrl}</div></div>`;
-    })
-    .join("");
+    const displayName = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open seat" : esc(s.name || "Player");
+    const initials = reserved ? S.hotseats[i].charAt(0).toUpperCase()
+      : !isEmpty ? (s.name || "?").charAt(0).toUpperCase()
+      : (i + 1).toString();
 
+    const avClass = isEmpty ? "empty" : reserved ? "local" : you ? "you" : s.kind === "bot" ? "bot" : "human";
+    const avIcon = s.kind === "bot" && !reserved ? "♟" : initials;
+
+    let roleLabel = "open";
+    if (reserved) roleLabel = "pass &amp; play";
+    else if (!isEmpty) roleLabel = s.kind === "bot" ? "computer" : you ? "you" : i === v.hostSeat ? "host" : "player";
+
+    const hostBadge = i === v.hostSeat && !isEmpty && !you ? `<span class="lby-badge host">host</span>` : "";
+    const youBadge  = you ? `<span class="lby-badge you">you</span>` : "";
+    const localBadge = reserved ? `<span class="lby-badge local">local</span>` : "";
+
+    return `<div class="lby-seat ${isEmpty ? "empty" : ""} ${you ? "me" : ""} ${tc}">
+      <div class="lby-av ${avClass}">${avIcon}</div>
+      <div class="lby-seat-info">
+        <div class="lby-seat-name">${displayName}</div>
+        <div class="lby-seat-role">${roleLabel}${hostBadge}${youBadge}${localBadge}</div>
+      </div>
+      <div class="lby-seat-actions">${actions}</div>
+    </div>`;
+  };
+
+  // Layout: two-column team grid for team games, single list otherwise
+  let seatsHTML;
+  if (isTeamGame) {
+    const idxA = v.seats.map((_, i) => i).filter(i => i % 2 === 0);
+    const idxB = v.seats.map((_, i) => i).filter(i => i % 2 === 1);
+    seatsHTML = `<div class="lby-teams">
+      <div class="lby-team tA">
+        <div class="lby-team-hdr">Team A</div>
+        ${idxA.map(i => renderSeat(v.seats[i], i)).join("")}
+      </div>
+      <div class="lby-team tB">
+        <div class="lby-team-hdr">Team B</div>
+        ${idxB.map(i => renderSeat(v.seats[i], i)).join("")}
+      </div>
+    </div>`;
+  } else {
+    seatsHTML = `<div class="lby-seat-list">${v.seats.map((s, i) => renderSeat(s, i)).join("")}</div>`;
+  }
+
+  // Config controls (host only)
   const cfgControls = isPJ
-    ? `<label>Players</label>
-         <div class="seg">${[4, 6].map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="pj-setplayers" data-count="${c}">${c}</button>`).join("")}</div>
-         <p class="sub" style="margin:4px 0 0">${v.players === 6 ? "Two teams of three (alternating seats)." : "Two pairs (partners opposite)."}</p>
-         <label>Marbles per player</label>
-         <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div>`
-    : `<label>Players</label>
-         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>
-         <label>Play to (points)</label>
-         <input class="field" id="f-target" type="number" min="1" value="${v.target}" />`;
+    ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
+         <div class="seg">${[4, 6].map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="pj-setplayers" data-count="${c}">${c}</button>`).join("")}</div></div>
+         <p class="sub" style="margin:2px 0 10px 72px">${v.players === 6 ? "Two teams of three." : "Two pairs, partners opposite."}</p>
+         <div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
+         <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
+    : `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
+         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>
+       <div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
+         <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>`;
 
   const botReplacementToggle = !S.offline
-    ? `<label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer">
-         <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} style="width:16px;height:16px" />
-         <span>Auto-replace disconnected players with bots <span class="sub">(1-min delay)</span></span>
+    ? `<label class="lby-replace-toggle">
+         <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} />
+         Auto-replace disconnects with bots
        </label>`
     : "";
 
-  const hostPanel = isHost
-    ? `<div class="panel">
-         <h2>Set up the table</h2>
-         ${cfgControls}
-         ${botReplacementToggle}
-         <p class="sub" style="margin-top:10px">Anyone can sit in an open seat. Empty seats become bots when you deal.</p>
-         <div style="margin-top:14px"><button class="btn" style="width:100%" data-action="start">${isPJ ? "Deal & start" : "Deal the cards"}</button></div>
-       </div>`
-    : `<div class="panel" style="text-align:center"><p class="sub">Waiting for the host to deal…</p></div>`;
-
   const hasHotseats = Object.keys(S.hotseats).length > 0;
-  const sharePanel = S.offline
-    ? `<div class="panel cream">
-        <h2>Offline game</h2>
-        <p class="sub">All on this device. Add bots to play solo, or add more <b>players</b> for pass-and-play — each gets their own hidden hand, and the device asks you to hand it over between turns.</p>
-      </div>`
-    : hasHotseats
-    ? `<div class="panel cream">
-        <h2>Pass &amp; Play</h2>
-        <p class="sub">Local players share this device. When the game starts it'll run offline — each player's hand stays hidden until it's their turn.</p>
-      </div>`
-    : `<div class="panel cream">
-        <h2>Lobby</h2>
-        <p class="sub">Share this link so friends can pull up a chair.</p>
-        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-          <input class="field" readonly value="${esc(link)}" style="font-size:13px" onclick="this.select()" />
-          <button class="btn sm" data-action="copy-link">Copy</button>
-        </div>
-      </div>`;
+  let shareRow = "";
+  if (S.offline) {
+    shareRow = `<p class="lby-mode-note">${hasHotseats ? "Pass &amp; Play — device is shared between turns." : "Offline — all bots play on this device."}</p>`;
+  } else {
+    shareRow = `<div class="lby-share-row">
+      <input class="lby-link-input" readonly value="${esc(link)}" onclick="this.select()" />
+      <button class="btn sm" data-action="copy-link">Copy link</button>
+    </div>`;
+  }
+
+  const dealBtn = isHost
+    ? `<button class="felt-cta" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button>`
+    : `<p class="lby-waiting">Waiting for the host to deal…</p>`;
+
+  const cfgSection = isHost
+    ? `<div class="lby-cfg">${cfgControls}${botReplacementToggle}</div>`
+    : "";
+
   app.__set = `${appbar(v)}
-    <div class="stage">
-      ${sharePanel}
-      <div class="panel"><h2 style="margin-bottom:10px">Seats</h2><div class="seats">${seats}</div></div>
-      ${hostPanel}
+    <div class="lby-wrap">
+      <div class="felt-content">
+        <div class="lby-title">${esc(GAMES[S.party].label)}</div>
+        ${shareRow}
+        ${seatsHTML}
+        ${cfgSection}
+        ${dealBtn}
+      </div>
     </div>`;
 }
 
