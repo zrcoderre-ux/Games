@@ -100,15 +100,16 @@ function isRun(cards: RummyCard[]): boolean {
   return false;
 }
 
-// A set is 3+ cards of the same rank, jokers wild. No distinct-suit / size-4
-// cap: with two decks a set can repeat a suit and run to more than four cards,
-// and the physical card pool (plus the duplicate-id guard in isLegal) bounds
-// it. A set must contain at least one natural card.
+// A set is 3+ cards of the same rank, jokers wild. Each rank+suit pair may
+// appear at most once (even in a double-deck game). A set must contain at
+// least one natural card.
 function isSet(cards: RummyCard[]): boolean {
   if (cards.length < 3) return false;
   const naturals = cards.filter((c) => !c.joker);
   if (naturals.length === 0) return false;
-  return naturals.every((c) => c.rank === naturals[0].rank);
+  if (!naturals.every((c) => c.rank === naturals[0].rank)) return false;
+  const suits = naturals.map((c) => c.suit);
+  return new Set(suits).size === suits.length; // no duplicate suits
 }
 
 // Order a run's cards low->high, slotting jokers into the gaps/ends they fill,
@@ -159,9 +160,11 @@ function canRunWith(pool: RummyCard[], target: RummyCard): boolean {
 
 function canFormMeldWith(pool: RummyCard[], target: RummyCard): boolean {
   if (target.joker) return false;
-  const sameRank = pool.filter((c) => !c.joker && c.rank === target.rank).length;
+  // Set check: target + other same-rank cards with distinct suits + jokers.
+  // Each suit may appear at most once, so count distinct other suits available.
+  const otherSuits = new Set(pool.filter((c) => !c.joker && c.rank === target.rank && c.suit !== target.suit).map((c) => c.suit));
   const jokers = pool.filter((c) => c.joker).length;
-  if (sameRank >= 1 && sameRank + jokers >= 3) return true;
+  if (1 + otherSuits.size + jokers >= 3) return true;
   return canRunWith(pool, target);
 }
 
@@ -841,21 +844,32 @@ function opponentDangerWithModel(
 const naturalsOf = (hand: RummyCard[]): RummyCard[] => hand.filter((c) => !c.joker);
 const jokersOf = (hand: RummyCard[]): RummyCard[] => hand.filter((c) => c.joker);
 
+// Deduplicate same-rank cards by suit — only one card per suit allowed in a set.
+function uniqueBySuit(cards: RummyCard[]): RummyCard[] {
+  const seen = new Map<string, RummyCard>();
+  for (const c of cards) if (!seen.has(c.suit)) seen.set(c.suit, c);
+  return [...seen.values()];
+}
 function findSet(hand: RummyCard[]): RummyCard[] | null {
   const jokers = jokersOf(hand);
   const byRank = new Map<number, RummyCard[]>();
   for (const c of naturalsOf(hand)) byRank.set(c.rank, [...(byRank.get(c.rank) ?? []), c]);
-  for (const g of byRank.values()) if (g.length >= 3) return g.slice(0, 4); // natural set first
-  // otherwise complete the largest natural group with jokers
   let bestG: RummyCard[] | null = null;
-  for (const g of byRank.values()) if (!bestG || g.length > bestG.length) bestG = g;
+  for (const g of byRank.values()) {
+    const unique = uniqueBySuit(g);
+    if (unique.length >= 3) return unique.slice(0, 4);
+    if (!bestG || unique.length > bestG.length) bestG = unique;
+  }
   if (bestG && bestG.length >= 1 && bestG.length + jokers.length >= 3)
     return [...bestG, ...jokers.slice(0, 3 - bestG.length)];
   return null;
 }
 function findSetContaining(hand: RummyCard[], c: RummyCard): RummyCard[] | null {
   if (c.joker) return null;
-  const g = hand.filter((x) => !x.joker && x.rank === c.rank);
+  // c must be included — use it as the representative for its own suit.
+  const seen = new Map<string, RummyCard>([[c.suit, c]]);
+  for (const x of hand) if (!x.joker && x.rank === c.rank && !seen.has(x.suit)) seen.set(x.suit, x);
+  const g = [...seen.values()];
   if (g.length >= 3) return g.slice(0, 4);
   const jokers = jokersOf(hand);
   if (g.length >= 1 && g.length + jokers.length >= 3) return [...g, ...jokers.slice(0, 3 - g.length)];

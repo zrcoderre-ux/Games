@@ -937,7 +937,9 @@ function isSet(cards) {
   if (cards.length < 3) return false;
   const naturals = cards.filter((c) => !c.joker);
   if (naturals.length === 0) return false;
-  return naturals.every((c) => c.rank === naturals[0].rank);
+  if (!naturals.every((c) => c.rank === naturals[0].rank)) return false;
+  const suits = naturals.map((c) => c.suit);
+  return new Set(suits).size === suits.length;
 }
 function orderRunCards(cards) {
   const naturals = cards.filter((c) => !c.joker);
@@ -987,9 +989,9 @@ function canRunWith(pool, target) {
 }
 function canFormMeldWith(pool, target) {
   if (target.joker) return false;
-  const sameRank = pool.filter((c) => !c.joker && c.rank === target.rank).length;
+  const otherSuits = new Set(pool.filter((c) => !c.joker && c.rank === target.rank && c.suit !== target.suit).map((c) => c.suit));
   const jokers = pool.filter((c) => c.joker).length;
-  if (sameRank >= 1 && sameRank + jokers >= 3) return true;
+  if (1 + otherSuits.size + jokers >= 3) return true;
   return canRunWith(pool, target);
 }
 function canLayoff(state, target) {
@@ -1435,20 +1437,30 @@ function opponentDangerWithModel(state, card, seat, model) {
 }
 var naturalsOf = (hand) => hand.filter((c) => !c.joker);
 var jokersOf = (hand) => hand.filter((c) => c.joker);
+function uniqueBySuit(cards) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const c of cards) if (!seen.has(c.suit)) seen.set(c.suit, c);
+  return [...seen.values()];
+}
 function findSet(hand) {
   const jokers = jokersOf(hand);
   const byRank = /* @__PURE__ */ new Map();
   for (const c of naturalsOf(hand)) byRank.set(c.rank, [...byRank.get(c.rank) ?? [], c]);
-  for (const g of byRank.values()) if (g.length >= 3) return g.slice(0, 4);
   let bestG = null;
-  for (const g of byRank.values()) if (!bestG || g.length > bestG.length) bestG = g;
+  for (const g of byRank.values()) {
+    const unique = uniqueBySuit(g);
+    if (unique.length >= 3) return unique.slice(0, 4);
+    if (!bestG || unique.length > bestG.length) bestG = unique;
+  }
   if (bestG && bestG.length >= 1 && bestG.length + jokers.length >= 3)
     return [...bestG, ...jokers.slice(0, 3 - bestG.length)];
   return null;
 }
 function findSetContaining(hand, c) {
   if (c.joker) return null;
-  const g = hand.filter((x) => !x.joker && x.rank === c.rank);
+  const seen = /* @__PURE__ */ new Map([[c.suit, c]]);
+  for (const x of hand) if (!x.joker && x.rank === c.rank && !seen.has(x.suit)) seen.set(x.suit, x);
+  const g = [...seen.values()];
   if (g.length >= 3) return g.slice(0, 4);
   const jokers = jokersOf(hand);
   if (g.length >= 1 && g.length + jokers.length >= 3) return [...g, ...jokers.slice(0, 3 - g.length)];
