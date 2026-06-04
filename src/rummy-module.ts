@@ -630,9 +630,50 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
 }
 
 // ---------- heuristic AI ----------
-// A "decent club player": draw from the discard only when the top card can be
-// used immediately, lay down melds as it gets them (held points are at risk),
-// lay off where it can, then discard the highest-value least-connected card.
+// Four personalities, assigned by seat index (repeating mod 4 for 5+ players).
+// Parameters control aggression when evaluating deep discard pickups and
+// end-game shedding. The same core logic runs for all; only the weights differ.
+
+type AiPersonality = {
+  /** Minimum net gain (pts) required to prefer a deep pickup over drawing stock. */
+  pickupThreshold: number;
+  /**
+   * How much of the held-card penalty is discounted early in the round (0–1).
+   * 0 = no discount, 1 = ignore penalty entirely when stock is full.
+   * Discount fades linearly to zero as the stock empties.
+   */
+  earlyDiscount: number;
+  /** Consider "endgame" when min opponent hand count falls to this. */
+  endgameHandSize: number;
+  /**
+   * Multiplier on opponent-danger score when deciding what to discard.
+   * Low = more willing to dump dangerous cards for the point reduction.
+   */
+  dangerWeight: number;
+};
+
+const PERSONALITIES: AiPersonality[] = [
+  // 0 · Balanced — reasonable defaults, middle of the road
+  { pickupThreshold: 8,  earlyDiscount: 0.35, endgameHandSize: 3, dangerWeight: 1.8 },
+  // 1 · Aggressive — picks up big piles early, holds high-value cards hoping to meld
+  { pickupThreshold: 3,  earlyDiscount: 0.70, endgameHandSize: 2, dangerWeight: 0.8 },
+  // 2 · Conservative — prefers a clean hand, dumps liabilities fast, avoids risk
+  { pickupThreshold: 16, earlyDiscount: 0.10, endgameHandSize: 5, dangerWeight: 2.5 },
+  // 3 · Opportunist — aggressive early but pivots to safety once opponents get low
+  { pickupThreshold: 5,  earlyDiscount: 0.60, endgameHandSize: 4, dangerWeight: 1.2 },
+];
+
+function getPersonality(seat: number): AiPersonality {
+  return PERSONALITIES[seat % PERSONALITIES.length];
+}
+
+// 0 = very start of round, 1 = stock exhausted.
+function roundProgress(state: RummyState): number {
+  const deckSize = 54 * decksFor(state.players); // 54 = 52 naturals + 2 jokers
+  const hs = handSize(state.players);
+  const initialStock = Math.max(1, deckSize - state.players * hs - 1);
+  return Math.min(1, Math.max(0, 1 - state.stock.length / initialStock));
+}
 
 // The AI spends its wild jokers, but sparingly: it always prefers a meld made
 // of natural cards and only fills gaps/ends with jokers when that's what it
@@ -809,12 +850,15 @@ function minOpponentHandSize(state: RummyState, seat: number): number {
 
 // Evaluate picking up the discard pile down to `targetCard`.
 // Returns a net-gain score (positive = worth doing, negative = not).
-// Takes into account: points gained from melding the pile, penalty for cards
-// we can't meld, danger of giving opponents our discard, and pile depth cost.
+//
+// Key insight: the penalty for unplayable cards is discounted early in the round
+// because those cards may become meldable later. That discount is parametrised by
+// the personality's `earlyDiscount` and fades to zero as the stock empties.
 function evaluateDeepPickup(
   state: RummyState,
   seat: number,
   targetCardId: number,
+  personality: AiPersonality,
 ): { gain: number; cards: RummyCard[] } {
   const discardPile = state.discard;
   const targetIdx = discardPile.findIndex((c) => c.id === targetCardId);
@@ -823,43 +867,45 @@ function evaluateDeepPickup(
   const taken = discardPile.slice(targetIdx); // targetCard + everything above it
   const combined = [...state.hands[seat], ...taken];
 
-  // Simulate playing everything we can from the combined hand
+  // Simulate playing everything we can from the combined hand.
   const leftoverPts = simulatePlayPoints(combined, state.melds);
-  const takenPts = taken.reduce((s, c) => s + cardValue(c), 0);
   const handPts = handPoints(state.hands[seat]);
 
-  // Net: points we'd gain from melding pile cards minus increase in held penalty
-  const meldedFromPile = takenPts - Math.max(0, leftoverPts - handPts);
-  // Cost: we have to hold extra cards if we can't meld them all
-  const extraHeld = Math.max(0, leftoverPts - handPts);
-  // Extra depth cost: each card we pick up that we can't immediately meld is a liability
-  const depthPenalty = taken.length * 1.5;
+  // Points we capture: taken pile value minus the increase in held-card penalty.
+  const takenPts = taken.reduce((s, c) => s + cardValue(c), 0);
+  const extraHeldPts = Math.max(0, leftoverPts - handPts);
 
-  return { gain: meldedFromPile - extraHeld * 0.5 - depthPenalty, cards: taken };
+  // Early-game: discount the held-card penalty because there's time to meld them.
+  // The discount is personality.earlyDiscount at the start and fades to 0 at end.
+  const progress = roundProgress(state);
+  const discount = personality.earlyDiscount * (1 - progress);
+  const effectiveHeldPenalty = extraHeldPts * (1 - discount);
+
+  // Gross benefit: pile points we'd convert to melds (not counting what we already held).
+  const grossGain = takenPts - extraHeldPts;
+
+  // Net = gross benefit minus what we're still effectively penalised for holding.
+  return { gain: grossGain - effectiveHeldPenalty, cards: taken };
 }
 
 // Choose the best discard from `hand`, accounting for:
 //   - card's own meld potential (keep connected cards)
-//   - opponent danger (don't feed their melds)
+//   - opponent danger (weighted by personality)
 //   - endgame pressure: when opponents are running low, dump high-value isolated cards fast
-function bestDiscard(state: RummyState, hand: RummyCard[], seat: number): RummyCard {
-  const opponentLow = minOpponentHandSize(state, seat) <= 3;
+function bestDiscard(state: RummyState, hand: RummyCard[], seat: number, personality: AiPersonality): RummyCard {
+  const opponentLow = minOpponentHandSize(state, seat) <= personality.endgameHandSize;
   const score = (c: RummyCard): number => {
     if (c.joker) return -200; // never discard a wild
-    // Base: card's point value (high = more tempting to discard, but risky)
     let discardScore = cardValue(c);
-    // Meld connectivity: keep cards that are part of partial melds
     const mates = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
     const adjInSuit = hand.filter(
       (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2,
     ).length;
     discardScore -= mates >= 2 ? 12 : mates === 1 ? 5 : 0;
     discardScore -= adjInSuit * 3;
-    // Opponent danger: avoid giving them useful cards (unless we're forced to in endgame)
     const danger = opponentDanger(state, c, seat);
-    discardScore -= danger * (opponentLow ? 1 : 2); // danger matters less when we're desperate
-    // Endgame pressure: if opponents are close to going out, dump high isolates fast
-    if (opponentLow) discardScore += cardValue(c) * 0.5; // amplify the urge to shed points
+    discardScore -= danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
+    if (opponentLow) discardScore += cardValue(c) * 0.5;
     return discardScore;
   };
   return [...hand].sort((a, b) => score(b) - score(a))[0];
@@ -886,37 +932,38 @@ function allMeldsInHand(hand: RummyCard[]): RummyCard[][] {
 
 function aiMove(state: RummyState, seat: number): RummyMove {
   const hand = state.hands[seat];
-  const opponentLow = minOpponentHandSize(state, seat) <= 3;
+  const personality = getPersonality(seat);
+  const opponentLow = minOpponentHandSize(state, seat) <= personality.endgameHandSize;
 
   // ── Draw phase ──────────────────────────────────────────────────────────────
   if (state.turnPhase === "draw") {
     const discard = state.discard;
     const top = discard[discard.length - 1];
 
-    // Always take the top card if it immediately enables a meld or layoff
+    // Always take the top card if it immediately enables a meld or layoff.
     if (top && (canFormMeldWith([...hand, top], top) || canLayoff(state, top)))
       return { type: "drawDiscard", seat, cardId: top.id };
 
-    // Consider picking up deeper into the discard pile.
-    // Only worth it when NOT in endgame pressure (opponents nearly out).
-    if (!opponentLow && discard.length >= 2) {
-      let bestGain = 8; // threshold: must be meaningfully better than drawing from stock
+    // Evaluate deep pile pickups across the full pile (no arbitrary depth cap).
+    // In endgame, only aggressive bots still consider deep pickups — a conservative
+    // or balanced bot won't risk loading up when opponents are almost out.
+    const deepAllowed = !opponentLow || personality.pickupThreshold <= 5;
+    if (deepAllowed && discard.length >= 2) {
+      let bestGain = personality.pickupThreshold; // must beat drawing an unknown stock card
       let bestTarget: RummyCard | null = null;
-      // Scan from top down; stop at depth 6 (diminishing returns beyond that)
-      const maxDepth = Math.min(discard.length, 6);
-      for (let depth = 1; depth < maxDepth; depth++) {
-        const candidate = discard[discard.length - 1 - depth];
-        // The target card must itself be useful (part of a meld in our combined hand)
-        const combined = [...hand, ...discard.slice(discard.length - 1 - depth)];
+      // Scan bottom-up; the target card must be immediately meldable given the full pickup.
+      for (let i = 0; i < discard.length - 1; i++) {
+        const candidate = discard[i];
+        const combined = [...hand, ...discard.slice(i)];
         if (!canFormMeldWith(combined, candidate) && !canLayoff(state, candidate)) continue;
-        const { gain } = evaluateDeepPickup(state, seat, candidate.id);
+        const { gain } = evaluateDeepPickup(state, seat, candidate.id, personality);
         if (gain > bestGain) { bestGain = gain; bestTarget = candidate; }
       }
       if (bestTarget) return { type: "drawDiscard", seat, cardId: bestTarget.id };
     }
 
     if (state.stock.length > 0) return { type: "drawStock", seat };
-    if (top) return { type: "drawDiscard", seat, cardId: top.id }; // last resort
+    if (top) return { type: "drawDiscard", seat, cardId: top.id }; // stock empty, take top
     return { type: "drawStock", seat };
   }
 
@@ -947,12 +994,9 @@ function aiMove(state: RummyState, seat: number): RummyMove {
       if (lo) layoffCandidates.push({ move: lo, value: cardValue(c) });
     }
   }
-  // Under endgame pressure, lay off everything we can. Otherwise prefer high-value
-  // cards that have no other meld potential (shed liability first).
   if (layoffCandidates.length > 0) {
     layoffCandidates.sort((a, b) => {
-      if (opponentLow) return b.value - a.value; // shed points fast
-      // Prefer to lay off cards with low meld potential (less valuable to keep)
+      if (opponentLow) return b.value - a.value; // shed points fast in endgame
       const aCard = hand.find((c) => c.id === (a.move as { cards: number[] }).cards[0])!;
       const bCard = hand.find((c) => c.id === (b.move as { cards: number[] }).cards[0])!;
       const aPot = meldPotential([aCard, ...hand.filter((c) => c !== aCard)]);
@@ -963,7 +1007,7 @@ function aiMove(state: RummyState, seat: number): RummyMove {
   }
 
   // 4. Discard the least valuable / most dangerous card.
-  return { type: "discard", seat, cardId: bestDiscard(state, hand, seat).id };
+  return { type: "discard", seat, cardId: bestDiscard(state, hand, seat, personality).id };
 }
 
 // ---------- the module ----------
