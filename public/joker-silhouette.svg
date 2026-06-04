@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" fill="currentColor">
+  <!-- Three-pointed jester hat -->
+  <!-- Left bell tip -->
+  <ellipse cx="30" cy="42" rx="9" ry="9"/>
+  <!-- Left horn -->
+  <path d="M30 50 Q38 72 58 80 Q50 64 48 56 Q42 62 30 50Z"/>
+  <!-- Middle bell tip -->
+  <ellipse cx="100" cy="14" rx="10" ry="10"/>
+  <!-- Middle horn -->
+  <path d="M92 22 Q90 48 80 60 Q100 54 120 60 Q110 48 108 22 Q104 30 100 24 Q96 30 92 22Z"/>
+  <!-- Right bell tip -->
+  <ellipse cx="170" cy="42" rx="9" ry="9"/>
+  <!-- Right horn -->
+  <path d="M170 50 Q162 72 142 80 Q150 64 152 56 Q158 62 170 50Z"/>
+  <!-- Hat body -->
+  <path d="M55 88 Q58 74 80 66 Q90 62 100 62 Q110 62 120 66 Q142 74 145 88 Q130 84 100 84 Q70 84 55 88Z"/>
+  <!-- Hat brim band -->
+  <rect x="52" y="86" width="96" height="10" rx="4"/>
+
+  <!-- Head -->
+  <ellipse cx="100" cy="118" rx="34" ry="36"/>
+
+  <!-- Collar / ruff -->
+  <path d="M66 148 Q72 158 80 155 Q86 168 94 163 Q96 174 100 172 Q104 174 106 163 Q114 168 120 155 Q128 158 134 148 Q118 143 100 142 Q82 143 66 148Z"/>
+
+  <!-- Body / tunic -->
+  <path d="M72 170 Q60 175 52 195 Q46 212 50 235 Q70 228 100 228 Q130 228 150 235 Q154 212 148 195 Q140 175 128 170 Q118 165 100 165 Q82 165 72 170Z"/>
+
+  <!-- Diamond shapes on tunic (cut out as negative space would need mask, so just add) -->
+
+  <!-- Belt -->
+  <rect x="55" y="224" width="90" height="12" rx="4"/>
+  <!-- Belt buckle -->
+  <rect x="90" y="226" width="20" height="8" rx="2"/>
+
+  <!-- Left arm (down) -->
+  <path d="M72 172 Q54 182 46 200 Q42 212 48 218 Q54 210 60 200 Q66 188 74 180Z"/>
+
+  <!-- Right arm holding marotte upward -->
+  <path d="M128 172 Q146 178 158 165 Q168 154 172 140 Q166 136 160 142 Q152 154 144 162 Q136 170 128 178Z"/>
+
+  <!-- Marotte staff -->
+  <rect x="157" y="80" width="8" height="68" rx="3" transform="rotate(-30 161 114)"/>
+
+  <!-- Marotte head (small jester head on stick) -->
+  <ellipse cx="172" cy="88" rx="13" ry="13"/>
+  <!-- Marotte mini hat points -->
+  <ellipse cx="162" cy="72" rx="5" ry="5"/>
+  <path d="M162 76 Q164 82 170 84 Q167 79 166 76Z"/>
+  <ellipse cx="182" cy="72" rx="5" ry="5"/>
+  <path d="M182 76 Q180 82 174 84 Q177 79 178 76Z"/>
+
+  <!-- Legs -->
+  <path d="M78 234 Q72 256 70 278 Q80 280 88 278 Q90 258 92 238Z"/>
+  <path d="M122 234 Q128 256 130 278 Q120 280 112 278 Q110 258 108 238Z"/>
+</svg>
