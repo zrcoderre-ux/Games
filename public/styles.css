@@ -190,7 +190,7 @@ body:has(.felt-table)::before{
 /* Scattered face-down card backs */
 .cb{
   position:absolute;width:40px;height:56px;border-radius:5px;z-index:1;
-  background:linear-gradient(135deg,#8b1a1a 0%,#6b1010 100%);
+  background:linear-gradient(135deg,#1a3a8b 0%,#102068 100%);
   border:1.5px solid rgba(255,255,255,.15);
   box-shadow:2px 3px 8px rgba(0,0,0,.55),inset 0 0 0 3px rgba(255,255,255,.05);
 }
@@ -858,16 +858,16 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   transform:translate(-50%,-50%);
 }
 .trick.positioned .play.pos-top{
-  transform:translate(-50%, calc(-50% - min(22vh, 130px)));
+  transform:translate(-50%, calc(-50% - min(30vh, 180px)));
 }
 .trick.positioned .play.pos-bottom{
-  transform:translate(-50%, calc(-50% + min(18vh, 100px)));
+  transform:translate(-50%, calc(-50% + min(26vh, 140px)));
 }
 .trick.positioned .play.pos-left{
-  transform:translate(calc(-50% - min(28vw, 160px)), -50%);
+  transform:translate(calc(-50% - min(36vw, 200px)), -50%);
 }
 .trick.positioned .play.pos-right{
-  transform:translate(calc(-50% + min(28vw, 160px)), -50%);
+  transform:translate(calc(-50% + min(36vw, 200px)), -50%);
 }
 
 /* piles (Rummy) */
@@ -1302,22 +1302,55 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-score-chip.mine{border-color:var(--brass-hi);box-shadow:0 0 0 1px var(--brass-hi)}
 .hlj-score-chip b{font-family:"Fraunces",serif;font-size:17px}
 
-/* Bid slider */
+/* Poker chip bid buttons */
 .hlj-bid-row{
-  display:flex;flex-direction:column;gap:6px;
-  background:rgba(0,0,0,.22);border:1px solid rgba(205,160,90,.2);
-  border-radius:14px;padding:10px 14px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
 }
-.hlj-bid-label{font-size:14px;font-weight:600;text-align:center}
-.hlj-bid-label b{font-family:"Fraunces",serif;font-size:20px;color:var(--brass-hi)}
-.hlj-slider{
-  width:100%;accent-color:var(--brass);height:6px;cursor:pointer;
+.hlj-chips{display:flex;gap:10px;justify-content:center;align-items:center}
+.hlj-chip{
+  width:48px;height:48px;border-radius:50%;
+  font-family:"Fraunces",serif;font-size:18px;font-weight:700;
+  border:3px solid rgba(205,160,90,.6);
+  background:radial-gradient(circle at 38% 35%, rgba(255,255,255,.18), transparent 55%),
+             linear-gradient(145deg,#2a5a2a,#1a3a1a);
+  color:var(--brass-hi);cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.15);
+  transition:transform .12s,box-shadow .12s,background .12s;
+  display:grid;place-items:center;
 }
-.hlj-bid-pips{
-  display:flex;justify-content:space-between;
-  padding:0 2px;font-size:11px;color:var(--ink-dim);font-weight:600;
+.hlj-chip:hover:not(:disabled){
+  transform:translateY(-3px) scale(1.08);
+  box-shadow:0 7px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.2);
 }
-.hlj-bid-pips .pip-cur{color:var(--brass-hi);font-weight:800}
+.hlj-chip:active:not(:disabled){transform:translateY(0) scale(.97)}
+.hlj-chip.claimed{
+  border-color:rgba(220,60,60,.7);
+  background:radial-gradient(circle at 38% 35%, rgba(255,255,255,.15), transparent 55%),
+             linear-gradient(145deg,#5a1a1a,#3a0e0e);
+  color:#ff9090;cursor:not-allowed;
+}
+.hlj-chip.blocked{opacity:.3;cursor:not-allowed}
+.hlj-chip:disabled{pointer-events:none}
+.hlj-pass-btn{
+  font-size:12px;font-weight:600;color:var(--ink-dim);background:none;
+  border:1px solid rgba(180,180,140,.2);border-radius:20px;padding:5px 16px;
+  cursor:pointer;transition:background .12s,color .12s,border-color .12s;
+}
+.hlj-pass-btn:hover{background:rgba(255,255,255,.07);color:var(--ink);border-color:rgba(180,180,140,.4)}
+
+/* Bid history on table during bidding */
+.hlj-table-bids{
+  display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;
+  padding:4px;
+}
+.hlj-table-bid{
+  font-size:12px;font-weight:600;color:var(--brass-hi);
+  background:rgba(0,0,0,.35);border:1px solid rgba(205,160,90,.3);
+  border-radius:20px;padding:4px 10px;
+}
+.hlj-table-bid b{font-family:"Fraunces",serif;font-size:14px}
+.hlj-table-bid.passed{color:var(--ink-dim);border-color:rgba(180,180,140,.18);font-style:italic}
+.callout-sm{font-size:13px;color:var(--ink-dim);font-style:italic}
 
 /* Signal segmented control */
 .hlj-signal-row{

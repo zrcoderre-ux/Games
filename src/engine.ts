@@ -205,6 +205,7 @@ export type GameState = {
   tricksWon: { seat: number; cards: Card[] }[]; // resolved tricks this hand
 
   lastHand: HandResult | null;
+  bidHistory: { seat: number; type: "bid" | "pass"; amount?: number }[];
 
   // Cross-hand player profiles, updated after each hand scores.
   profiles: PlayerProfile[];
@@ -262,6 +263,7 @@ export function createGame(players: PlayerCount, seed: number, target = 21): Gam
     currentTrick: [],
     tricksWon: [],
     lastHand: null,
+    bidHistory: [],
     profiles: Array.from({ length: players }, emptyProfile),
   };
   return deal(base);
@@ -293,6 +295,7 @@ function deal(state: GameState): GameState {
     highBid: null,
     winningBid: null,
     signals: Array(state.players).fill(null),
+    bidHistory: [],
     turn: firstBidder,
     leaderSeat: firstBidder,
     trickIndex: 0,
@@ -408,11 +411,17 @@ function applyBid(state: GameState, move: Move): GameState {
   const bidsActed = state.bidsActed + 1;
   const done = bidsActed === state.players;
 
+  const entry = move.type === "bid"
+    ? { seat: move.seat, type: "bid" as const, amount: move.amount }
+    : { seat: move.seat, type: "pass" as const };
+  const bidHistory = [...(state.bidHistory ?? []), entry];
+
   if (!done) {
     return {
       ...state,
       highBid,
       bidsActed,
+      bidHistory,
       bidTurn: (state.bidTurn + 1) % state.players,
     };
   }
@@ -424,6 +433,7 @@ function applyBid(state: GameState, move: Move): GameState {
     ...state,
     highBid,
     bidsActed,
+    bidHistory,
     winningBid: highBid,
     phase: "playing",
     trump: null,

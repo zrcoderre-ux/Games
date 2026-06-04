@@ -73,6 +73,7 @@ export type PlayerView = {
   handCounts: number[]; // cards remaining per seat (public)
 
   highBid: { seat: number; amount: number } | null;
+  bidHistory: { seat: number; type: "bid" | "pass"; amount?: number }[];
   signals: (HandSignal | null)[]; // public confidence signal per seat
   currentTrick: TrickPlay[]; // cards on the table (public)
   lastTrick: { winner: number; cards: Card[] } | null; // for animating the previous trick
@@ -112,6 +113,7 @@ export function redact(
     yourHand: seat !== null && state.hands[seat] ? state.hands[seat] : [],
     handCounts: state.hands.map((h) => h.length),
     highBid: state.highBid,
+    bidHistory: state.bidHistory ?? [],
     signals: state.signals,
     currentTrick: state.currentTrick,
     lastTrick,
