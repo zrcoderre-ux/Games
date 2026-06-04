@@ -754,7 +754,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .meld-log-name{font-size:12px;font-weight:700;color:var(--brass-hi);letter-spacing:.4px;
   text-transform:uppercase;margin-bottom:6px}
 .meld-log-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;
-  background:rgba(0,0,0,.22);border:1px solid rgba(205,160,90,.12);border-radius:9px;padding:6px 10px}
+  background:rgba(0,0,0,.22);border:1px solid rgba(205,160,90,.12);border-radius:9px;padding:6px 10px;
+  cursor:pointer;transition:border-color .12s}
+.meld-log-row:hover{border-color:rgba(205,160,90,.45)}
 .meld-kind{font-size:11px;color:var(--ink-soft);min-width:26px;font-weight:600}
 .meld-log-cards{display:flex;gap:0;flex-wrap:wrap}
 .meld-log-cards .card{margin-left:-10px}
@@ -787,7 +789,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .fan-inner .card.dragging{opacity:.45;cursor:grabbing}
 
 /* modal popup (discard pile list) */
-.modal-back{position:fixed;inset:0;background:rgba(5,8,16,.72);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:50;animation:rise .2s ease both;padding:18px}
+.modal-back{position:fixed;inset:0;background:rgba(5,8,16,.72);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:130;animation:rise .2s ease both;padding:18px}
 .modal{background:linear-gradient(180deg,#1e2d48,#111c30);border-radius:14px;max-width:420px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 60px -20px rgba(0,0,0,.8),inset 0 0 0 1px rgba(180,210,255,.12);padding-bottom:14px}
 .modalhead{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 10px;font-family:Fraunces,serif;font-weight:600;color:var(--ink);border-bottom:1px solid rgba(150,110,60,.25)}
 .modalbody{overflow:auto;padding:14px}

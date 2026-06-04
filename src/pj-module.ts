@@ -161,6 +161,8 @@ export type PJView = {
   phase: "playing" | "gameOver" | "lobby";
   seats: RoomMeta["seats"];
   hostSeat: number | null;
+  botReplacement: boolean;
+  disconnectedSeats: number[];
   toAct: number | null;
   yourTurn: boolean;
   yourTeam: number | null;
@@ -539,6 +541,8 @@ function redact(state: PJState, seat: number | null, meta: RoomMeta): PJView {
     phase: state.phase,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     toAct,
     yourTurn: yours,
     yourTeam: seat !== null ? teamOf(seat) : null,
@@ -565,6 +569,8 @@ function lobbyView(config: PJConfig, seat: number | null, meta: RoomMeta): PJVie
     phase: "lobby",
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     toAct: null,
     yourTurn: false,
     yourTeam: seat !== null ? teamOf(seat) : null,
