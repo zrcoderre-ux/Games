@@ -1597,7 +1597,7 @@ function doStart() {
   S.awaitingPass = false;
   if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: S.view.players, marbles: S.view.marbles } });
   const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-  send({ t: "start", config: { players: S.view.players, target } });
+  send({ t: "start", config: { players: S.view.players, target, botDifficulty: S.view.botDifficulty } });
 }
 
 function toggleSel(id) {
