@@ -220,23 +220,23 @@ body:has(.felt-table)::before{
 }
 .felt-sub{
   font-size:10.5px;font-weight:400;letter-spacing:.13em;text-transform:uppercase;
-  color:rgba(248,244,232,.28);margin-bottom:26px;
+  color:rgba(248,244,232,.28);margin-bottom:20px;
 }
 .felt-rule{
-  width:100%;height:1px;margin-bottom:22px;
+  width:100%;height:1px;margin-bottom:18px;
   background:linear-gradient(90deg,transparent,rgba(201,144,30,.25) 20%,rgba(201,144,30,.4) 50%,rgba(201,144,30,.25) 80%,transparent);
 }
 
 .felt-label{
   font-size:9.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;
-  color:#c9901e;margin-bottom:7px;align-self:flex-start;width:100%;
-  display:block;
+  color:#c9901e;margin-bottom:7px;width:100%;
+  display:block;text-align:center;
 }
 .felt-input{
   width:100%;background:transparent;border:none;
   border-bottom:1.5px solid rgba(201,144,30,.38);
   padding:9px 2px;font-family:"Hanken Grotesk",sans-serif;
-  font-size:15px;color:#f8f4e8;outline:none;margin-bottom:22px;
+  font-size:15px;color:#f8f4e8;outline:none;margin-bottom:18px;
   box-shadow:inset 0 2px 5px rgba(0,0,0,.22);
   transition:border-color .2s;caret-color:#e0a830;
 }
@@ -246,7 +246,7 @@ body:has(.felt-table)::before{
 
 /* Game card fan */
 .tbl-fan{
-  width:100%;height:148px;position:relative;margin-bottom:26px;
+  width:100%;height:148px;position:relative;margin-bottom:20px;
 }
 .tbl-card{
   position:absolute;width:84px;height:116px;border-radius:7px;
