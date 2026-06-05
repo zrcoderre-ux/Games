@@ -1734,8 +1734,10 @@ function pjBoardSVG(v, glow) {
     <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="#000" filter="url(#pjgrain)" opacity="0.5" style="mix-blend-mode:multiply"/>
     <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="url(#pjsheen)"/>
     <rect x="0.5" y="0.5" width="${f(W - 1)}" height="${f(H - 1)}" rx="4.6" fill="none" stroke="var(--wood-edge)" stroke-width="0.7"/>`;
-  // inset green felt: shadow rim then green surface
-  const ho = b.hollow;
+  // inset green felt: for 4p use a thick frame (hi=27) that fully encloses both
+  // the ring track holes and the diagonal castle arm holes inside the wood band.
+  const feltInset = P === 4 ? 27 : b.hollow.x;
+  const ho = P === 4 ? { x: feltInset, y: feltInset, w: W - 2 * feltInset, h: H - 2 * feltInset } : b.hollow;
   s += `<rect x="${f(ho.x - 1)}" y="${f(ho.y - 1)}" width="${f(ho.w + 2)}" height="${f(ho.h + 2)}" rx="3.6" fill="#000" opacity="0.6"/>`;
   s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="#1c5c32"/>`;
   s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="#000" filter="url(#pjgrainv)" opacity="0.12" style="mix-blend-mode:multiply"/>`;
