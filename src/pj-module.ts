@@ -149,6 +149,7 @@ export type BoardLayout = {
   castles: Hole[][];
   exits: number[];
   castleEntries: number[];
+  castleArmStarts: Hole[]; // where each castle arm begins (corner for 4p, rail midpoint for 6p)
   seams: Seam[]; // panel-boundary points on the rail; client draws each to centre
 };
 
@@ -217,16 +218,33 @@ function boardLayout(players: number, marbles: number): BoardLayout {
   const starts: Hole[][] = [];
   const seams: Seam[] = [];
   const railSpacing = (W - 2 * ti) / HPS;
+
+  // 4p: diagonal castle arms from each corner inward at 45°
+  const S2 = 1 / Math.SQRT2;
+  const corners4 = [
+    { x: W - ti, y: ti,     dx: -S2,  dy:  S2  }, // top-right → SW
+    { x: W - ti, y: H - ti, dx: -S2,  dy: -S2  }, // bottom-right → NW
+    { x: ti,     y: H - ti, dx:  S2,  dy: -S2  }, // bottom-left → NE
+    { x: ti,     y: ti,     dx:  S2,  dy:  S2  }, // top-left → SE
+  ];
+  const cstep4 = 4.8; // spacing between castle holes
+
   for (let p = 0; p < players; p++) {
     const cm = ring[castleEntry(p)];
     const dx = cx - cm.x, dy = cy - cm.y;
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx / len, uy = dy / len; // inward unit vector (toward centre)
     const ax = -uy, ay = ux; // along-rail unit vector
-    const reach = len * 0.6; // stop the castle short of the hollow hub
+    const reach = len * 0.6;
     const cstep = reach / (marbles + 0.5);
     const cas: Hole[] = [];
-    for (let j = 0; j < marbles; j++) cas.push({ x: cm.x + ux * cstep * (j + 1), y: cm.y + uy * cstep * (j + 1) });
+    if (players === 4) {
+      // Diagonal from corner
+      const c = corners4[p];
+      for (let j = 0; j < marbles; j++) cas.push({ x: c.x + c.dx * cstep4 * (j + 1), y: c.y + c.dy * cstep4 * (j + 1) });
+    } else {
+      for (let j = 0; j < marbles; j++) cas.push({ x: cm.x + ux * cstep * (j + 1), y: cm.y + uy * cstep * (j + 1) });
+    }
     castles.push(cas);
 
     // start row: tucked into the wood band near the exit, parallel to the rail
@@ -252,6 +270,9 @@ function boardLayout(players: number, marbles: number): BoardLayout {
     castles,
     exits: Array.from({ length: players }, (_, p) => exitHole(p, players)),
     castleEntries: Array.from({ length: players }, (_, p) => castleEntry(p)),
+    castleArmStarts: players === 4
+      ? corners4.map(c => ({ x: c.x, y: c.y }))
+      : Array.from({ length: players }, (_, p) => ring[castleEntry(p)]),
     seams,
   };
 }

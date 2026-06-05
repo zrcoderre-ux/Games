@@ -2501,6 +2501,18 @@ function boardLayout(players, marbles) {
   const starts = [];
   const seams = [];
   const railSpacing = (W - 2 * ti) / HPS;
+  const S2 = 1 / Math.SQRT2;
+  const corners4 = [
+    { x: W - ti, y: ti, dx: -S2, dy: S2 },
+    // top-right → SW
+    { x: W - ti, y: H - ti, dx: -S2, dy: -S2 },
+    // bottom-right → NW
+    { x: ti, y: H - ti, dx: S2, dy: -S2 },
+    // bottom-left → NE
+    { x: ti, y: ti, dx: S2, dy: S2 }
+    // top-left → SE
+  ];
+  const cstep4 = 4.8;
   for (let p = 0; p < players; p++) {
     const cm = ring[castleEntry(p)];
     const dx = cx - cm.x, dy = cy - cm.y;
@@ -2510,7 +2522,12 @@ function boardLayout(players, marbles) {
     const reach = len * 0.6;
     const cstep = reach / (marbles + 0.5);
     const cas = [];
-    for (let j = 0; j < marbles; j++) cas.push({ x: cm.x + ux * cstep * (j + 1), y: cm.y + uy * cstep * (j + 1) });
+    if (players === 4) {
+      const c = corners4[p];
+      for (let j = 0; j < marbles; j++) cas.push({ x: c.x + c.dx * cstep4 * (j + 1), y: c.y + c.dy * cstep4 * (j + 1) });
+    } else {
+      for (let j = 0; j < marbles; j++) cas.push({ x: cm.x + ux * cstep * (j + 1), y: cm.y + uy * cstep * (j + 1) });
+    }
     castles.push(cas);
     const ex = ring[exitHole(p, players)];
     const outset = 4.2, sp = Math.min(railSpacing, 3.6);
@@ -2532,6 +2549,7 @@ function boardLayout(players, marbles) {
     castles,
     exits: Array.from({ length: players }, (_, p) => exitHole(p, players)),
     castleEntries: Array.from({ length: players }, (_, p) => castleEntry(p)),
+    castleArmStarts: players === 4 ? corners4.map((c) => ({ x: c.x, y: c.y })) : Array.from({ length: players }, (_, p) => ring[castleEntry(p)]),
     seams
   };
 }
