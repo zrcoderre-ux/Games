@@ -1750,22 +1750,6 @@ function pjBoardSVG(v, glow) {
   s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="url(#pjtable)"/>`;
   s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="#000" filter="url(#pjgrainv)" opacity="0.4" style="mix-blend-mode:multiply"/>`;
   s += `<rect x="${f(ho.x + 0.4)}" y="${f(ho.y + 0.4)}" width="${f(ho.w - 0.8)}" height="${f(ho.h - 0.8)}" rx="2.6" fill="none" stroke="#000" stroke-width="0.5" opacity="0.4"/>`;
-  // center felt area — open space framed by the track
-  const cw = ho.w * 0.52, ch = ho.h * 0.52;
-  const cx2 = C.x - cw / 2, cy2 = C.y - ch / 2;
-  s += `<rect x="${f(cx2)}" y="${f(cy2)}" width="${f(cw)}" height="${f(ch)}" rx="2.5" fill="#1b3d24" opacity="0.72"/>`;
-  s += `<rect x="${f(cx2)}" y="${f(cy2)}" width="${f(cw)}" height="${f(ch)}" rx="2.5" fill="#000" filter="url(#pjgrainv)" opacity="0.35" style="mix-blend-mode:multiply"/>`;
-  s += `<rect x="${f(cx2 - 0.4)}" y="${f(cy2 - 0.4)}" width="${f(cw + 0.8)}" height="${f(ch + 0.8)}" rx="2.8" fill="none" stroke="#000" stroke-width="1.0" opacity="0.5"/>`;
-  s += `<rect x="${f(cx2 + 0.4)}" y="${f(cy2 + 0.4)}" width="${f(cw - 0.8)}" height="${f(ch - 0.8)}" rx="2.2" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.4"/>`;
-  // joker hat watermark in felt center — inline SVG paths scaled to fit
-  const hatW = cw * 0.72, hatH = hatW * 0.65;
-  const hx = f(C.x - hatW / 2), hy = f(C.y - hatH / 2);
-  s += `<g transform="translate(${hx},${hy}) scale(${f(hatW/100)},${f(hatH/65)})" fill="white" fill-opacity="0.28">
-    <circle cx="8" cy="52" r="4.5"/>
-    <circle cx="78" cy="20" r="4"/>
-    <circle cx="91" cy="55" r="4.5"/>
-    <path d="M 22 62 C 16 61 10 58 8 56 C 6 54 5 52 8 48 C 11 44 16 44 20 42 C 24 40 28 36 32 30 C 36 24 40 14 48 10 C 54 7 60 8 65 13 C 68 16 70 21 72 22 C 74 23 75 20 77 17 C 79 14 79 17 78 20 C 77 24 75 27 74 30 C 72 33 72 38 74 43 C 76 48 83 52 88 53 C 90 54 92 54 91 55 C 90 57 87 59 82 60 C 72 63 58 62 48 62 C 38 62 30 63 22 62 Z"/>
-  </g>`;
   // castle arms: a wooden bar from each rail entry inward to the last heaven hole
   for (let p = 0; p < P; p++) {
     const cm = b.ring[b.castleEntries[p]], last = b.castles[p][b.castles[p].length - 1];
