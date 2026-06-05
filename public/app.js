@@ -1711,9 +1711,6 @@ function pjBoardSVG(v, glow) {
       <linearGradient id="pjwood" x1="0" y1="0" x2="0.7" y2="1">
         <stop offset="0%" stop-color="var(--wood-3)"/><stop offset="45%" stop-color="var(--wood-2)"/><stop offset="100%" stop-color="var(--wood-1)"/>
       </linearGradient>
-      <radialGradient id="pjtable" cx="50%" cy="46%" r="65%">
-        <stop offset="0%" stop-color="#3c2611"/><stop offset="72%" stop-color="#241608"/><stop offset="100%" stop-color="var(--wood-0)"/>
-      </radialGradient>
       <radialGradient id="pjhole" cx="42%" cy="38%" r="62%">
         <stop offset="0%" stop-color="#070402"/><stop offset="65%" stop-color="#130c06"/><stop offset="100%" stop-color="#2a1a0d"/>
       </radialGradient>
@@ -1737,29 +1734,20 @@ function pjBoardSVG(v, glow) {
     <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="#000" filter="url(#pjgrain)" opacity="0.5" style="mix-blend-mode:multiply"/>
     <rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="url(#pjsheen)"/>
     <rect x="0.5" y="0.5" width="${f(W - 1)}" height="${f(H - 1)}" rx="4.6" fill="none" stroke="var(--wood-edge)" stroke-width="0.7"/>`;
-  // slanted panel seams: a beveled groove crossing the wood band toward centre
-  for (const sp of b.seams) {
-    const dx = C.x - sp.x, dy = C.y - sp.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
-    const ox = sp.x - ux * 8, oy = sp.y - uy * 8, ix = sp.x + ux * 5, iy = sp.y + uy * 5;
-    s += `<line x1="${f(ox)}" y1="${f(oy)}" x2="${f(ix)}" y2="${f(iy)}" stroke="#0b0805" stroke-width="0.8" opacity="0.6"/>`;
-    s += `<line x1="${f(ox + 0.55)}" y1="${f(oy)}" x2="${f(ix + 0.55)}" y2="${f(iy)}" stroke="var(--wood-hi)" stroke-width="0.3" opacity="0.32"/>`;
-  }
-  // recessed table: a dark rim (shadow of the raised frame) then the grained surface
+  // inset green felt: shadow rim then green surface
   const ho = b.hollow;
-  s += `<rect x="${f(ho.x - 1)}" y="${f(ho.y - 1)}" width="${f(ho.w + 2)}" height="${f(ho.h + 2)}" rx="3.6" fill="#000" opacity="0.55"/>`;
-  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="url(#pjtable)"/>`;
-  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="#000" filter="url(#pjgrainv)" opacity="0.4" style="mix-blend-mode:multiply"/>`;
-  s += `<rect x="${f(ho.x + 0.4)}" y="${f(ho.y + 0.4)}" width="${f(ho.w - 0.8)}" height="${f(ho.h - 0.8)}" rx="2.6" fill="none" stroke="#000" stroke-width="0.5" opacity="0.4"/>`;
-  // castle arms: a wooden bar from each rail entry inward to the last heaven hole
+  s += `<rect x="${f(ho.x - 1)}" y="${f(ho.y - 1)}" width="${f(ho.w + 2)}" height="${f(ho.h + 2)}" rx="3.6" fill="#000" opacity="0.6"/>`;
+  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="#1c5c32"/>`;
+  s += `<rect x="${f(ho.x)}" y="${f(ho.y)}" width="${f(ho.w)}" height="${f(ho.h)}" rx="3" fill="#000" filter="url(#pjgrainv)" opacity="0.12" style="mix-blend-mode:multiply"/>`;
+  s += `<rect x="${f(ho.x + 0.4)}" y="${f(ho.y + 0.4)}" width="${f(ho.w - 0.8)}" height="${f(ho.h - 0.8)}" rx="2.6" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.5"/>`;
+  // castle arms: wooden bars from each corner/midpoint diagonally inward to the last heaven hole
   for (let p = 0; p < P; p++) {
-    const cm = b.ring[b.castleEntries[p]], last = b.castles[p][b.castles[p].length - 1];
-    s += `<line x1="${f(cm.x)}" y1="${f(cm.y + 0.35)}" x2="${f(last.x)}" y2="${f(last.y + 0.35)}" stroke="#000" stroke-width="4.8" stroke-linecap="round" opacity="0.3"/>`;
-    s += `<line x1="${f(cm.x)}" y1="${f(cm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="url(#pjwood)" stroke-width="4.4" stroke-linecap="round"/>`;
-    s += `<line x1="${f(cm.x)}" y1="${f(cm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="var(--wood-hi)" stroke-width="0.5" stroke-linecap="round" opacity="0.25" transform="translate(-0.4,-0.5)"/>`;
+    const arm = b.castleArmStarts[p], last = b.castles[p][b.castles[p].length - 1];
+    s += `<line x1="${f(arm.x)}" y1="${f(arm.y + 0.35)}" x2="${f(last.x)}" y2="${f(last.y + 0.35)}" stroke="#000" stroke-width="5.2" stroke-linecap="round" opacity="0.35"/>`;
+    s += `<line x1="${f(arm.x)}" y1="${f(arm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="url(#pjwood)" stroke-width="4.8" stroke-linecap="round"/>`;
+    s += `<line x1="${f(arm.x)}" y1="${f(arm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" stroke="var(--wood-hi)" stroke-width="0.5" stroke-linecap="round" opacity="0.28" transform="translate(-0.4,-0.5)"/>`;
+    s += `<line x1="${f(arm.x)}" y1="${f(arm.y)}" x2="${f(last.x)}" y2="${f(last.y)}" fill="#000" filter="url(#pjgrain)" opacity="0.4" stroke="transparent" stroke-width="5" style="mix-blend-mode:multiply"/>`;
   }
-  // centre hub
-  s += `<circle cx="${C.x}" cy="${C.y}" r="3.6" fill="url(#pjwood)" stroke="var(--wood-edge)" stroke-width="0.4"/>`;
-  s += `<circle cx="${C.x}" cy="${C.y}" r="3.6" fill="#000" filter="url(#pjgrain)" opacity="0.4" style="mix-blend-mode:multiply"/>`;
   // holes: ring, then each player's castle + start
   for (const h of b.ring) s += hole(h);
   for (let p = 0; p < P; p++) { for (const h of b.castles[p]) s += hole(h); for (const h of b.starts[p]) s += hole(h); }
