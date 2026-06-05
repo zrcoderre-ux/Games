@@ -247,11 +247,20 @@ function boardLayout(players: number, marbles: number): BoardLayout {
     }
     castles.push(cas);
 
-    // start row: tucked into the wood band near the exit, parallel to the rail
+    // start group: 2D diamond inside the inner wood band, inward from the exit hole
+    // rows go inward (ux,uy direction), cols run along the rail (ax,ay direction)
     const ex = ring[exitHole(p, players)];
-    const outset = 4.2, sp = Math.min(railSpacing, 3.6);
+    const rowSp = 4.5, colSp = 3.6;
+    const row0n = Math.ceil(marbles / 2), row1n = Math.floor(marbles / 2);
     const st: Hole[] = [];
-    for (let j = 0; j < marbles; j++) st.push({ x: ex.x - ux * outset + ax * sp * (j - (marbles - 1) / 2), y: ex.y - uy * outset + ay * sp * (j - (marbles - 1) / 2) });
+    for (let row = 0; row < 2; row++) {
+      const n = row === 0 ? row0n : row1n;
+      const inset = 5.5 + row * rowSp;
+      for (let col = 0; col < n; col++) {
+        const along = colSp * (col - (n - 1) / 2);
+        st.push({ x: ex.x + ux * inset + ax * along, y: ex.y + uy * inset + ay * along });
+      }
+    }
     starts.push(st);
 
     seams.push(runs[p](0)); // panel boundary at the start of each section
