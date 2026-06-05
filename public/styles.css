@@ -1311,6 +1311,15 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
           mask:url(/joker-silhouette.png) center / contain no-repeat;
 }
 
+/* Hearts center decoration: big ♥ with ♠♦♣ around it */
+.hearts-center-decor{position:relative;display:inline-flex;align-items:center;justify-content:center;pointer-events:none;user-select:none}
+.hcd-main{font-size:clamp(120px,38vw,220px);line-height:1;color:rgba(255,255,255,.045);filter:blur(1px)}
+.hcd-suit{position:absolute;font-size:clamp(36px,9vw,62px);color:rgba(255,255,255,.055);line-height:1}
+.hcd-suit.red{color:rgba(255,255,255,.055)}
+.hcd-suit.sp{top:-28%;left:50%;transform:translateX(-50%)}
+.hcd-suit.di{top:50%;right:-18%;transform:translateY(-50%)}
+.hcd-suit.cl{top:50%;left:-18%;transform:translateY(-50%)}
+
 /* Corner suit watermarks */
 .felt-corners{position:absolute;inset:0;pointer-events:none;user-select:none}
 .felt-corner-suit{
