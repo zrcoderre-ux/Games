@@ -1303,8 +1303,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .trump-watermark.red{color:rgba(200,60,60,.07)}
 .trump-watermark.joker-placeholder{
-  width:clamp(120px,32vw,200px);height:auto;
-  color:rgba(45,122,74,.45);
+  width:clamp(140px,34vw,230px);aspect-ratio:1/1;height:auto;
+  /* Jester-hat silhouette: shape comes from the PNG's alpha channel,
+     tint stays the soft felt-green watermark used by the old SVG. */
+  background-color:rgba(45,122,74,.45);
+  -webkit-mask:url(/joker-silhouette.png) center / contain no-repeat;
+          mask:url(/joker-silhouette.png) center / contain no-repeat;
 }
 
 /* self-extra strip between selfbar and actions */
