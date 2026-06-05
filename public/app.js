@@ -1663,12 +1663,7 @@ function renderHearts(v) {
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
 
-  const heartsFeltOverlay = `<div class="hearts-center-decor">
-    <span class="hcd-suit sp">♠</span>
-    <span class="hcd-suit di red">♦</span>
-    <span class="hcd-main red">♥</span>
-    <span class="hcd-suit cl">♣</span>
-  </div>`;
+  const heartsFeltOverlay = `<span class="trump-watermark red">♥</span>`;
   const heartsCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2?'red':''} ${['tl','tr','br','bl'][i]}">${s}</span>`
   ).join("");
