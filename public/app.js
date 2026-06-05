@@ -960,12 +960,7 @@ function renderHLJ(v) {
   // Trump watermark on felt fabric; joker placeholder when no trump yet
   const feltOverlay = v.trump
     ? `<span class="trump-watermark ${RED.has(v.trump) ? "red" : ""}">${SUIT[v.trump]}</span>`
-    : `<svg class="trump-watermark joker-placeholder" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 65" fill="currentColor" aria-hidden="true">
-      <circle cx="8" cy="52" r="4.5"/>
-      <circle cx="78" cy="20" r="4"/>
-      <circle cx="91" cy="55" r="4.5"/>
-      <path d="M 22 62 C 16 61 10 58 8 56 C 6 54 5 52 8 48 C 11 44 16 44 20 42 C 24 40 28 36 32 30 C 36 24 40 14 48 10 C 54 7 60 8 65 13 C 68 16 70 21 72 22 C 74 23 75 20 77 17 C 79 14 79 17 78 20 C 77 24 75 27 74 30 C 72 33 72 38 74 43 C 76 48 83 52 88 53 C 90 54 92 54 91 55 C 90 57 87 59 82 60 C 72 63 58 62 48 62 C 38 62 30 63 22 62 Z"/>
-    </svg>`;
+    : `<span class="trump-watermark joker-placeholder" role="img" aria-label="No trump chosen yet"></span>`;
 
   // hand (fanned), sorted by suit then rank, dim non-legal cards while it's your turn to play
   const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
