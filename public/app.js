@@ -1706,7 +1706,7 @@ function pjBoardSVG(v, glow) {
       <circle cx="${f(h.x)}" cy="${f(h.y)}" r="1.75" fill="url(#pjhole)"/>
       <circle cx="${f(h.x - 0.18)}" cy="${f(h.y - 0.18)}" r="1.75" fill="none" stroke="var(--wood-hi)" stroke-width="0.22" opacity="0.35"/>
     </g>`;
-  let s = `<svg class="pjsvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+  let s = `<svg class="pjsvg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" preserveAspectRatio="xMidYMid meet" style="aspect-ratio:${W}/${H}">
     <defs>
       <linearGradient id="pjwood" x1="0" y1="0" x2="0.7" y2="1">
         <stop offset="0%" stop-color="var(--wood-3)"/><stop offset="45%" stop-color="var(--wood-2)"/><stop offset="100%" stop-color="var(--wood-1)"/>
