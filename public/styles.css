@@ -1311,6 +1311,18 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
           mask:url(/joker-silhouette.png) center / contain no-repeat;
 }
 
+/* Corner suit watermarks */
+.felt-corners{position:absolute;inset:0;pointer-events:none;user-select:none}
+.felt-corner-suit{
+  position:absolute;font-size:clamp(22px,5vw,34px);line-height:1;
+  color:rgba(255,255,255,.1);
+}
+.felt-corner-suit.red{color:rgba(255,255,255,.1)}
+.felt-corner-suit.tl{top:10px;left:12px}
+.felt-corner-suit.tr{top:10px;right:12px}
+.felt-corner-suit.br{bottom:10px;right:12px}
+.felt-corner-suit.bl{bottom:10px;left:12px}
+
 /* self-extra strip between selfbar and actions */
 .self-extra{
   width:100%;padding:0 8px;box-sizing:border-box;
@@ -1379,11 +1391,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   box-shadow:0 7px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.2);
 }
 .hlj-chip:active:not(:disabled){transform:translateY(0) scale(.97)}
-.hlj-chip.claimed{
+.hlj-chip.steal{
   border-color:rgba(220,60,60,.7);
   background:radial-gradient(circle at 38% 35%, rgba(255,255,255,.15), transparent 55%),
              linear-gradient(145deg,#5a1a1a,#3a0e0e);
-  color:#ff9090;cursor:not-allowed;
+  color:#ff9090;
 }
 .hlj-chip.blocked{opacity:.3;cursor:not-allowed}
 .hlj-chip:disabled{pointer-events:none}

@@ -579,6 +579,7 @@ function tableShell(v, parts) {
     <div class="felt">
       ${feltPods}
       ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
+      ${parts.cornerSuits ? `<div class="felt-corners" aria-hidden="true">${parts.cornerSuits}</div>` : ""}
       <div class="center">${parts.center}</div>
       ${parts.trick || ""}
       ${parts.feltBid || ""}
@@ -1015,13 +1016,21 @@ function renderHLJ(v) {
     : "";
 
   // Your chip buttons, rendered on the felt when it's your bidding turn
+  // Amounts already claimed by a non-dealer bidder (hidden from buttons)
+  const claimedAmounts = new Set(
+    bidHistory.filter(b => b.type === "bid").map(b => b.amount)
+  );
+  const isDealer = v.you != null && v.dealerSeat === v.you;
   const feltBidPanel = v.phase === "bidding" && v.yourTurn && (bids.length || canPass)
     ? `<div class="hlj-felt-bid">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
             const legal = n >= minBid;
             const isCur = curHighAmt === n;
-            return `<button class="hlj-chip${isCur ? " claimed" : ""}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${!legal ? "disabled" : ""}>${n}</button>`;
+            // Hide buttons for amounts already bid, unless this is the dealer's steal option
+            const isSteal = isDealer && isCur;
+            if (claimedAmounts.has(n) && !isSteal) return "";
+            return `<button class="hlj-chip${isSteal ? " steal" : ""}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${!legal ? "disabled" : ""}>${n}</button>`;
           }).join("")}
           ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
         </div>
@@ -1145,7 +1154,10 @@ function renderHLJ(v) {
     </div>`;
   })();
 
-  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, hand, actions: null, selfMeta, selfTurn, selfExtra }) + hljHandModal;
+  const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
+    `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
+  ).join("");
+  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra }) + hljHandModal;
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
