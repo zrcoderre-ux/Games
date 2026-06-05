@@ -2535,7 +2535,7 @@ function boardLayout(players, marbles) {
     const st = [];
     for (let row = 0; row < 2; row++) {
       const n = row === 0 ? row0n : row1n;
-      const inset = 5.5 + row * rowSp;
+      const inset = 9.5 + row * rowSp;
       for (let col = 0; col < n; col++) {
         const along = colSp * (col - (n - 1) / 2);
         st.push({ x: ex.x + ux * inset + ax * along, y: ex.y + uy * inset + ay * along });
