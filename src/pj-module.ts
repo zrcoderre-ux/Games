@@ -228,6 +228,7 @@ function boardLayout(players: number, marbles: number): BoardLayout {
     { x: ti,     y: ti,     dx:  S2,  dy:  S2  }, // top-left → SE
   ];
   const cstep4 = 4.8; // spacing between castle holes
+  const castleGap4 = 6.5; // gap from corner before first hole, clears ring track
 
   for (let p = 0; p < players; p++) {
     const cm = ring[castleEntry(p)];
@@ -241,7 +242,7 @@ function boardLayout(players: number, marbles: number): BoardLayout {
     if (players === 4) {
       // Diagonal from corner
       const c = corners4[p];
-      for (let j = 0; j < marbles; j++) cas.push({ x: c.x + c.dx * cstep4 * (j + 1), y: c.y + c.dy * cstep4 * (j + 1) });
+      for (let j = 0; j < marbles; j++) cas.push({ x: c.x + c.dx * (castleGap4 + cstep4 * (j + 1)), y: c.y + c.dy * (castleGap4 + cstep4 * (j + 1)) });
     } else {
       for (let j = 0; j < marbles; j++) cas.push({ x: cm.x + ux * cstep * (j + 1), y: cm.y + uy * cstep * (j + 1) });
     }
@@ -255,7 +256,7 @@ function boardLayout(players: number, marbles: number): BoardLayout {
     const st: Hole[] = [];
     for (let row = 0; row < 2; row++) {
       const n = row === 0 ? row0n : row1n;
-      const inset = 5.5 + row * rowSp;
+      const inset = 9.5 + row * rowSp;
       for (let col = 0; col < n; col++) {
         const along = colSp * (col - (n - 1) / 2);
         st.push({ x: ex.x + ux * inset + ax * along, y: ex.y + uy * inset + ay * along });
