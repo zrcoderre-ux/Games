@@ -1245,6 +1245,15 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .pjsvg{width:100%;height:auto;display:block;border-radius:8px}
 .pjcardslot{display:inline-block;cursor:pointer;transition:transform .08s ease}
 .pjcardslot:active{transform:translateY(1px)}
+.pj-hand-row{
+  display:flex;flex-direction:row;flex-wrap:wrap;
+  justify-content:center;align-items:flex-end;
+  gap:4px;width:100%;
+}
+.pj-hand-row .card{
+  width:clamp(46px,11vw,64px);
+  font-size:clamp(10px,2.5vw,14px);
+}
 
 /* ---------- Rummy: stacked discard pile + popup ---------- */
 .discardstack{position:relative;width:var(--w,62px);height:calc(var(--w,62px)*1.42);margin:8px 0 0 26px;cursor:pointer}
