@@ -1822,11 +1822,11 @@ function renderPJ(v) {
   const maxW = `min(94vw, ${((v.board.viewW / v.board.viewH) * 90).toFixed(1)}vh)`;
   const center = `<div class="pjwrap" style="max-width:${maxW}">${pjBoardSVG(v, glow)}</div>`;
 
-  // hand: tap a usable card to reveal its moves
+  // hand: tap a usable card to reveal its moves — wrap in row so cards lay horizontal
   const usable = new Set(v.legalMoves.filter((m) => "cardId" in m).map((m) => m.cardId));
-  const hand = v.yourHand
+  const hand = `<div class="pj-hand-row">${v.yourHand
     .map((c) => `<span class="pjcardslot" ${yours ? `data-action="pj-pick-card" data-cardid="${c.id}"` : ""}>${cardHTML(c, { playable: yours && usable.has(c.id), dim: yours && !usable.has(c.id), sel: S.pjCard === c.id })}</span>`)
-    .join("");
+    .join("")}</div>`;
 
   const acts = [];
   if (yours && allForfeit) {
