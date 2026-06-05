@@ -580,7 +580,7 @@ function tableShell(v, parts) {
       ${feltPods}
       ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
       ${parts.cornerSuits ? `<div class="felt-corners" aria-hidden="true">${parts.cornerSuits}</div>` : ""}
-      <div class="center">${parts.center}</div>
+      <div class="center${parts.centerFull ? ' full' : ''}">${parts.center}</div>
       ${parts.trick || ""}
       ${parts.feltBid || ""}
       ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
@@ -1848,7 +1848,7 @@ function renderPJ(v) {
     ? `<span class="turnflag">Your turn${playingPartner ? " \u2014 playing teammate" : ""}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, centerFull: true, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
 function doConnect() {
