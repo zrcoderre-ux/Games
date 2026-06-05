@@ -1760,7 +1760,7 @@ function pjBoardSVG(v, glow) {
   // joker hat watermark in felt center — inline SVG paths scaled to fit
   const hatW = cw * 0.72, hatH = hatW * 0.65;
   const hx = f(C.x - hatW / 2), hy = f(C.y - hatH / 2);
-  s += `<g transform="translate(${hx},${hy}) scale(${f(hatW/100)},${f(hatH/65)})" opacity="0.28" fill="rgba(255,255,255,0.9)">
+  s += `<g transform="translate(${hx},${hy}) scale(${f(hatW/100)},${f(hatH/65)})" fill="white" fill-opacity="0.28">
     <circle cx="8" cy="52" r="4.5"/>
     <circle cx="78" cy="20" r="4"/>
     <circle cx="91" cy="55" r="4.5"/>
