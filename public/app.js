@@ -971,7 +971,7 @@ function renderHLJ(v) {
   const lm = v.yourTurn ? v.legalMoves : [];
   const bids = lm.filter((m) => m.type === "bid");
   const canPass = lm.some((m) => m.type === "pass");
-  const trumpChoices = lm.filter((m) => m.type === "selectTrump");
+
   const plays = new Set(lm.filter((m) => m.type === "play").map((m) => cardKey(m.card)));
   const highBid = v.highBid ? `${v.highBid.amount} (${esc(seatName(v, v.highBid.seat))})` : "\u2014";
 
@@ -1106,16 +1106,6 @@ function renderHLJ(v) {
   const youHaveBid = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "bid");
   // Signal control hidden for now — architecture kept for later
   const signalControl = "";
-
-  // Trump suit buttons \u2014 when you need to select
-  const trumpControl = v.yourTurn && trumpChoices.length
-    ? `<div class="hlj-trump-row">
-        <span class="hint">Choose trump:</span>
-        <div style="display:flex;gap:10px;justify-content:center">
-          ${trumpChoices.map((m) => `<button class="btn" data-action="move-trump" data-suit="${m.suit}" style="font-size:22px;min-width:54px;color:${RED.has(m.suit) ? "var(--suit-red)" : "#2a2018"}">${SUIT[m.suit]}</button>`).join("")}
-        </div>
-      </div>`
-    : "";
 
   const playHint = v.yourTurn && plays.size ? `<span class="hint">Tap a glowing card to play.</span>` : "";
 
@@ -2091,7 +2081,7 @@ app.addEventListener("click", (e) => {
       return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
     }
     case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
-    case "move-trump": return send({ t: "move", move: { type: "selectTrump", seat: v.you, suit: t.dataset.suit } });
+
     case "signal": return send({ t: "aux", payload: t.dataset.level });
     case "play-card": {
       const c = v.yourHand.find((x) => cardKey(x) === t.dataset.key);

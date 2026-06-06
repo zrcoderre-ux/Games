@@ -1500,8 +1500,6 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 .hlj-sig-btn.active{background:var(--brass);color:#1a0e04;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
 .hlj-sig-btn:hover:not(.active){background:rgba(255,255,255,.1);color:var(--ink)}
 
-/* Trump suit row */
-.hlj-trump-row{display:flex;flex-direction:column;gap:6px;align-items:center}
 
 /* HLJ end-of-hand popup */
 .hlj-rr-contract{
