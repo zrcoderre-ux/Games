@@ -557,7 +557,7 @@ function tableShell(v, parts) {
     // rx/ry are radii as % of felt width/height (larger than the trick card circle).
     const n = v.seats.length;
     const you = v.you;
-    const rx = 44, ry = 40;
+    const rx = 44, ry = 46;
     const podStyle = (seat) => {
       if (you == null) {
         // spectator: spread evenly starting from top
@@ -887,7 +887,7 @@ function renderGameOver(v, title, scoresHTML) {
 function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
   // rx/ry: circle radii as % of felt width/height. Using a slight
   // horizontal stretch so cards don't crowd the sides on tall mobile screens.
-  const rx = 30, ry = 26;
+  const rx = 30, ry = 34;
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%";
     const off = (seat - you + n) % n;
@@ -1003,7 +1003,7 @@ function renderHLJ(v) {
   // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    const rx = 30, ry = 26;
+    const rx = 30, ry = 34;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
     const a = Math.PI + off * (2 * Math.PI / n);
