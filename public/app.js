@@ -228,7 +228,7 @@ function avatarHTML(name, o = {}) {
 // opponent pod
 function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
-  const backs = Math.min(o.count || 0, 4);
+  const backs = Math.min(o.backs ?? o.count ?? 0, 4);
   const mb = Array.from({ length: backs }, () => `<span class="mb"></span>`).join("");
   const isDisconnected = v.disconnectedSeats && v.disconnectedSeats.includes(i);
   const isHost = v.you === v.hostSeat && v.you !== null;
@@ -933,7 +933,7 @@ function renderHLJ(v) {
             dealer: i === v.dealerSeat,
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
-            count: v.handCounts[i],
+            backs: v.handCounts[i],
           }) },
     )
     .filter(Boolean);
@@ -1589,7 +1589,7 @@ function renderHearts(v) {
         ? null
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
-            count: v.handCounts[i],
+            backs: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
           }) },
