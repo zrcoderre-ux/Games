@@ -236,15 +236,17 @@ function podHTML(v, i, o = {}) {
     ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
     : "";
   const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
+  const hasBacks = backs > 0;
   return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""}">
-    ${""/* team chip removed — color coding + seating order make it redundant */}
     ${o.dealer ? `<span class="dealer">D</span>` : ""}
-    <div class="ministack">${mb}${avatarHTML(name)}</div>
-    <div class="pod-info">
-      <span class="name">${esc(name)}${disconnectedBadge}</span>
+    <div class="ministack">
+      ${mb}
+      <span class="back-name${hasBacks ? "" : " no-cards"}">${esc(name)}${disconnectedBadge}</span>
+    </div>
+    ${o.pts != null || o.count != null ? `<div class="pod-info">
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
       ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
-    </div>
+    </div>` : ""}
     ${o.note ? `<div class="note">${esc(o.note)}</div>` : ""}
     ${replaceBtn}
   </div>`;
