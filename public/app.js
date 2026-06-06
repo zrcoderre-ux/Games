@@ -929,7 +929,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%";
     const off = (seat - you + n) % n;
-    const { x, y } = perimPos(off / n, { x1: 20, x2: 80, y1: 18, y2: 78 });
+    const { x, y } = perimPos(off / n, { x1: 8, x2: 92, y1: 15, y2: 82 });
     return `top:${y}%;left:${x}%`;
   };
   const inner = plays.map((p, idx) =>
@@ -1042,7 +1042,7 @@ function renderHLJ(v) {
     const n = v.seats.length;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const { x, y } = perimPos(off / n, { x1: 20, x2: 80, y1: 18, y2: 78 });
+    const { x, y } = perimPos(off / n, { x1: 8, x2: 92, y1: 15, y2: 82 });
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = v.phase === "bidding"
