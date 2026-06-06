@@ -1362,7 +1362,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   box-shadow:0 4px 10px rgba(0,0,0,.5);
 }
 .hlj-bid-token.dealer{
-  width:48px;height:48px;border-radius:50%;
+  width:42px;height:42px;border-radius:50%;
   font-family:"Hanken Grotesk",sans-serif;font-size:8px;font-weight:900;
   letter-spacing:.1em;text-transform:uppercase;color:#2a1f0e;
   background:radial-gradient(circle at 38% 32%,#fff 0%,#f0ead8 55%,#d8ceb4 100%);
@@ -1406,12 +1406,15 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   box-shadow:0 7px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.2);
 }
 .hlj-chip:active:not(:disabled){transform:translateY(0) scale(.97)}
+/* Steal chips keep the gold ring, use red fill */
 .hlj-chip.steal{
-  border-color:rgba(220,60,60,.7);
+  border-color:rgba(205,160,90,.6);
   background:radial-gradient(circle at 38% 35%, rgba(255,255,255,.15), transparent 55%),
              linear-gradient(145deg,#5a1a1a,#3a0e0e);
   color:#ff9090;
 }
+/* Non-clickable stolen-number display chip */
+span.hlj-chip.steal{cursor:default;pointer-events:none;opacity:.85}
 .hlj-chip.blocked{opacity:.3;cursor:not-allowed}
 .hlj-chip:disabled{pointer-events:none}
 .hlj-pass-btn{

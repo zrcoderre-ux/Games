@@ -533,7 +533,7 @@ function tableShell(v, parts) {
     // rx/ry are radii as % of felt width/height (larger than the trick card circle).
     const n = v.seats.length;
     const you = v.you;
-    const rx = 38, ry = 34;
+    const rx = 44, ry = 40;
     const podStyle = (seat) => {
       if (you == null) {
         // spectator: spread evenly starting from top
@@ -863,7 +863,7 @@ function renderGameOver(v, title, scoresHTML) {
 function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
   // rx/ry: circle radii as % of felt width/height. Using a slight
   // horizontal stretch so cards don't crowd the sides on tall mobile screens.
-  const rx = 26, ry = 22;
+  const rx = 30, ry = 26;
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%";
     const off = (seat - you + n) % n;
@@ -979,7 +979,7 @@ function renderHLJ(v) {
   // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    const rx = 26, ry = 22;
+    const rx = 30, ry = 26;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
     const a = Math.PI + off * (2 * Math.PI / n);
@@ -990,7 +990,7 @@ function renderHLJ(v) {
   const bidTokens = v.phase === "bidding"
     ? (() => {
         const dealerActed = bidHistory.some(b => b.seat === v.dealerSeat);
-        const dealerTok = !dealerActed
+        const dealerTok = !dealerActed && v.dealerSeat !== you
           ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">DEALER</div>`
           : "";
         const histToks = bidHistory.map(b => {
@@ -1016,10 +1016,14 @@ function renderHLJ(v) {
     ? `<div class="hlj-felt-bid">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
-            if (claimedAmounts.has(n)) return ""; // each number can only be bid once
+            if (claimedAmounts.has(n)) {
+              // Dealer can steal the current high bid — show red number + STEAL pair
+              if (isDealer && n === curHighAmt)
+                return `<span class="hlj-chip steal">${n}</span><button class="hlj-chip steal" data-action="move-bid" data-amount="${n}">STEAL</button>`;
+              return ""; // already claimed, hide for everyone else
+            }
             const legal = n >= minBid;
-            const isSteal = isDealer && curHighAmt != null && n === curHighAmt;
-            return `<button class="hlj-chip${isSteal ? " steal" : ""}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${!legal ? "disabled" : ""}>${n}</button>`;
+            return `<button class="hlj-chip${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${!legal ? "disabled" : ""}>${n}</button>`;
           }).join("")}
           ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
         </div>
