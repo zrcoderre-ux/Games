@@ -791,30 +791,37 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .pod .ministack{
   position:relative;
   display:flex;align-items:flex-end;justify-content:center;
-  min-height:36px;padding-bottom:10px; /* room for avatar overlap */
+  min-height:30px;
 }
 .pod .ministack .mb{
   width:16px;height:24px;border-radius:4px;margin-left:-10px;flex-shrink:0;
-  background:
-    repeating-linear-gradient(45deg,#0e1a30 0 3px,#1a2a48 3px 6px),
-    #0e1a30;
+  /* default neutral back — overridden per team below */
+  background:repeating-linear-gradient(45deg,#0e1a30 0 3px,#1a2a48 3px 6px),#0e1a30;
   box-shadow:0 1px 2px rgba(0,0,0,.6),inset 0 0 0 1px rgba(140,180,255,.2);
 }
 .pod .ministack .mb:first-child{margin-left:0}
-/* avatar sits centred at the bottom of the ministack, overlapping the card backs */
-.pod .ministack .avatar{
-  position:absolute;bottom:0;left:50%;transform:translateX(-50%);
-  width:22px;height:22px;font-size:9px;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 0 1.5px rgba(10,16,32,.7),0 2px 4px rgba(0,0,0,.5);
+/* Team card back colours */
+.pod.tA .ministack .mb{
+  background:repeating-linear-gradient(45deg,#5a0a0a 0 3px,#8a1a1a 3px 6px),#5a0a0a;
+  box-shadow:0 1px 2px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,160,160,.25);
 }
-/* name + pts + count in one horizontal row */
+.pod.tB .ministack .mb{
+  background:repeating-linear-gradient(45deg,#0a1a5a 0 3px,#1a2e8a 3px 6px),#0a1a5a;
+  box-shadow:0 1px 2px rgba(0,0,0,.6),inset 0 0 0 1px rgba(140,180,255,.25);
+}
+/* Name label printed on the card back stack */
+.pod .back-name{
+  position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+  font-size:9px;font-weight:800;font-family:"Hanken Grotesk",sans-serif;
+  white-space:nowrap;pointer-events:none;
+  color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.9);
+  letter-spacing:.02em;max-width:80px;overflow:hidden;text-overflow:ellipsis;
+}
+
+/* pts + count row — only shows when those values exist */
 .pod-info{
   display:flex;align-items:center;gap:5px;
-  max-width:110px;
-}
-.pod .name{
-  font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  color:var(--ink);text-shadow:0 1px 2px rgba(0,0,0,.5);flex:1;min-width:0;
+  max-width:110px;margin-top:2px;
 }
 .pod .count{
   font-size:10px;font-weight:700;color:#0a1020;background:var(--cream-2);
@@ -827,9 +834,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   color:#5a4a28;font-size:10px;font-weight:800;display:grid;place-items:center;
   box-shadow:0 1px 3px rgba(0,0,0,.5);border:1px solid rgba(0,0,0,.15);
 }
-/* active turn glow */
-.pod.active .ministack .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 2px var(--brass-hi),0 0 10px 1px rgba(231,196,133,.7)!important;animation:turnpulse 1.6s ease-in-out infinite}
-.pod.active .name{color:var(--brass-hi)}
+/* active turn glow on the card stack */
+.pod.active .ministack .mb:last-of-type{box-shadow:0 0 0 2px var(--brass-hi),0 0 10px 1px rgba(231,196,133,.7),0 1px 2px rgba(0,0,0,.6)!important;animation:turnpulse 1.6s ease-in-out infinite}
+.pod.active .back-name{color:var(--brass-hi);text-shadow:0 0 8px rgba(231,196,133,.6),0 1px 3px rgba(0,0,0,.9)}
 
 /* ---------- Center play area ---------- */
 .center{
@@ -1081,8 +1088,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* ---------- additions for table components ---------- */
 .pod .note{font-size:11px;font-style:italic;color:var(--ink-soft);font-family:"Fraunces",serif;margin-top:-2px;text-transform:capitalize}
-.pod.partner .name{color:var(--brass-hi)}
-.pod.partner .ministack .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 2px rgba(205,160,90,.45),0 2px 4px rgba(0,0,0,.5)!important}
+.pod.partner .back-name{color:var(--brass-hi)}
 
 .panel.cream .tag{color:#9a753c}
 .avatar.big{width:54px;height:54px;font-size:21px}
@@ -1145,9 +1151,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
    ============================================================ */
 :root{ --teamA:#e7a64e; --teamB:#5cae9c; }
 
-/* team ring on opponent avatars (active brass glow still wins) */
-.pod.tA .ministack .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 2px var(--teamA),0 2px 4px rgba(0,0,0,.5)!important}
-.pod.tB .ministack .avatar{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 0 0 2px var(--teamB),0 2px 4px rgba(0,0,0,.5)!important}
+/* team colours now carried by card back gradients (tA=red, tB=blue) */
 
 .teamchip{position:absolute;top:-2px;left:0;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;
   font-size:11px;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.55);border:1px solid rgba(0,0,0,.18);z-index:2}
@@ -1361,6 +1365,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   border:3px solid rgba(205,160,90,.6);color:var(--brass-hi);
   box-shadow:0 4px 10px rgba(0,0,0,.5);
 }
+.hlj-bid-token.chip.steal{
+  background:radial-gradient(circle at 38% 35%,rgba(255,255,255,.15),transparent 55%),
+             linear-gradient(145deg,#5a1a1a,#3a0e0e);
+  color:#ff9090;
+}
 .hlj-bid-token.dealer{
   width:42px;height:42px;border-radius:50%;
   font-family:"Hanken Grotesk",sans-serif;font-size:8px;font-weight:900;
@@ -1415,6 +1424,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 /* Non-clickable stolen-number display chip */
 span.hlj-chip.steal{cursor:default;pointer-events:none;opacity:.85}
+/* STEAL action button — smaller text to fit the word */
+button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
 .hlj-chip.blocked{opacity:.3;cursor:not-allowed}
 .hlj-chip:disabled{pointer-events:none}
 .hlj-pass-btn{

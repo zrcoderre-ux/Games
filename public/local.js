@@ -495,12 +495,27 @@ function applyBid(state, move) {
   const entry = move.type === "bid" ? { seat: move.seat, type: "bid", amount: move.amount } : { seat: move.seat, type: "pass" };
   const bidHistory = [...state.bidHistory ?? [], entry];
   if (!done) {
+    const nextTurn = (state.bidTurn + 1) % state.players;
+    const jumpToDealer = move.type === "bid" && move.amount === 6 && state.bidTurn !== state.dealerSeat;
+    if (jumpToDealer) {
+      const skips = [];
+      for (let seat = nextTurn; seat !== state.dealerSeat; seat = (seat + 1) % state.players) {
+        skips.push({ seat, type: "pass" });
+      }
+      return {
+        ...state,
+        highBid,
+        bidsActed: bidsActed + skips.length,
+        bidHistory: [...bidHistory, ...skips],
+        bidTurn: state.dealerSeat
+      };
+    }
     return {
       ...state,
       highBid,
       bidsActed,
       bidHistory,
-      bidTurn: (state.bidTurn + 1) % state.players
+      bidTurn: nextTurn
     };
   }
   return {
@@ -701,10 +716,10 @@ function suitValue(hand, suit, players) {
   else if (has(13)) score += 0.4;
   else if (has(12)) score += 0.15;
   if (has(11)) {
-    const protectors = [14, 13, 12].filter(has).length;
-    score += Math.min(0.8, 0.25 + 0.2 * protectors);
+    const protectors = [14, 13, 12].filter(has).length + (hasJoker ? 1 : 0);
+    score += Math.min(0.9, 0.25 + 0.2 * protectors);
   }
-  if (hasJoker) score += Math.min(1.6, 0.3 + 0.25 * (n - 1));
+  if (hasJoker) score += Math.min(2.2, 0.3 + 0.25 * (n - 1) + (has(14) ? 1.15 : 0));
   else score += Math.min(0.8, 0.15 * highCount);
   score += Math.min(0.7, 0.12 * n + (has(lowest) ? 0.15 : 0) + (has(14) ? 0.65 : has(13) ? 0.25 : 0));
   score += Math.min(1, 0.1 * n + 0.15 * tens + (has(14) ? 0.5 : 0));
@@ -827,10 +842,32 @@ function opponentThreatLevel(state, opponentSeat, bidAmount) {
   if (after >= state.target - 2) return 1;
   return 0;
 }
+function estimateSixBidProb(hand, players) {
+  const { suit } = bestSuit(hand, players);
+  const trumps = hand.filter((c) => isTrump(c, suit));
+  const has = (r) => trumps.some((c) => !isJoker(c) && c.rank === r);
+  const hasJoker = trumps.some(isJoker);
+  const n = trumps.length;
+  if (!has(14)) return 0;
+  const remaining = players * 6 + 5 - 6;
+  const pJokerLive = hasJoker ? 1 : (remaining - 5) / remaining;
+  let sweepProb = 0.99;
+  if (!hasJoker) sweepProb -= 0.01;
+  if (!has(11)) sweepProb -= 0.2;
+  if (!has(13) && !has(12)) sweepProb -= 0.08;
+  sweepProb += 5e-3 * Math.max(0, n - 4);
+  sweepProb = clamp(sweepProb, 0, 0.99);
+  return pJokerLive * sweepProb;
+}
 function decideBid(state, seat, rng, p) {
   const hand = state.hands[seat];
   const best = bestSuit(hand, state.players);
-  const willing = clamp(Math.round(best.score - p.bidSafety), 0, 6);
+  const myTeam = teamOf(seat);
+  const oppTeam = 1 - myTeam;
+  const oppGap = state.target - state.scores[oppTeam];
+  const desperationBonus = oppGap <= 6 ? (6 - oppGap) * 0.18 : 0;
+  const effectiveSafety = Math.max(0, p.bidSafety - desperationBonus);
+  const willing = clamp(Math.round(best.score - effectiveSafety), 0, 6);
   const myConf = confFromScore(best.score);
   const isDealer = seat === state.dealerSeat;
   const high = state.highBid;
@@ -858,6 +895,22 @@ function decideBid(state, seat, rng, p) {
     } else if (sameTeam && myConf === 2 && theirConf <= 0.5) {
       if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
     }
+  }
+  if (needed === 6) {
+    const sixProb = estimateSixBidProb(hand, state.players);
+    const myScore = state.scores[myTeam];
+    const myGap = state.target - myScore;
+    const safeFromHoleBonus = myScore >= 1 ? Math.min(0.1, myScore * 8e-3) : 0;
+    const autoWinBonus = myScore >= 0 ? 0.07 : 0;
+    const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
+    const rawNearWinPenalty = myGap <= 6 ? (6 - myGap) * 0.1 : 0;
+    const nearWinPenalty = rawNearWinPenalty * Math.max(0, 1 - despSixBonus * 5);
+    const sixThresh = clamp(
+      0.65 + p.bidSafety * 0.2 - safeFromHoleBonus - autoWinBonus - despSixBonus + nearWinPenalty,
+      0.48,
+      0.97
+    );
+    if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
   }
   return { type: "pass", seat };
 }
@@ -1026,6 +1079,17 @@ function hljEntries(prev, next, move) {
   }
   return out;
 }
+var PERSONALITY_TABLE = [
+  PERSONALITIES.aggressive,
+  PERSONALITIES.balanced,
+  PERSONALITIES.aggressive,
+  PERSONALITIES.balanced,
+  PERSONALITIES.conservative
+];
+function botPersonality(state, seat) {
+  const h = (state.seed >>> 0 ^ Math.imul(seat + 1, 2654435769)) >>> 0;
+  return PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
+}
 var hljModule = {
   meta: { id: "high-low-jack", name: "High Low Jack", supportedPlayerCounts: [4, 6, 8] },
   seatCount: (config) => config.players,
@@ -1049,7 +1113,7 @@ var hljModule = {
     const blanked = { ...g, hands: g.hands.map(() => []), kitty: [], phase: "bidding" };
     return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats, phase: "lobby" });
   },
-  aiMove: (s, seat) => aiMove(s, seat),
+  aiMove: (s, seat) => aiMove(s, seat, void 0, botPersonality(s, seat)),
   // Hand signals: a non-turn side action that must preserve the log untouched.
   aux: {
     apply: (s, seat, payload) => {

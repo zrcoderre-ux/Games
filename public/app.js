@@ -228,7 +228,7 @@ function avatarHTML(name, o = {}) {
 // opponent pod
 function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
-  const backs = Math.min(o.backs ?? o.count ?? 0, 4);
+  const backs = 4;
   const mb = Array.from({ length: backs }, () => `<span class="mb"></span>`).join("");
   const isDisconnected = v.disconnectedSeats && v.disconnectedSeats.includes(i);
   const isHost = v.you === v.hostSeat && v.you !== null;
@@ -237,14 +237,15 @@ function podHTML(v, i, o = {}) {
     : "";
   const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
   return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""}">
-    ${""/* team chip removed — color coding + seating order make it redundant */}
     ${o.dealer ? `<span class="dealer">D</span>` : ""}
-    <div class="ministack">${mb}${avatarHTML(name)}</div>
-    <div class="pod-info">
-      <span class="name">${esc(name)}${disconnectedBadge}</span>
+    <div class="ministack">
+      ${mb}
+      <span class="back-name">${esc(name)}${disconnectedBadge}</span>
+    </div>
+    ${o.pts != null || o.count != null ? `<div class="pod-info">
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
       ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
-    </div>
+    </div>` : ""}
     ${o.note ? `<div class="note">${esc(o.note)}</div>` : ""}
     ${replaceBtn}
   </div>`;
@@ -339,8 +340,26 @@ function onFrame(e) {
     }
     maybePromptPass();
     render();
+    maybeAutoPlay(msg.view);
   }
   else if (msg.t === "error") { toast(msg.message); }
+}
+
+// Auto-play: when it's your turn in HLJ playing phase and only one card is legal,
+// play it automatically after a short delay so the game flows without tap-spam.
+let _autoPlayTimer = null;
+function maybeAutoPlay(v) {
+  if (_autoPlayTimer) { clearTimeout(_autoPlayTimer); _autoPlayTimer = null; }
+  if (!v || !v.yourTurn || S.party !== "high-low-jack") return;
+  if (v.phase !== "playing") return;
+  const playMoves = (v.legalMoves || []).filter((m) => m.type === "play");
+  if (playMoves.length !== 1) return;
+  const move = playMoves[0];
+  _autoPlayTimer = setTimeout(() => {
+    _autoPlayTimer = null;
+    // Guard: view must not have changed since we scheduled
+    if (S.view === v) send({ t: "move", move: { type: "play", seat: v.you, card: move.card } });
+  }, 1800);
 }
 
 // Pass-and-play privacy gate: when the active hand belongs to a different local
@@ -998,10 +1017,12 @@ function renderHLJ(v) {
         const dealerTok = !dealerActed && v.dealerSeat !== you
           ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">DEALER</div>`
           : "";
+        const highBidSeat = v.highBid?.seat ?? null;
         const histToks = bidHistory.map(b => {
           const style = bidPosStyle(b.seat);
           const label = b.type === "pass" ? "Pass" : String(b.amount);
-          const cls = b.type === "pass" ? "pass" : "chip";
+          const isHigh = b.type === "bid" && b.seat === highBidSeat;
+          const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
           return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
         }).join("");
         return dealerTok + histToks;

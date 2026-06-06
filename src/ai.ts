@@ -111,14 +111,17 @@ function suitValue(hand: Card[], suit: Suit, players: number): number {
   else if (has(12)) score += 0.15;
 
   // Jack of trump (1 pt) — keepable if you have higher trumps to protect it.
+  // The Joker counts as a protector: it can be held back to cover the Jack's trick.
   if (has(11)) {
-    const protectors = [14, 13, 12].filter(has).length;
-    score += Math.min(0.8, 0.25 + 0.2 * protectors);
+    const protectors = [14, 13, 12].filter(has).length + (hasJoker ? 1 : 0);
+    score += Math.min(0.9, 0.25 + 0.2 * protectors);
   }
 
   // Bonhomme (2 pts). If you hold it, you only keep it with trump control to
   // win the trick it lands in; if opponents hold it, strong trumps capture it.
-  if (hasJoker) score += Math.min(1.6, 0.3 + 0.25 * (n - 1));
+  // Ace+Joker synergy: Ace establishes trump control first, making the Joker nearly
+  // unlosable — add a significant bonus for holding both.
+  if (hasJoker) score += Math.min(2.2, 0.3 + 0.25 * (n - 1) + (has(14) ? 1.15 : 0));
   else score += Math.min(0.8, 0.15 * highCount);
 
   // Low (captured rule). The Ace forces Low to surface (opponents holding the
@@ -307,12 +310,52 @@ function opponentThreatLevel(state: GameState, opponentSeat: number, bidAmount: 
   return 0;
 }
 
+// ---------- 6-bid probability ----------
+
+// Estimate P(making all 6 points) for `hand` as the bidder.
+// The dominant risk for strong hands is the Joker landing in the kitty — when
+// it's in play and you hold A+K+Q+J you pull it almost every time (~99%).
+// P(make 6) ≈ P(joker alive) × P(sweep | joker alive).
+function estimateSixBidProb(hand: Card[], players: number): number {
+  const { suit } = bestSuit(hand, players);
+  const trumps = hand.filter(c => isTrump(c, suit));
+  const has = (r: number) => trumps.some(c => !isJoker(c) && c.rank === r);
+  const hasJoker = trumps.some(isJoker);
+  const n = trumps.length;
+
+  if (!has(14)) return 0; // no Ace → can't reliably control High or strip trumps
+
+  // P(joker not buried in kitty): deckSize = players*6+5, remaining after your 6.
+  const remaining = players * 6 + 5 - 6;
+  const pJokerLive = hasJoker ? 1.0 : (remaining - 5) / remaining;
+
+  // P(sweep all 6 pts | joker is in play).
+  // Simulation result: A+K+Q+J makes 6 ≈99% when joker is in play, for all player counts.
+  let sweepProb = 0.99;
+  if (!hasJoker)   sweepProb -= 0.01;           // tiny extra risk vs. holding it
+  if (!has(11))    sweepProb -= 0.20;           // Jack point likely lost
+  if (!has(13) && !has(12)) sweepProb -= 0.08; // no K or Q: weaker capture control
+  sweepProb += 0.005 * Math.max(0, n - 4);     // each extra trump adds marginal safety
+  sweepProb = clamp(sweepProb, 0, 0.99);
+
+  return pJokerLive * sweepProb;
+}
+
 // ---------- decisions ----------
 
 function decideBid(state: GameState, seat: number, rng: () => number, p: Personality): Move {
   const hand = state.hands[seat];
   const best = bestSuit(hand, state.players);
-  const willing = clamp(Math.round(best.score - p.bidSafety), 0, 6);
+
+  // Desperation scaling: as the opponent team approaches 21, bid more aggressively.
+  // Each point they're within 6 of winning adds a small safety reduction.
+  const myTeam = teamOf(seat) as 0 | 1;
+  const oppTeam = (1 - myTeam) as 0 | 1;
+  const oppGap = state.target - state.scores[oppTeam];
+  const desperationBonus = oppGap <= 6 ? (6 - oppGap) * 0.18 : 0;
+  const effectiveSafety = Math.max(0, p.bidSafety - desperationBonus);
+
+  const willing = clamp(Math.round(best.score - effectiveSafety), 0, 6);
   const myConf = confFromScore(best.score);
 
   const isDealer = seat === state.dealerSeat;
@@ -360,6 +403,40 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
       if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
     }
   }
+
+  // 6-bid on hand strength alone: use kitty-risk-aware probability rather than
+  // the scalar score (which can't capture player-count-dependent risk).
+  if (needed === 6) {
+    const sixProb = estimateSixBidProb(hand, state.players);
+    const myScore = state.scores[myTeam];
+    const myGap   = state.target - myScore;
+
+    // Lower threshold when a missed 6-bid won't send us in the hole.
+    // Each point of cushion above 0 reduces risk — cap at score=12 (a miss lands at 6+).
+    const safeFromHoleBonus = myScore >= 1 ? Math.min(0.10, myScore * 0.008) : 0;
+
+    // Lower threshold when auto-win is available (making 6 ends the game now).
+    const autoWinBonus = myScore >= 0 ? 0.07 : 0;
+
+    // Lower threshold when opponent is dangerously close to winning.
+    const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
+
+    // RAISE threshold when our score is high enough that we don't need a 6-bid.
+    // At myGap ≤ 6 (score ≥ 15) we can win by simply taking the auction at any
+    // amount and scoring 6 naturally — a risky 6-bid adds downside with little upside.
+    // The penalty grows as we get closer to winning without it.
+    // Exception: if opponent is also close (despSixBonus active), urgency overrides.
+    const rawNearWinPenalty = myGap <= 6 ? (6 - myGap) * 0.10 : 0;
+    const nearWinPenalty = rawNearWinPenalty * Math.max(0, 1 - despSixBonus * 5);
+
+    // Base threshold: aggressive=0.70, balanced=0.80, conservative=0.90
+    const sixThresh = clamp(
+      0.65 + p.bidSafety * 0.2 - safeFromHoleBonus - autoWinBonus - despSixBonus + nearWinPenalty,
+      0.48, 0.97,
+    );
+    if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
+  }
+
   return { type: "pass", seat };
 }
 
