@@ -466,14 +466,19 @@ function logSheet() {
     let dealtRows = "";
     if (S.party === "high-low-jack" && v && v.lastDealtHands) {
       const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
-      dealtRows = v.lastDealtHands.map((hand, seat) => {
+      const sortHand = (hand) => [...hand].sort((a, b) =>
+        (a.joker ? 1 : 0) - (b.joker ? 1 : 0) ||
+        (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
+        a.rank - b.rank
+      );
+      let kittyRow = "";
+      if (v.lastKitty && v.lastKitty.length) {
+        const cards = sortHand(v.lastKitty).map(c => cardHTML(c, { mini: true })).join("");
+        kittyRow = `<div class="logrow hlj-dealt-row"><span class="hlj-dealt-name hlj-dealt-kitty">Kitty</span><div class="hlj-dealt-cards">${cards}</div></div>`;
+      }
+      dealtRows = kittyRow + v.lastDealtHands.map((hand, seat) => {
         const name = esc(seatName(v, seat));
-        const sorted = [...hand].sort((a, b) =>
-          (a.joker ? 1 : 0) - (b.joker ? 1 : 0) ||
-          (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
-          a.rank - b.rank
-        );
-        const cards = sorted.map(c => cardHTML(c, { mini: true })).join("");
+        const cards = sortHand(hand).map(c => cardHTML(c, { mini: true })).join("");
         return `<div class="logrow hlj-dealt-row"><span class="hlj-dealt-name">${name}</span><div class="hlj-dealt-cards">${cards}</div></div>`;
       }).join("");
     }
@@ -515,7 +520,7 @@ function logSheet() {
   </div>`;
 
   return `<div class="logsheet">
-      <div class="loghead">${tabs(tab)}<button class="btn sm ghost" data-action="toggle-log">Close</button></div>
+      <div class="loghead">${tabs(tab)}<button class="btn sm ghost" data-action="download-state" title="Download game state for diagnostics">↓</button><button class="btn sm ghost" data-action="toggle-log">Close</button></div>
       <div class="logbody">${tab === "melds" ? meldsBody() : logBody()}</div>
     </div>`;
 }
@@ -1935,6 +1940,15 @@ app.addEventListener("click", (e) => {
       localStorage.setItem("cg_theme", S.theme);
       applyTheme(S.theme);
       return renderStart();
+    }
+    case "download-state": {
+      const payload = { ts: new Date().toISOString(), party: S.party, roomId: S.roomId, view: S.view };
+      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `gamestate-${S.party}-${Date.now()}.json`; a.click();
+      URL.revokeObjectURL(url);
+      return;
     }
     case "toggle-log": S.showLog = !S.showLog; return render();
     case "log-tab": S.logTab = t.dataset.tab; return render();
