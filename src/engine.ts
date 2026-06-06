@@ -186,11 +186,14 @@ export type GameState = {
   dealerSeat: number;
   scores: [number, number]; // team 0, team 1 (team = seat % 2)
   winner: number | null;
+  gamesWon: [number, number]; // wins per team across the series
+  winsNeeded: number; // wins required to win the series (1 = single game)
 
   // Per-hand state:
   hands: Card[][]; // hands[seat] = remaining cards
   kitty: Card[]; // dead cards, never played, kept only to know what's out of play
   trump: Suit | null;
+  trumpRevealed: boolean; // true after selectTrump or the first card is played
 
   // Bidding:
   bidTurn: number; // seat to act during bidding
@@ -240,7 +243,7 @@ function emptyProfile(): PlayerProfile {
   };
 }
 
-export function createGame(players: PlayerCount, seed: number, target = 21): GameState {
+export function createGame(players: PlayerCount, seed: number, target = 21, winsNeeded = 1): GameState {
   if (!SUPPORTED_PLAYERS.includes(players)) {
     throw new Error(`Unsupported player count: ${players}`);
   }
@@ -252,9 +255,12 @@ export function createGame(players: PlayerCount, seed: number, target = 21): Gam
     dealerSeat: seed % players,
     scores: [0, 0],
     winner: null,
+    gamesWon: [0, 0],
+    winsNeeded,
     hands: [],
     kitty: [],
     trump: null,
+    trumpRevealed: false,
     bidTurn: 0,
     bidsActed: 0,
     highBid: null,
@@ -295,6 +301,7 @@ function deal(state: GameState): GameState {
     dealtHands: hands.map(h => [...h]),
     kitty,
     trump: null,
+    trumpRevealed: false,
     bidTurn: firstBidder,
     bidsActed: 0,
     highBid: null,
@@ -403,7 +410,7 @@ export function applyMove(state: GameState, move: Move): GameState {
     // The bidder may declare a trump suit before leading (the uncommon case of
     // wanting to lead something other than trump). Otherwise they just lead and
     // applyPlay sets trump from that first card.
-    if (move.type === "selectTrump") return { ...state, trump: move.suit };
+    if (move.type === "selectTrump") return { ...state, trump: move.suit, trumpRevealed: true };
     return applyPlay(state, move);
   }
   throw new Error("game over");
@@ -475,7 +482,9 @@ function applyPlay(state: GameState, move: Move): GameState {
   // this first card is always a natural, suited card.
   if (state.trump === null) {
     if (isJoker(move.card)) throw new Error("Cannot lead the joker on the first trick");
-    state = { ...state, trump: move.card.suit };
+    state = { ...state, trump: move.card.suit, trumpRevealed: true };
+  } else if (!state.trumpRevealed) {
+    state = { ...state, trumpRevealed: true };
   }
 
   const hands = state.hands.map((h, s) =>
@@ -631,7 +640,23 @@ export function scoreHand(state: GameState): GameState {
   });
 
   if (winner !== null) {
-    return { ...state, scores, phase: "gameOver", winner, lastHand: result, profiles };
+    const gamesWon: [number, number] = [state.gamesWon[0], state.gamesWon[1]];
+    gamesWon[winner]++;
+    const seriesWinner = gamesWon[winner] >= state.winsNeeded ? winner : null;
+    if (seriesWinner !== null) {
+      return { ...state, scores, gamesWon, phase: "gameOver", winner: seriesWinner, lastHand: result, profiles };
+    }
+    // Series continues: reset scores and deal the next game.
+    const next: GameState = {
+      ...state,
+      scores: [0, 0],
+      gamesWon,
+      winner: null,
+      lastHand: result,
+      profiles,
+      dealerSeat: (state.dealerSeat + 1) % state.players,
+    };
+    return deal(next);
   }
 
   // Otherwise rotate the dealer to the left and deal the next hand.

@@ -25,7 +25,7 @@ import { redact, type PlayerView } from "./protocol.ts";
 import { aiMove, handConfidence, PERSONALITIES, type Personality } from "./ai.ts";
 import type { Game, LogEntry } from "./game.ts";
 
-export type HLJConfig = { players: PlayerCount; target: number };
+export type HLJConfig = { players: PlayerCount; target: number; bestOf?: number };
 
 // The engine's state plus an authoritative, append-only move log.
 export type HljState = GameState & { log: LogEntry[]; logSeq: number };
@@ -120,7 +120,8 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   botStepMs: (s) => Math.round(1600 * 4 / s.players),
 
   createGame: (config, seed) => {
-    const g = engineCreateGame(config.players, seed, config.target);
+    const winsNeeded = config.bestOf ? Math.ceil(config.bestOf / 2) : 1;
+    const g = engineCreateGame(config.players, seed, config.target, winsNeeded);
     return attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]);
   },
 
@@ -142,7 +143,8 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   redact: (s, seat, meta) => redact(s, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats }),
 
   lobbyView: (config, seat, meta) => {
-    const g = engineCreateGame(config.players, 1, config.target);
+    const winsNeeded = config.bestOf ? Math.ceil(config.bestOf / 2) : 1;
+    const g = engineCreateGame(config.players, 1, config.target, winsNeeded);
     const blanked = { ...g, hands: g.hands.map(() => []), kitty: [], phase: "bidding" as const };
     return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats, phase: "lobby" });
   },
