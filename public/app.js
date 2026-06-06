@@ -554,23 +554,14 @@ function tableShell(v, parts) {
     feltPods = `<div class="rail top deal">${podItems.join("") || `<div class="callout">Waiting for players to arrive…</div>`}</div>`;
   } else {
     // compass layout: place each opponent pod on a circle, equidistant by angle.
-    // rx/ry are radii as % of felt width/height (larger than the trick card circle).
+    // Square perimeter layout: each player sits on an edge of the felt.
     const n = v.seats.length;
     const you = v.you;
-    const rx = 44, ry = 46;
     const podStyle = (seat) => {
-      if (you == null) {
-        // spectator: spread evenly starting from top
-        const idx = podItems.findIndex(p => p.seat === seat);
-        const a = Math.PI + (idx + 1) * (2 * Math.PI / n);
-        const x = (50 + rx * Math.sin(a)).toFixed(1);
-        const y = (50 - ry * Math.cos(a)).toFixed(1);
-        return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
-      }
-      const off = (seat - you + n) % n; // 1..n-1
-      const a = Math.PI + off * (2 * Math.PI / n);
-      const x = (50 + rx * Math.sin(a)).toFixed(1);
-      const y = (50 - ry * Math.cos(a)).toFixed(1);
+      const off = you == null
+        ? podItems.findIndex(p => p.seat === seat) + 1
+        : (seat - you + n) % n;
+      const { x, y } = perimPos(off / n);
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     };
     const slots = podItems.length
@@ -875,6 +866,29 @@ function renderGameOver(v, title, scoresHTML) {
     </div>`;
 }
 
+// Perimeter layout: map t∈[0,1] to a point on the felt rectangle.
+// Clockwise from bottom-center: bottom-right → right → top → left → bottom-left.
+// x1/x2/y1/y2 are the clamped edge values (% of felt).
+function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
+  const cx = 50;
+  if (t < 1/8) {
+    const s = t / (1/8);
+    return { x: cx + (x2 - cx) * s, y: y2 };
+  } else if (t < 3/8) {
+    const s = (t - 1/8) / (1/4);
+    return { x: x2, y: y2 + (y1 - y2) * s };
+  } else if (t < 5/8) {
+    const s = (t - 3/8) / (1/4);
+    return { x: x2 + (x1 - x2) * s, y: y1 };
+  } else if (t < 7/8) {
+    const s = (t - 5/8) / (1/4);
+    return { x: x1, y: y1 + (y2 - y1) * s };
+  } else {
+    const s = (t - 7/8) / (1/8);
+    return { x: x1 + (cx - x1) * s, y: y2 };
+  }
+}
+
 // Which card in a completed High Low Jack trick won it (port of engine
 // trickWinner): highest trump — joker is the lowest trump — else highest of the
 // led suit. Returns the index into the play-order cards array.
@@ -887,14 +901,10 @@ function renderGameOver(v, title, scoresHTML) {
 function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
   // rx/ry: circle radii as % of felt width/height. Using a slight
   // horizontal stretch so cards don't crowd the sides on tall mobile screens.
-  const rx = 30, ry = 34;
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%";
     const off = (seat - you + n) % n;
-    // angle measured clockwise from bottom (the viewer's own position)
-    const a = Math.PI + off * (2 * Math.PI / n);
-    const x = (50 + rx * Math.sin(a)).toFixed(1);
-    const y = (50 - ry * Math.cos(a)).toFixed(1);
+    const { x, y } = perimPos(off / n, { x1: 20, x2: 80, y1: 18, y2: 78 });
     return `top:${y}%;left:${x}%`;
   };
   const inner = plays.map((p, idx) =>
@@ -1003,12 +1013,9 @@ function renderHLJ(v) {
   // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    const rx = 30, ry = 34;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const a = Math.PI + off * (2 * Math.PI / n);
-    const x = (50 + rx * Math.sin(a)).toFixed(1);
-    const y = (50 - ry * Math.cos(a)).toFixed(1);
+    const { x, y } = perimPos(off / n, { x1: 20, x2: 80, y1: 18, y2: 78 });
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = v.phase === "bidding"
