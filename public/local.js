@@ -495,12 +495,27 @@ function applyBid(state, move) {
   const entry = move.type === "bid" ? { seat: move.seat, type: "bid", amount: move.amount } : { seat: move.seat, type: "pass" };
   const bidHistory = [...state.bidHistory ?? [], entry];
   if (!done) {
+    const nextTurn = (state.bidTurn + 1) % state.players;
+    const jumpToDealer = move.type === "bid" && move.amount === 6 && state.bidTurn !== state.dealerSeat;
+    if (jumpToDealer) {
+      const skips = [];
+      for (let seat = nextTurn; seat !== state.dealerSeat; seat = (seat + 1) % state.players) {
+        skips.push({ seat, type: "pass" });
+      }
+      return {
+        ...state,
+        highBid,
+        bidsActed: bidsActed + skips.length,
+        bidHistory: [...bidHistory, ...skips],
+        bidTurn: state.dealerSeat
+      };
+    }
     return {
       ...state,
       highBid,
       bidsActed,
       bidHistory,
-      bidTurn: (state.bidTurn + 1) % state.players
+      bidTurn: nextTurn
     };
   }
   return {

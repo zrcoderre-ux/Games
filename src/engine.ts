@@ -421,12 +421,29 @@ function applyBid(state: GameState, move: Move): GameState {
   const bidHistory = [...(state.bidHistory ?? []), entry];
 
   if (!done) {
+    // A bid of 6 by a non-dealer skips remaining bidders — go straight to the dealer.
+    const nextTurn = (state.bidTurn + 1) % state.players;
+    const jumpToDealer = move.type === "bid" && move.amount === 6 && state.bidTurn !== state.dealerSeat;
+    if (jumpToDealer) {
+      // Insert implicit passes for every seat between nextTurn and dealerSeat.
+      const skips: { seat: number; type: "pass" }[] = [];
+      for (let seat = nextTurn; seat !== state.dealerSeat; seat = (seat + 1) % state.players) {
+        skips.push({ seat, type: "pass" });
+      }
+      return {
+        ...state,
+        highBid,
+        bidsActed: bidsActed + skips.length,
+        bidHistory: [...bidHistory, ...skips],
+        bidTurn: state.dealerSeat,
+      };
+    }
     return {
       ...state,
       highBid,
       bidsActed,
       bidHistory,
-      bidTurn: (state.bidTurn + 1) % state.players,
+      bidTurn: nextTurn,
     };
   }
 

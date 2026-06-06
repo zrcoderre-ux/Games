@@ -1361,6 +1361,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   border:3px solid rgba(205,160,90,.6);color:var(--brass-hi);
   box-shadow:0 4px 10px rgba(0,0,0,.5);
 }
+.hlj-bid-token.chip.steal{
+  background:radial-gradient(circle at 38% 35%,rgba(255,255,255,.15),transparent 55%),
+             linear-gradient(145deg,#5a1a1a,#3a0e0e);
+  color:#ff9090;
+}
 .hlj-bid-token.dealer{
   width:42px;height:42px;border-radius:50%;
   font-family:"Hanken Grotesk",sans-serif;font-size:8px;font-weight:900;
@@ -1415,6 +1420,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 /* Non-clickable stolen-number display chip */
 span.hlj-chip.steal{cursor:default;pointer-events:none;opacity:.85}
+/* STEAL action button — smaller text to fit the word */
+button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
 .hlj-chip.blocked{opacity:.3;cursor:not-allowed}
 .hlj-chip:disabled{pointer-events:none}
 .hlj-pass-btn{
