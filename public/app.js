@@ -197,7 +197,7 @@ function cardHTML(c, o = {}) {
   const s = SUIT[c.suit];
   const corner = `<b>${r}</b><i>${s}</i>`;
   if (o.mini) {
-    return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span></div>`;
+    return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span><span class="pip">${s}</span></div>`;
   }
   return `<div class="${cls.join(" ")}"${st} ${a.join(" ")}><span class="corner tl">${corner}</span><span class="pip">${s}</span><span class="corner br">${corner}</span></div>`;
 }
