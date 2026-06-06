@@ -1061,14 +1061,7 @@ function renderHLJ(v) {
       return dealerTok + histToks;
     }
     if (v.phase === "playing" && v.highBid) {
-      // Winning bid chip at the bidder's seat
-      const winTok = `<div class="hlj-bid-token chip steal" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
-      // Dealer chip at dealer's seat, unless dealer won the bid (winning chip already there)
-      const dealerIsWinner = v.highBid.seat === v.dealerSeat;
-      const dealerTok = !dealerIsWinner
-        ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">DEALER</div>`
-        : "";
-      return winTok + dealerTok;
+      return `<div class="hlj-bid-token chip steal" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
     }
     return "";
   })();
