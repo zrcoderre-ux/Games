@@ -926,12 +926,12 @@ function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
 function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true } = {}) {
   const circleStyle = (seat) => {
-    if (you == null) return "top:20%;left:50%";
+    if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
     const { x, y } = perimPos(off / n, { x1: 18, x2: 82, y1: 10, y2: 88 });
-    return `top:${y}%;left:${x}%`;
+    return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
-  const halfH = mini ? 31 : 44; // half of card height: mini=44*1.42/2≈31, full=62*1.42/2≈44
+  const halfH = mini ? 31 : 44;
   const inner = plays.map((p, idx) =>
     `<div class="play${idx === 0 ? " lead" : ""}" style="${circleStyle(p.seat)};--card-half-h:${halfH}px">${cardHTML(p.card, { mini, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
   ).join("");

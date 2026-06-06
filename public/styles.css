@@ -876,24 +876,21 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick .play.lead .who{color:var(--brass-hi)}
 
 /* Positioned trick layout — each play element is placed via inline style
-   computed by trickHTML() so all cards sit on the same radius circle */
+   computed by trickHTML(); transform:translate(-50%,-50%) on .play centres it */
 .trick.positioned{position:absolute;inset:0;pointer-events:none;z-index:2}
 .trick.positioned .play{
   position:absolute;pointer-events:none;
-  width:0;height:0; /* zero-size anchor — children position from this exact point */
+  display:flex;flex-direction:column;align-items:center;
+  width:max-content;
+  animation:dropinC .5s cubic-bezier(.2,.8,.2,1) both;
 }
-/* Card centres on the anchor point */
 .trick.positioned .play .card{
-  position:absolute;
-  transform:translate(-50%,-50%);
+  position:relative;
   pointer-events:all;
 }
-/* Who label hangs below the card using card-height CSS var */
+/* Who label sits below the card naturally in flex column */
 .trick.positioned .play .who{
-  position:absolute;
-  top:calc(var(--card-half-h, 31px) + 5px);
-  left:0;transform:translateX(-50%);
-  white-space:nowrap;pointer-events:none;
+  white-space:nowrap;pointer-events:none;margin-top:3px;
 }
 
 /* piles (Rummy) */
@@ -1061,6 +1058,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* ---------- animations ---------- */
 @keyframes rise{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes dropin{from{opacity:0;transform:translateY(-18px) scale(.9) rotate(-3deg)}to{opacity:1;transform:none}}
+@keyframes dropinC{from{opacity:0;transform:translate(-50%,calc(-50% - 18px)) scale(.9) rotate(-3deg)}to{opacity:1;transform:translate(-50%,-50%)}}
 @keyframes turnpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.12)}}
 @keyframes dealin{from{opacity:0;transform:translateY(26px) scale(.9)}to{opacity:1}}
 @keyframes jokerpulse{0%{transform:scale(1)}30%{transform:scale(1.22)}60%{transform:scale(.96)}100%{transform:scale(1)}}
