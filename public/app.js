@@ -597,6 +597,7 @@ function tableShell(v, parts) {
       ${parts.feltBid || ""}
       ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
     </div>
+    ${parts.aboveSelf ? `<div class="above-self">${parts.aboveSelf}</div>` : ""}
     <div class="selfwrap">${self}</div>
   </div>${logSheet()}`;
 }
@@ -923,12 +924,10 @@ function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
 function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true } = {}) {
-  // rx/ry: circle radii as % of felt width/height. Using a slight
-  // horizontal stretch so cards don't crowd the sides on tall mobile screens.
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%";
     const off = (seat - you + n) % n;
-    const { x, y } = perimPos(off / n, { x1: 8, x2: 92, y1: 15, y2: 82 });
+    const { x, y } = perimPos(off / n, { x1: 16, x2: 84, y1: 15, y2: 82 });
     return `top:${y}%;left:${x}%`;
   };
   const inner = plays.map((p, idx) =>
@@ -1238,7 +1237,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, feltBottom: trumpControl }) + hljHandModal;
+  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, aboveSelf: trumpControl }) + hljHandModal;
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------

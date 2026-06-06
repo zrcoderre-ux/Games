@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"Reminder: after pushing commits, create a PR and merge the branch into main — unless the user has a follow-up prompt still pending in this turn.\"}}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
