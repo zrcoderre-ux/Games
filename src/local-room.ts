@@ -260,7 +260,9 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     if (!s || this.game.isOver(s)) return;
     const seat = this.game.seatToAct(s);
     if (seat !== null && this.seats[seat]?.kind === "bot") {
-      this.botTimer = setTimeout(() => this.botStep(), this.game.botStepMs ?? BOT_STEP_MS_DEFAULT);
+      const raw = this.game.botStepMs;
+      const ms = typeof raw === "function" ? raw(s) : (raw ?? BOT_STEP_MS_DEFAULT);
+      this.botTimer = setTimeout(() => this.botStep(), ms);
     }
   }
 

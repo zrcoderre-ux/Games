@@ -245,7 +245,9 @@ var LocalRoom = class {
     if (!s || this.game.isOver(s)) return;
     const seat = this.game.seatToAct(s);
     if (seat !== null && this.seats[seat]?.kind === "bot") {
-      this.botTimer = setTimeout(() => this.botStep(), this.game.botStepMs ?? BOT_STEP_MS_DEFAULT);
+      const raw = this.game.botStepMs;
+      const ms = typeof raw === "function" ? raw(s) : raw ?? BOT_STEP_MS_DEFAULT;
+      this.botTimer = setTimeout(() => this.botStep(), ms);
     }
   }
   botStep() {
@@ -1093,6 +1095,9 @@ function botPersonality(state, seat) {
 var hljModule = {
   meta: { id: "high-low-jack", name: "High Low Jack", supportedPlayerCounts: [4, 6, 8] },
   seatCount: (config) => config.players,
+  // Scale bot delay so total wait per trick stays roughly constant regardless of player count.
+  // Base 1600ms for 4p: 6p → ~1067ms, 8p → 800ms.
+  botStepMs: (s) => Math.round(1600 * 4 / s.players),
   createGame: (config, seed) => {
     const g = createGame(config.players, seed, config.target);
     return attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]);

@@ -115,6 +115,10 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
 
   seatCount: (config) => config.players,
 
+  // Scale bot delay so total wait per trick stays roughly constant regardless of player count.
+  // Base 1600ms for 4p: 6p → ~1067ms, 8p → 800ms.
+  botStepMs: (s) => Math.round(1600 * 4 / s.players),
+
   createGame: (config, seed) => {
     const g = engineCreateGame(config.players, seed, config.target);
     return attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]);
