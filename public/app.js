@@ -1044,23 +1044,28 @@ function renderHLJ(v) {
     const { x, y } = perimPos(off / n, { x1: 8, x2: 92, y1: 15, y2: 82 });
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
-  const bidTokens = v.phase === "bidding"
-    ? (() => {
-        const dealerActed = bidHistory.some(b => b.seat === v.dealerSeat);
-        const dealerTok = !dealerActed && v.dealerSeat !== you
-          ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">DEALER</div>`
-          : "";
-        const highBidSeat = v.highBid?.seat ?? null;
-        const histToks = bidHistory.map(b => {
-          const style = bidPosStyle(b.seat);
-          const label = b.type === "pass" ? "Pass" : String(b.amount);
-          const isHigh = b.type === "bid" && b.seat === highBidSeat;
-          const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
-          return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
-        }).join("");
-        return dealerTok + histToks;
-      })()
-    : "";
+  const bidTokens = (() => {
+    if (v.phase === "bidding") {
+      const dealerActed = bidHistory.some(b => b.seat === v.dealerSeat);
+      const dealerTok = !dealerActed && v.dealerSeat !== you
+        ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">DEALER</div>`
+        : "";
+      const highBidSeat = v.highBid?.seat ?? null;
+      const histToks = bidHistory.map(b => {
+        const style = bidPosStyle(b.seat);
+        const label = b.type === "pass" ? "Pass" : String(b.amount);
+        const isHigh = b.type === "bid" && b.seat === highBidSeat;
+        const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
+        return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
+      }).join("");
+      return dealerTok + histToks;
+    }
+    if (v.phase === "playing" && v.highBid) {
+      // Show the contract as a reminder during play
+      return `<div class="hlj-bid-token chip steal" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
+    }
+    return "";
+  })();
   const bidOverlay = bidTokens
     ? `<div class="hlj-bid-overlay">${bidTokens}</div>`
     : "";
