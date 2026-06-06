@@ -716,10 +716,10 @@ function suitValue(hand, suit, players) {
   else if (has(13)) score += 0.4;
   else if (has(12)) score += 0.15;
   if (has(11)) {
-    const protectors = [14, 13, 12].filter(has).length;
-    score += Math.min(0.8, 0.25 + 0.2 * protectors);
+    const protectors = [14, 13, 12].filter(has).length + (hasJoker ? 1 : 0);
+    score += Math.min(0.9, 0.25 + 0.2 * protectors);
   }
-  if (hasJoker) score += Math.min(1.6, 0.3 + 0.25 * (n - 1));
+  if (hasJoker) score += Math.min(2.2, 0.3 + 0.25 * (n - 1) + (has(14) ? 1.15 : 0));
   else score += Math.min(0.8, 0.15 * highCount);
   score += Math.min(0.7, 0.12 * n + (has(lowest) ? 0.15 : 0) + (has(14) ? 0.65 : has(13) ? 0.25 : 0));
   score += Math.min(1, 0.1 * n + 0.15 * tens + (has(14) ? 0.5 : 0));

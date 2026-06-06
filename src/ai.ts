@@ -111,14 +111,17 @@ function suitValue(hand: Card[], suit: Suit, players: number): number {
   else if (has(12)) score += 0.15;
 
   // Jack of trump (1 pt) — keepable if you have higher trumps to protect it.
+  // The Joker counts as a protector: it can be held back to cover the Jack's trick.
   if (has(11)) {
-    const protectors = [14, 13, 12].filter(has).length;
-    score += Math.min(0.8, 0.25 + 0.2 * protectors);
+    const protectors = [14, 13, 12].filter(has).length + (hasJoker ? 1 : 0);
+    score += Math.min(0.9, 0.25 + 0.2 * protectors);
   }
 
   // Bonhomme (2 pts). If you hold it, you only keep it with trump control to
   // win the trick it lands in; if opponents hold it, strong trumps capture it.
-  if (hasJoker) score += Math.min(1.6, 0.3 + 0.25 * (n - 1));
+  // Ace+Joker synergy: Ace establishes trump control first, making the Joker nearly
+  // unlosable — add a significant bonus for holding both.
+  if (hasJoker) score += Math.min(2.2, 0.3 + 0.25 * (n - 1) + (has(14) ? 1.15 : 0));
   else score += Math.min(0.8, 0.15 * highCount);
 
   // Low (captured rule). The Ace forces Low to surface (opponents holding the
