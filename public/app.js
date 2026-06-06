@@ -1087,7 +1087,7 @@ function renderHLJ(v) {
     <span class="hlj-score-chip t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
   </div>`;
 
-  const selfExtra = `${teamScores}${signalControl}${trumpControl}${playHint}`;
+  const selfExtra = `${feltBidPanel}${teamScores}${signalControl}${trumpControl}${playHint}`;
 
   const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
   const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
@@ -1194,7 +1194,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra }) + hljHandModal;
+  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra }) + hljHandModal;
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
