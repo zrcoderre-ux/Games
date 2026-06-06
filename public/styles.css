@@ -1361,11 +1361,22 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   border:3px solid rgba(205,160,90,.6);color:var(--brass-hi);
   box-shadow:0 4px 10px rgba(0,0,0,.5);
 }
+.hlj-bid-token.dealer{
+  width:48px;height:48px;border-radius:50%;
+  font-family:"Hanken Grotesk",sans-serif;font-size:8px;font-weight:900;
+  letter-spacing:.1em;text-transform:uppercase;color:#2a1f0e;
+  background:radial-gradient(circle at 38% 32%,#fff 0%,#f0ead8 55%,#d8ceb4 100%);
+  border:3px solid rgba(180,160,100,.5);
+  box-shadow:0 4px 12px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.95);
+}
 .hlj-bid-token.pass{
-  font-family:"Hanken Grotesk",sans-serif;font-size:11px;font-weight:700;
-  color:var(--ink-dim);letter-spacing:.05em;text-transform:uppercase;
-  background:rgba(0,0,0,.35);border:1px solid rgba(180,180,140,.2);
-  border-radius:20px;padding:4px 10px;width:auto;height:auto;
+  width:42px;height:42px;border-radius:50%;
+  font-family:"Hanken Grotesk",sans-serif;font-size:10px;font-weight:800;
+  letter-spacing:.06em;text-transform:uppercase;color:#c8c0b0;
+  background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.12),transparent 52%),
+             linear-gradient(145deg,#3a3830,#1e1c18);
+  border:3px solid rgba(180,170,140,.35);
+  box-shadow:0 4px 10px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);
 }
 
 /* Felt-anchored chip panel — your bid turn, sits above the selfwrap */
