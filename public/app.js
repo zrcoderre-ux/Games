@@ -533,22 +533,22 @@ function tableShell(v, parts) {
     const n = v.seats.length;
     const you = v.you;
     // Map seat offset (1..n-1) to a CSS position class
-    // Layout per player count (opponents = n-1):
+    // Layout per player count (opponents = n-1), spread fully around the table:
     //   2p: [top]
     //   3p: [left, right]
     //   4p: [left, top, right]
-    //   5p: [left, tl, tr, right]
-    //   6p: [left, tl, tl2, tr2, tr, right]
-    //   7p: [left, tl, tl2, top, tr2, tr, right]
-    //   8p: same as 7p (max supported)
+    //   5p: [bl, left, right, br]
+    //   6p: [bl, left, top, right, br]
+    //   7p: [bl, left, tl, tr, right, br]
+    //   8p: [bl, left, tl, top, tr, right, br]
     const LAYOUTS = {
       1: ["pos-top"],
       2: ["pos-left", "pos-right"],
       3: ["pos-left", "pos-top", "pos-right"],
-      4: ["pos-left", "pos-top pos-tl", "pos-top pos-tr", "pos-right"],
-      5: ["pos-left", "pos-top pos-tl", "pos-top", "pos-top pos-tr", "pos-right"],
-      6: ["pos-left", "pos-top pos-tl", "pos-top pos-tl2", "pos-top pos-tr2", "pos-top pos-tr", "pos-right"],
-      7: ["pos-left", "pos-top pos-tl", "pos-top pos-tl2", "pos-top", "pos-top pos-tr2", "pos-top pos-tr", "pos-right"],
+      4: ["pos-bl", "pos-left", "pos-right", "pos-br"],
+      5: ["pos-bl", "pos-left", "pos-top", "pos-right", "pos-br"],
+      6: ["pos-bl", "pos-left", "pos-top pos-tl", "pos-top pos-tr", "pos-right", "pos-br"],
+      7: ["pos-bl", "pos-left", "pos-top pos-tl", "pos-top", "pos-top pos-tr", "pos-right", "pos-br"],
     };
     const layout = LAYOUTS[n - 1] || LAYOUTS[7];
     const slots = podItems.length
