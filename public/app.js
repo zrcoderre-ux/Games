@@ -1086,7 +1086,7 @@ function renderHLJ(v) {
     const n = v.seats.length;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const { x, y } = perimPos(off / n, { x1: 18, x2: 82, y1: 10, y2: 88 });
+    const { x, y } = perimPos(off / n, { x1: 20, x2: 80, y1: 16, y2: 74 });
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = (() => {
