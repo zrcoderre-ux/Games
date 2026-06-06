@@ -155,6 +155,7 @@ export type HandResult = {
     jack: number | null; // null if Jack not in play
     bonhomme: number | null; // null if joker not in play
     game: number | null; // null on a tie
+    gameCount: [number, number]; // pip counts for both teams (for display)
   };
   dealtHands: Card[][]; // each player's starting hand, revealed post-hand
 };
@@ -586,7 +587,7 @@ export function scoreHand(state: GameState): GameState {
     pointsByTeam,
     made,
     deltaByTeam,
-    detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam },
+    detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam, gameCount },
     dealtHands: state.dealtHands ?? [],
   };
 

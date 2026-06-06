@@ -1117,21 +1117,39 @@ function renderHLJ(v) {
     const bidderName = esc(seatName(v, lh.bidderSeat));
 
     const pts = lh.detail;
-    const pointItems = [
+    const honors = [
       { label: "High",     team: pts.high },
       { label: "Low",      team: pts.low },
       { label: "Jack",     team: pts.jack },
       { label: "Bonhomme", team: pts.bonhomme },
       { label: "Game",     team: pts.game },
-    ].filter(p => p.team !== null && p.team !== undefined);
+    ];
 
-    const ptRows = pointItems.map(p => {
-      const letter = p.team === 0 ? "A" : "B";
-      return `<div class="hlj-rr-ptrow">
-        <span class="hlj-rr-ptname">${p.label}</span>
-        <span class="hlj-rr-ptteam t${letter}">Team ${letter}</span>
-      </div>`;
-    }).join("");
+    // Two-column layout: Team A column | Team B column
+    const colA = honors.filter(h => h.team === 0 && h.team !== null && h.team !== undefined);
+    const colB = honors.filter(h => h.team === 1 && h.team !== null && h.team !== undefined);
+    const totalA = lh.pointsByTeam[0];
+    const totalB = lh.pointsByTeam[1];
+
+    const honorList = (items, team) => items.length
+      ? items.map(h => {
+          const sub = h.label === "Game" && pts.gameCount
+            ? `<span class="hlj-rr-pip">(${pts.gameCount[team]} pips)</span>`
+            : "";
+          return `<div class="hlj-rr-honor">${h.label}${sub}</div>`;
+        }).join("")
+      : `<div class="hlj-rr-honor none">—</div>`;
+
+    const ptRows = `<div class="hlj-rr-twocol">
+      <div class="hlj-rr-col tA">
+        <div class="hlj-rr-colhdr tA">Team A · ${totalA} pt${totalA !== 1 ? "s" : ""}</div>
+        ${honorList(colA, 0)}
+      </div>
+      <div class="hlj-rr-col tB">
+        <div class="hlj-rr-colhdr tB">Team B · ${totalB} pt${totalB !== 1 ? "s" : ""}</div>
+        ${honorList(colB, 1)}
+      </div>
+    </div>`;
 
     const made = lh.made;
     const scoreRows = [0, 1].map(t => {

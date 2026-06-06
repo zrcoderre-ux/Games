@@ -1149,14 +1149,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* ============================================================
    TEAMS (High Low Jack) · last trick · move log
    ============================================================ */
-:root{ --teamA:#e7a64e; --teamB:#5cae9c; }
+:root{ --teamA:#e05050; --teamB:#5080e0; }
 
 /* team colours now carried by card back gradients (tA=red, tB=blue) */
 
 .teamchip{position:absolute;top:-2px;left:0;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;
   font-size:11px;font-weight:800;box-shadow:0 1px 3px rgba(0,0,0,.55);border:1px solid rgba(0,0,0,.18);z-index:2}
-.teamchip.tA{background:var(--teamA);color:#3a2306}
-.teamchip.tB{background:var(--teamB);color:#0c241f}
+.teamchip.tA{background:var(--teamA);color:#fff}
+.teamchip.tB{background:var(--teamB);color:#fff}
 
 .teamdot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
 .teamdot.tA{background:var(--teamA)}
@@ -1164,8 +1164,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 .teambadge{display:inline-flex;align-items:center;gap:5px;font-weight:800;font-size:11px;letter-spacing:.6px;
   text-transform:uppercase;padding:3px 10px;border-radius:999px;box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
-.teambadge.tA{background:var(--teamA);color:#3a2306}
-.teambadge.tB{background:var(--teamB);color:#0c241f}
+.teambadge.tA{background:var(--teamA);color:#fff}
+.teambadge.tB{background:var(--teamB);color:#fff}
 .me-partner{color:var(--ink-soft);font-size:12px;margin-left:8px}
 
 .crestrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
@@ -1390,7 +1390,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* Felt-anchored chip panel — your bid turn, sits above the selfwrap */
 .hlj-felt-bid{
-  position:absolute;bottom:8%;left:50%;transform:translateX(-50%);
+  position:absolute;bottom:2%;left:50%;transform:translateX(-50%);
   z-index:4;display:flex;flex-direction:column;align-items:center;gap:8px;
 }
 
@@ -1479,6 +1479,23 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
   color:var(--ink-dim);margin-bottom:7px;
 }
+/* two-column honors layout */
+.hlj-rr-twocol{display:flex;gap:10px}
+.hlj-rr-col{flex:1;min-width:0}
+.hlj-rr-colhdr{
+  font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 8px;border-radius:6px 6px 0 0;margin-bottom:2px;
+  background:rgba(255,255,255,.06);
+}
+.hlj-rr-colhdr.tA{color:var(--teamA)}
+.hlj-rr-colhdr.tB{color:var(--teamB)}
+.hlj-rr-honor{
+  font-size:13px;color:var(--ink);
+  padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.05);
+}
+.hlj-rr-honor.none{color:var(--ink-dim);font-style:italic}
+.hlj-rr-pip{font-size:11px;color:var(--ink-dim);margin-left:5px}
+
 .hlj-rr-ptrow{
   display:flex;align-items:center;justify-content:space-between;
   padding:5px 0;border-bottom:1px solid rgba(180,180,140,.08);
