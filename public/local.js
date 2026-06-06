@@ -357,7 +357,7 @@ function emptyProfile() {
     totalTeamPoints: 0
   };
 }
-function createGame(players, seed, target = 21) {
+function createGame(players, seed, target = 21, winsNeeded = 1) {
   if (!SUPPORTED_PLAYERS.includes(players)) {
     throw new Error(`Unsupported player count: ${players}`);
   }
@@ -369,6 +369,8 @@ function createGame(players, seed, target = 21) {
     dealerSeat: seed % players,
     scores: [0, 0],
     winner: null,
+    gamesWon: [0, 0],
+    winsNeeded,
     hands: [],
     kitty: [],
     trump: null,
@@ -659,7 +661,22 @@ function scoreHand(state) {
     return p;
   });
   if (winner !== null) {
-    return { ...state, scores, phase: "gameOver", winner, lastHand: result, profiles };
+    const gamesWon = [state.gamesWon[0], state.gamesWon[1]];
+    gamesWon[winner]++;
+    const seriesWinner = gamesWon[winner] >= state.winsNeeded ? winner : null;
+    if (seriesWinner !== null) {
+      return { ...state, scores, gamesWon, phase: "gameOver", winner: seriesWinner, lastHand: result, profiles };
+    }
+    const next2 = {
+      ...state,
+      scores: [0, 0],
+      gamesWon,
+      winner: null,
+      lastHand: result,
+      profiles,
+      dealerSeat: (state.dealerSeat + 1) % state.players
+    };
+    return deal(next2);
   }
   const next = {
     ...state,
@@ -1017,6 +1034,8 @@ function redact(state, seat, meta) {
     hostSeat: meta.hostSeat,
     scores: state.scores,
     winner: state.winner,
+    gamesWon: state.gamesWon,
+    winsNeeded: state.winsNeeded,
     dealerSeat: state.dealerSeat,
     trump: state.trump,
     toAct,
@@ -1099,7 +1118,8 @@ var hljModule = {
   // Base 1600ms for 4p: 6p → ~1067ms, 8p → 800ms.
   botStepMs: (s) => Math.round(1600 * 4 / s.players),
   createGame: (config, seed) => {
-    const g = createGame(config.players, seed, config.target);
+    const winsNeeded = config.bestOf ? Math.ceil(config.bestOf / 2) : 1;
+    const g = createGame(config.players, seed, config.target, winsNeeded);
     return attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]);
   },
   // Pitch's turn order: bidder during bidding, otherwise the player to act.
@@ -1114,7 +1134,8 @@ var hljModule = {
   isOver: (s) => s.phase === "gameOver",
   redact: (s, seat, meta) => redact(s, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats }),
   lobbyView: (config, seat, meta) => {
-    const g = createGame(config.players, 1, config.target);
+    const winsNeeded = config.bestOf ? Math.ceil(config.bestOf / 2) : 1;
+    const g = createGame(config.players, 1, config.target, winsNeeded);
     const blanked = { ...g, hands: g.hands.map(() => []), kitty: [], phase: "bidding" };
     return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats, phase: "lobby" });
   },

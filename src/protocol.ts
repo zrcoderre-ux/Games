@@ -61,6 +61,8 @@ export type PlayerView = {
 
   scores: [number, number];
   winner: number | null;
+  gamesWon: [number, number];
+  winsNeeded: number;
 
   dealerSeat: number;
   trump: Suit | null;
@@ -107,6 +109,8 @@ export function redact(
     hostSeat: meta.hostSeat,
     scores: state.scores,
     winner: state.winner,
+    gamesWon: state.gamesWon,
+    winsNeeded: state.winsNeeded,
     dealerSeat: state.dealerSeat,
     trump: state.trump,
     toAct,

@@ -186,6 +186,8 @@ export type GameState = {
   dealerSeat: number;
   scores: [number, number]; // team 0, team 1 (team = seat % 2)
   winner: number | null;
+  gamesWon: [number, number]; // wins per team across the series
+  winsNeeded: number; // wins required to win the series (1 = single game)
 
   // Per-hand state:
   hands: Card[][]; // hands[seat] = remaining cards
@@ -240,7 +242,7 @@ function emptyProfile(): PlayerProfile {
   };
 }
 
-export function createGame(players: PlayerCount, seed: number, target = 21): GameState {
+export function createGame(players: PlayerCount, seed: number, target = 21, winsNeeded = 1): GameState {
   if (!SUPPORTED_PLAYERS.includes(players)) {
     throw new Error(`Unsupported player count: ${players}`);
   }
@@ -252,6 +254,8 @@ export function createGame(players: PlayerCount, seed: number, target = 21): Gam
     dealerSeat: seed % players,
     scores: [0, 0],
     winner: null,
+    gamesWon: [0, 0],
+    winsNeeded,
     hands: [],
     kitty: [],
     trump: null,
@@ -631,7 +635,23 @@ export function scoreHand(state: GameState): GameState {
   });
 
   if (winner !== null) {
-    return { ...state, scores, phase: "gameOver", winner, lastHand: result, profiles };
+    const gamesWon: [number, number] = [state.gamesWon[0], state.gamesWon[1]];
+    gamesWon[winner]++;
+    const seriesWinner = gamesWon[winner] >= state.winsNeeded ? winner : null;
+    if (seriesWinner !== null) {
+      return { ...state, scores, gamesWon, phase: "gameOver", winner: seriesWinner, lastHand: result, profiles };
+    }
+    // Series continues: reset scores and deal the next game.
+    const next: GameState = {
+      ...state,
+      scores: [0, 0],
+      gamesWon,
+      winner: null,
+      lastHand: result,
+      profiles,
+      dealerSeat: (state.dealerSeat + 1) % state.players,
+    };
+    return deal(next);
   }
 
   // Otherwise rotate the dealer to the left and deal the next hand.

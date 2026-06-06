@@ -77,6 +77,7 @@ const S = {
   hotseats: {}, // seat → name for pass-and-play reservations (pre-start, client-only)
   pjCard: null, // selected card id (Pegs & Jokers)
   pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
+  lbySettingsOpen: false,
   showLog: false,
   logTab: "log", // "log" | "melds"
   logExpandedId: null, // id of log entry whose extraCards are expanded
@@ -803,13 +804,6 @@ function renderLobby(v) {
        <div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
          <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>`;
 
-  const botReplacementToggle = !S.offline
-    ? `<label class="lby-replace-toggle">
-         <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} />
-         Auto-replace disconnects with bots
-       </label>`
-    : "";
-
   const hasHotseats = Object.keys(S.hotseats).length > 0;
   let shareRow = "";
   if (S.offline) {
@@ -825,8 +819,37 @@ function renderLobby(v) {
     ? `<button class="felt-cta" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button>`
     : `<p class="lby-waiting">Waiting for the host to deal…</p>`;
 
+  // Settings modal (host only)
+  const winsNeeded = v.winsNeeded ?? 1;
+  const bestOf = winsNeeded <= 1 ? 1 : winsNeeded * 2 - 1;
+  const settingsModal = isHost && S.lbySettingsOpen
+    ? `<div class="modal-back" data-action="close-lby-settings">
+        <div class="modal" data-stop="1">
+          <div class="modalhead"><span>Settings</span><button class="btn sm ghost" data-action="close-lby-settings">Close</button></div>
+          <div class="modalbody">
+            ${isHLJ ? `<div class="lby-set-row">
+              <span class="lby-set-label">Best of</span>
+              <div class="seg">
+                ${[1, 3, 5].map(n => `<button class="${n === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${n}">${n === 1 ? "1 game" : `${n} games`}</button>`).join("")}
+              </div>
+            </div>` : ""}
+            ${!S.offline ? `<div class="lby-set-row">
+              <label class="lby-set-toggle">
+                <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} />
+                <span>Auto-replace disconnects with bots</span>
+              </label>
+            </div>` : ""}
+          </div>
+        </div>
+      </div>`
+    : "";
+
+  const settingsBtn = isHost
+    ? `<button class="btn sm ghost lby-settings-btn" data-action="open-lby-settings">⚙ Settings</button>`
+    : "";
+
   const cfgSection = isHost
-    ? `<div class="lby-cfg">${cfgControls}${botReplacementToggle}</div>`
+    ? `<div class="lby-cfg">${cfgControls}</div>`
     : "";
 
   app.__set = `${appbar(v)}
@@ -836,9 +859,10 @@ function renderLobby(v) {
         ${shareRow}
         ${seatsHTML}
         ${cfgSection}
+        ${settingsBtn}
         ${dealBtn}
       </div>
-    </div>`;
+    </div>${settingsModal}`;
 }
 
 // ---------- shared: game over ----------
@@ -935,9 +959,11 @@ function renderHLJ(v) {
   if (v.phase === "gameOver") {
     const w = v.winner;
     const you = v.you;
+    const gw = v.gamesWon ?? [0, 0];
+    const seriesLabel = (t) => (v.winsNeeded ?? 1) > 1 ? ` · ${gw[t]} win${gw[t] !== 1 ? "s" : ""}` : "";
     const rows = [
-      { name: "Team A", score: v.scores[0], win: w === 0, you: you != null && you % 2 === 0 },
-      { name: "Team B", score: v.scores[1], win: w === 1, you: you != null && you % 2 === 1 },
+      { name: `Team A${seriesLabel(0)}`, score: v.scores[0], win: w === 0, you: you != null && you % 2 === 0 },
+      { name: `Team B${seriesLabel(1)}`, score: v.scores[1], win: w === 1, you: you != null && you % 2 === 1 },
     ];
     return renderGameOver(v, w == null ? "Game over" : `Team ${w === 0 ? "A" : "B"} wins!`, scoreList(rows));
   }
@@ -1087,8 +1113,11 @@ function renderHLJ(v) {
   const oppTeamIdx = 1 - myTeamIdx;
   const myTeamLetter = myTeamIdx === 0 ? "A" : "B";
   const oppTeamLetter = myTeamIdx === 0 ? "B" : "A";
+  const seriesA = v.gamesWon?.[myTeamIdx] ?? 0;
+  const seriesB = v.gamesWon?.[oppTeamIdx] ?? 0;
+  const seriesSuffix = (v.winsNeeded ?? 1) > 1 ? ` (${seriesA}\u2013${seriesB})` : "";
   const teamScores = `<div class="hlj-scores">
-    <span class="hlj-score-chip t${myTeamLetter} mine"><span class="teamdot t${myTeamLetter}"></span>Team ${myTeamLetter}&nbsp;<b>${v.scores[myTeamIdx]}</b></span>
+    <span class="hlj-score-chip t${myTeamLetter} mine"><span class="teamdot t${myTeamLetter}"></span>Team ${myTeamLetter}&nbsp;<b>${v.scores[myTeamIdx]}</b>${seriesSuffix}</span>
     <span class="hlj-score-chip t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
   </div>`;
 
@@ -2027,6 +2056,12 @@ app.addEventListener("click", (e) => {
     case "clear-hotseat": {
       delete S.hotseats[+t.dataset.seat];
       return render();
+    }
+    case "open-lby-settings": S.lbySettingsOpen = true; return render();
+    case "close-lby-settings": S.lbySettingsOpen = false; return render();
+    case "lby-set-bestof": {
+      const n = +t.dataset.n;
+      return send({ t: "setConfig", config: { players: v.players, target: v.target, bestOf: n } });
     }
     case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
