@@ -349,7 +349,9 @@ export abstract class RoomServer<
     if (s && !this.game.isOver(s)) {
       const seat = this.game.seatToAct(s);
       if (seat !== null && this.isBot(seat)) {
-        const botTime = Date.now() + (this.game.botStepMs ?? BOT_STEP_MS);
+        const raw = this.game.botStepMs;
+        const stepMs = typeof raw === "function" ? raw(s) : (raw ?? BOT_STEP_MS);
+        const botTime = Date.now() + stepMs;
         next = next === null ? botTime : Math.min(next, botTime);
       }
     }
