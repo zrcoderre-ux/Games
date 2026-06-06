@@ -561,7 +561,7 @@ function tableShell(v, parts) {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
-      const { x, y } = perimPos(off / n, { x1: 8, x2: 92, y1: 8, y2: 90 });
+      const { x, y } = perimPos(off / n, { x1: 20, x2: 80, y1: 8, y2: 90 });
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     };
     const slots = podItems.length
@@ -927,7 +927,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true }
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%";
     const off = (seat - you + n) % n;
-    const { x, y } = perimPos(off / n, { x1: 16, x2: 84, y1: 15, y2: 82 });
+    const { x, y } = perimPos(off / n, { x1: 20, x2: 80, y1: 15, y2: 82 });
     return `top:${y}%;left:${x}%`;
   };
   const inner = plays.map((p, idx) =>
@@ -1044,7 +1044,7 @@ function renderHLJ(v) {
     const n = v.seats.length;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const { x, y } = perimPos(off / n, { x1: 8, x2: 92, y1: 15, y2: 82 });
+    const { x, y } = perimPos(off / n, { x1: 20, x2: 80, y1: 15, y2: 82 });
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = (() => {
