@@ -867,25 +867,26 @@ function renderGameOver(v, title, scoresHTML) {
 }
 
 // Perimeter layout: map t∈[0,1] to a point on the felt rectangle.
-// Clockwise from bottom-center: bottom-right → right → top → left → bottom-left.
+// Players placed clockwise around the table (viewed from above), so off=1 is to your left.
+// Perimeter goes: bottom-left → left → top → right → bottom-right.
 // x1/x2/y1/y2 are the clamped edge values (% of felt).
 function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
   const cx = 50;
   if (t < 1/8) {
     const s = t / (1/8);
-    return { x: cx + (x2 - cx) * s, y: y2 };
+    return { x: cx - (cx - x1) * s, y: y2 };
   } else if (t < 3/8) {
     const s = (t - 1/8) / (1/4);
-    return { x: x2, y: y2 + (y1 - y2) * s };
+    return { x: x1, y: y2 + (y1 - y2) * s };
   } else if (t < 5/8) {
     const s = (t - 3/8) / (1/4);
-    return { x: x2 + (x1 - x2) * s, y: y1 };
+    return { x: x1 + (x2 - x1) * s, y: y1 };
   } else if (t < 7/8) {
     const s = (t - 5/8) / (1/4);
-    return { x: x1, y: y1 + (y2 - y1) * s };
+    return { x: x2, y: y1 + (y2 - y1) * s };
   } else {
     const s = (t - 7/8) / (1/8);
-    return { x: x1 + (cx - x1) * s, y: y2 };
+    return { x: x2 - (x2 - cx) * s, y: y2 };
   }
 }
 
