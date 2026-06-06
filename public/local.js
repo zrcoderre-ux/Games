@@ -898,10 +898,18 @@ function decideBid(state, seat, rng, p) {
   }
   if (needed === 6) {
     const sixProb = estimateSixBidProb(hand, state.players);
-    const autoWin = state.scores[myTeam] >= 0;
-    const autoWinBonus = autoWin ? 0.08 : 0;
+    const myScore = state.scores[myTeam];
+    const myGap = state.target - myScore;
+    const safeFromHoleBonus = myScore >= 1 ? Math.min(0.1, myScore * 8e-3) : 0;
+    const autoWinBonus = myScore >= 0 ? 0.07 : 0;
     const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
-    const sixThresh = Math.max(0.5, 0.65 + p.bidSafety * 0.2 - autoWinBonus - despSixBonus);
+    const rawNearWinPenalty = myGap <= 6 ? (6 - myGap) * 0.1 : 0;
+    const nearWinPenalty = rawNearWinPenalty * Math.max(0, 1 - despSixBonus * 5);
+    const sixThresh = clamp(
+      0.65 + p.bidSafety * 0.2 - safeFromHoleBonus - autoWinBonus - despSixBonus + nearWinPenalty,
+      0.48,
+      0.97
+    );
     if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
   }
   return { type: "pass", seat };

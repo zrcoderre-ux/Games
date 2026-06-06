@@ -406,16 +406,34 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
 
   // 6-bid on hand strength alone: use kitty-risk-aware probability rather than
   // the scalar score (which can't capture player-count-dependent risk).
-  // Also lower the threshold when:
-  //   • a successful 6-bid wins the game right now (auto-win at non-negative score)
-  //   • opponent is closing in on target (overlaps with desperation above)
   if (needed === 6) {
     const sixProb = estimateSixBidProb(hand, state.players);
-    const autoWin  = state.scores[myTeam] >= 0;
-    const autoWinBonus = autoWin ? 0.08 : 0;
+    const myScore = state.scores[myTeam];
+    const myGap   = state.target - myScore;
+
+    // Lower threshold when a missed 6-bid won't send us in the hole.
+    // Each point of cushion above 0 reduces risk — cap at score=12 (a miss lands at 6+).
+    const safeFromHoleBonus = myScore >= 1 ? Math.min(0.10, myScore * 0.008) : 0;
+
+    // Lower threshold when auto-win is available (making 6 ends the game now).
+    const autoWinBonus = myScore >= 0 ? 0.07 : 0;
+
+    // Lower threshold when opponent is dangerously close to winning.
     const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
+
+    // RAISE threshold when our score is high enough that we don't need a 6-bid.
+    // At myGap ≤ 6 (score ≥ 15) we can win by simply taking the auction at any
+    // amount and scoring 6 naturally — a risky 6-bid adds downside with little upside.
+    // The penalty grows as we get closer to winning without it.
+    // Exception: if opponent is also close (despSixBonus active), urgency overrides.
+    const rawNearWinPenalty = myGap <= 6 ? (6 - myGap) * 0.10 : 0;
+    const nearWinPenalty = rawNearWinPenalty * Math.max(0, 1 - despSixBonus * 5);
+
     // Base threshold: aggressive=0.70, balanced=0.80, conservative=0.90
-    const sixThresh = Math.max(0.50, 0.65 + p.bidSafety * 0.2 - autoWinBonus - despSixBonus);
+    const sixThresh = clamp(
+      0.65 + p.bidSafety * 0.2 - safeFromHoleBonus - autoWinBonus - despSixBonus + nearWinPenalty,
+      0.48, 0.97,
+    );
     if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
   }
 
