@@ -238,7 +238,6 @@ function podHTML(v, i, o = {}) {
     : "";
   const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
   return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""}">
-    ${o.dealer ? `<span class="dealer">D</span>` : ""}
     <div class="ministack">
       ${mb}
       <span class="back-name">${esc(name)}${disconnectedBadge}</span>
