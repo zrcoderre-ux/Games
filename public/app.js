@@ -597,6 +597,7 @@ function tableShell(v, parts) {
       ${parts.feltBid || ""}
       ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
     </div>
+    ${parts.aboveSelf ? `<div class="above-self">${parts.aboveSelf}</div>` : ""}
     <div class="selfwrap">${self}</div>
   </div>${logSheet()}`;
 }
@@ -1238,7 +1239,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, feltBottom: trumpControl }) + hljHandModal;
+  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, aboveSelf: trumpControl }) + hljHandModal;
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
