@@ -215,14 +215,38 @@ export abstract class RoomServer<
     if (!this.game.meta.supportedPlayerCounts.includes(n)) {
       throw new Error(`${this.game.meta.name} doesn't support ${n} players`);
     }
-    // Resize, keeping whoever already occupies a seat that still exists.
+    // Resize: preserve all human players. First fill humans into the new seat array
+    // in their current order, then pack any that fell outside n into the first empty slots.
     const seats: SeatInfo[] = emptySeats(n);
-    for (let s = 0; s < Math.min(n, this.room.seats.length); s++) seats[s] = this.room.seats[s];
+    const overflow: Array<[string, SeatInfo]> = []; // [pid, info] for displaced humans
+    for (let s = 0; s < this.room.seats.length; s++) {
+      const info = this.room.seats[s];
+      if (info.kind !== "human") continue;
+      if (s < n) {
+        seats[s] = info;
+      } else {
+        const pid = Object.entries(this.room.pidSeats).find(([, seat]) => seat === s)?.[0];
+        if (pid) overflow.push([pid, info]);
+      }
+    }
+    for (const [pid, info] of overflow) {
+      const free = seats.findIndex((x) => x.kind === "empty");
+      if (free !== -1) {
+        seats[free] = info;
+        this.room.pidSeats[pid] = free;
+      } else {
+        delete this.room.pidSeats[pid]; // table truly full — no room for this human
+      }
+    }
+    // Bots that were in seats beyond the new size are simply dropped (they're expendable).
     for (const [pid, s] of Object.entries(this.room.pidSeats)) if (s >= n) delete this.room.pidSeats[pid];
-    // If the host's seat fell off the (smaller) table, hand host to the first remaining human.
-    if (this.room.hostSeat !== null && this.room.hostSeat >= n) {
-      const firstHuman = seats.findIndex((x) => x.kind === "human");
-      this.room.hostSeat = firstHuman === -1 ? null : firstHuman;
+    // Update host if their seat moved.
+    if (this.room.hostSeat !== null) {
+      const hostPid = Object.entries(this.room.pidSeats).find(([, s]) => s === this.room.hostSeat)?.[0];
+      if (!hostPid) {
+        const firstHuman = seats.findIndex((x) => x.kind === "human");
+        this.room.hostSeat = firstHuman === -1 ? null : firstHuman;
+      }
     }
     this.room.config = config;
     this.room.seats = seats;
