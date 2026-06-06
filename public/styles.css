@@ -881,7 +881,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick.positioned .play{
   position:absolute;pointer-events:all;
   display:flex;flex-direction:column;align-items:center;gap:5px;
-  transform:translate(-50%,-50%); /* inline top/left is the centre point */
+  /* anchor = card centre: shift left by half card width, up by half card height */
+  transform:translate(-50%,-50%);
+}
+/* who label doesn't affect the card's centring — pull it out of flow */
+.trick.positioned .play .who{
+  position:absolute;top:100%;margin-top:4px;white-space:nowrap;
 }
 
 /* piles (Rummy) */
