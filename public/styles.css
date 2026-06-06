@@ -1061,6 +1061,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 @keyframes rise{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes dropin{from{opacity:0;transform:translateY(-18px) scale(.9) rotate(-3deg)}to{opacity:1;transform:none}}
 @keyframes dropinC{from{opacity:0;transform:translate(-50%,calc(-50% - 18px)) scale(.9) rotate(-3deg)}to{opacity:1;transform:translate(-50%,-50%)}}
+@keyframes dropinB{from{opacity:0;transform:translate(-50%,calc(-50% - 10px)) scale(.9)}to{opacity:1;transform:translate(-50%,-50%)}}
 @keyframes turnpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.12)}}
 @keyframes dealin{from{opacity:0;transform:translateY(26px) scale(.9)}to{opacity:1}}
 @keyframes jokerpulse{0%{transform:scale(1)}30%{transform:scale(1.22)}60%{transform:scale(.96)}100%{transform:scale(1)}}
@@ -1395,7 +1396,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   pointer-events:all;
   font-family:"Fraunces",serif;font-size:13px;font-weight:700;
   display:grid;place-items:center;
-  animation:dropin .35s cubic-bezier(.2,.8,.2,1) both;
+  animation:dropinB .35s cubic-bezier(.2,.8,.2,1) both;
 }
 /* Shared notched-chip look for table tokens */
 .hlj-bid-token.chip{
