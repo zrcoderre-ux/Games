@@ -557,7 +557,7 @@ function tableShell(v, parts) {
     // rx/ry are radii as % of felt width/height (larger than the trick card circle).
     const n = v.seats.length;
     const you = v.you;
-    const rx = 44, ry = 40;
+    const rx = 44, ry = 46;
     const podStyle = (seat) => {
       if (you == null) {
         // spectator: spread evenly starting from top
@@ -887,7 +887,7 @@ function renderGameOver(v, title, scoresHTML) {
 function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
   // rx/ry: circle radii as % of felt width/height. Using a slight
   // horizontal stretch so cards don't crowd the sides on tall mobile screens.
-  const rx = 30, ry = 26;
+  const rx = 30, ry = 34;
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%";
     const off = (seat - you + n) % n;
@@ -1003,7 +1003,7 @@ function renderHLJ(v) {
   // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    const rx = 30, ry = 26;
+    const rx = 30, ry = 34;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
     const a = Math.PI + off * (2 * Math.PI / n);
@@ -1018,14 +1018,11 @@ function renderHLJ(v) {
           ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">DEALER</div>`
           : "";
         const highBidSeat = v.highBid?.seat ?? null;
-        const histToks = bidHistory.map(b => {
-          const style = bidPosStyle(b.seat);
-          const label = b.type === "pass" ? "Pass" : String(b.amount);
-          const isHigh = b.type === "bid" && b.seat === highBidSeat;
-          const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
-          return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
-        }).join("");
-        return dealerTok + histToks;
+        // Only show the current high bid token on the felt (in front of that player)
+        const highTok = highBidSeat !== null
+          ? `<div class="hlj-bid-token chip steal" style="${bidPosStyle(highBidSeat)}">${v.highBid.amount}</div>`
+          : "";
+        return dealerTok + highTok;
       })()
     : "";
   const bidOverlay = bidTokens
@@ -1045,7 +1042,7 @@ function renderHLJ(v) {
             if (claimedAmounts.has(n)) {
               // Dealer can steal the current high bid — show red number + STEAL pair
               if (isDealer && n === curHighAmt)
-                return `<span class="hlj-chip steal">${n}</span><button class="hlj-chip steal" data-action="move-bid" data-amount="${n}">STEAL</button>`;
+                return `<button class="hlj-chip steal" data-action="move-bid" data-amount="${n}">STEAL</button>`;
               return ""; // already claimed, hide for everyone else
             }
             const legal = n >= minBid;
