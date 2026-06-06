@@ -866,7 +866,7 @@ function renderLobby(v) {
     : "";
 
   const settingsBtn = isHost
-    ? `<button class="btn sm ghost lby-settings-btn" data-action="open-lby-settings">⚙ Settings</button>`
+    ? `<button class="lby-gear-btn" data-action="open-lby-settings" title="Settings">⚙</button>`
     : "";
 
   const cfgSection = isHost
@@ -876,12 +876,12 @@ function renderLobby(v) {
   app.__set = `${appbar(v)}
     <div class="lby-wrap">
       <div class="felt-content">
+        ${settingsBtn}
         <div class="lby-title">${esc(GAMES[S.party].label)}</div>
         ${shareRow}
-        ${seatsHTML}
+        <div class="lby-seats-scroll">${seatsHTML}</div>
         ${cfgSection}
-        ${settingsBtn}
-        ${dealBtn}
+        <div class="lby-cta-row">${dealBtn}</div>
       </div>
     </div>${settingsModal}`;
 }
