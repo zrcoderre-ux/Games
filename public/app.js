@@ -1001,9 +1001,13 @@ function renderHLJ(v) {
     hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
-    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
-      .map((c, idx) => `<div class="play">${cardHTML(c, { win: idx === winIdx })}</div>`)
-      .join("")}</div></div>`;
+    const ltCards = v.lastTrick.cards;
+    const ltCardHTML = (c, idx) => `<div class="play">${cardHTML(c, { win: idx === winIdx })}</div>`;
+    const half = Math.ceil(ltCards.length / 2);
+    const ltRows = ltCards.length > 4
+      ? `<div class="lt-row">${ltCards.slice(0, half).map(ltCardHTML).join("")}</div><div class="lt-row">${ltCards.slice(half).map((c, i) => ltCardHTML(c, half + i)).join("")}</div>`
+      : `<div class="lt-row">${ltCards.map(ltCardHTML).join("")}</div>`;
+    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div>${ltRows}</div>`;
   } else if (v.phase === "bidding") {
     centerExtra = "";
   } else {
