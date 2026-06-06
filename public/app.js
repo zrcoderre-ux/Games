@@ -66,6 +66,8 @@ const S = {
   rummyRoundTimer: null, // auto-dismiss setTimeout handle
   hljHandAcked: null, // JSON key of the lastHand already dismissed
   hljHandTimer: null, // auto-dismiss setTimeout handle
+  hljTrickHold: null, // {trick, winSeat} held briefly after last card played
+  hljTrickHoldTimer: null,
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
@@ -319,6 +321,24 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
+    // HLJ: when the trick just resolved (currentTrick went from full → empty),
+    // hold the completed trick display for one "extra player" turn worth of time.
+    if (S.party === "high-low-jack" && prev?.currentTrick?.length === prev?.seats?.length
+        && msg.view?.currentTrick?.length === 0 && msg.view?.phase === "playing") {
+      if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
+      const n = prev.seats.length;
+      const winSeat = (() => {
+        const cards = prev.currentTrick.map(p => p.card);
+        const idx = hljWinIdx(cards, prev.trump ?? msg.view.trump);
+        return idx >= 0 ? prev.currentTrick[idx].seat : null;
+      })();
+      S.hljTrickHold = { trick: prev.currentTrick, winSeat, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`) };
+      S.hljTrickHoldTimer = setTimeout(() => {
+        S.hljTrickHold = null;
+        S.hljTrickHoldTimer = null;
+        render();
+      }, 1200);
+    }
     // If the round result changed (new round ended), reset the ack so the popup shows again.
     const prevKey = prev?.lastRound ? JSON.stringify(prev.scores) : null;
     const newKey  = msg.view?.lastRound ? JSON.stringify(msg.view.scores) : null;
@@ -1006,6 +1026,10 @@ function renderHLJ(v) {
   if (v.currentTrick.length) {
     const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
     hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
+  } else if (S.hljTrickHold) {
+    const h = S.hljTrickHold;
+    const trickPlays = h.trick.map((p) => ({ ...p, name: h.names[p.seat] ?? seatName(v, p.seat) }));
+    hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.winSeat });
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     const ltCards = v.lastTrick.cards;
