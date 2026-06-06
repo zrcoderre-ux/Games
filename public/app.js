@@ -922,7 +922,7 @@ function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
 // `you`    – viewer's seat index (null = spectator → top centre)
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
-function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
+function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true } = {}) {
   // rx/ry: circle radii as % of felt width/height. Using a slight
   // horizontal stretch so cards don't crowd the sides on tall mobile screens.
   const circleStyle = (seat) => {
@@ -932,7 +932,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
     return `top:${y}%;left:${x}%`;
   };
   const inner = plays.map((p, idx) =>
-    `<div class="play${idx === 0 ? " lead" : ""}" style="${circleStyle(p.seat)}">${cardHTML(p.card, { mini: true, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
+    `<div class="play${idx === 0 ? " lead" : ""}" style="${circleStyle(p.seat)}">${cardHTML(p.card, { mini, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
   ).join("");
   return `<div class="trick positioned${faded ? " faded" : ""}">${inner}</div>`;
 }
@@ -998,11 +998,11 @@ function renderHLJ(v) {
   let centerExtra = "";
   if (v.currentTrick.length) {
     const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-    hljTrick = trickHTML(trickPlays, you, v.seats.length);
+    hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
-      .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
+      .map((c, idx) => `<div class="play">${cardHTML(c, { win: idx === winIdx })}</div>`)
       .join("")}</div></div>`;
   } else if (v.phase === "bidding") {
     centerExtra = "";
