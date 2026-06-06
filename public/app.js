@@ -228,7 +228,7 @@ function avatarHTML(name, o = {}) {
 // opponent pod
 function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
-  const backs = Math.min(o.backs ?? o.count ?? 0, 4);
+  const backs = 4;
   const mb = Array.from({ length: backs }, () => `<span class="mb"></span>`).join("");
   const isDisconnected = v.disconnectedSeats && v.disconnectedSeats.includes(i);
   const isHost = v.you === v.hostSeat && v.you !== null;
@@ -236,12 +236,11 @@ function podHTML(v, i, o = {}) {
     ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
     : "";
   const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
-  const hasBacks = backs > 0;
   return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""}">
     ${o.dealer ? `<span class="dealer">D</span>` : ""}
     <div class="ministack">
       ${mb}
-      <span class="back-name${hasBacks ? "" : " no-cards"}">${esc(name)}${disconnectedBadge}</span>
+      <span class="back-name">${esc(name)}${disconnectedBadge}</span>
     </div>
     ${o.pts != null || o.count != null ? `<div class="pod-info">
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
