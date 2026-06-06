@@ -228,7 +228,7 @@ function avatarHTML(name, o = {}) {
 // opponent pod
 function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
-  const backs = Math.min(o.count || 0, 4);
+  const backs = Math.min(o.backs ?? o.count ?? 0, 4);
   const mb = Array.from({ length: backs }, () => `<span class="mb"></span>`).join("");
   const isDisconnected = v.disconnectedSeats && v.disconnectedSeats.includes(i);
   const isHost = v.you === v.hostSeat && v.you !== null;
@@ -243,7 +243,7 @@ function podHTML(v, i, o = {}) {
     <div class="pod-info">
       <span class="name">${esc(name)}${disconnectedBadge}</span>
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
-      <span class="count">${o.count}</span>
+      ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
     </div>
     ${o.note ? `<div class="note">${esc(o.note)}</div>` : ""}
     ${replaceBtn}
@@ -868,10 +868,10 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
     1: ["pos-top"],
     2: ["pos-left","pos-right"],
     3: ["pos-left","pos-top","pos-right"],
-    4: ["pos-left","pos-top","pos-top pos-tl","pos-right"],
-    5: ["pos-left","pos-tl","pos-top","pos-tr","pos-right"],
-    6: ["pos-left","pos-tl","pos-top","pos-top","pos-tr","pos-right"],
-    7: ["pos-left","pos-tl","pos-top","pos-top","pos-top","pos-tr","pos-right"],
+    4: ["pos-bl","pos-left","pos-right","pos-br"],
+    5: ["pos-bl","pos-left","pos-top","pos-right","pos-br"],
+    6: ["pos-bl","pos-left","pos-tl","pos-tr","pos-right","pos-br"],
+    7: ["pos-bl","pos-left","pos-tl","pos-top","pos-tr","pos-right","pos-br"],
   };
   const posClass = (seat) => {
     if (you == null) return "pos-top";
@@ -933,7 +933,7 @@ function renderHLJ(v) {
             dealer: i === v.dealerSeat,
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
-            count: null, // all hands same size in HLJ
+            backs: v.handCounts[i],
           }) },
     )
     .filter(Boolean);
@@ -983,25 +983,26 @@ function renderHLJ(v) {
   const curHighAmt = v.highBid ? v.highBid.amount : null;
   const bidHistory = Array.isArray(v.bidHistory) ? v.bidHistory : [];
 
-  // Build a positioned overlay: one token per player who has bid/passed
-  // Edge-anchored positions match .trick.positioned .play.pos-* CSS
+  // Bid token positions mirror the inner trick circle (same coords as .trick.positioned .play)
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    if (you == null) return "top:8%;left:50%;transform:translateX(-50%)";
+    if (you == null) return "top:28%;left:50%;transform:translateX(-50%)";
     const off = (seat - you + n) % n;
-    if (off === 0) return "bottom:8%;left:50%;transform:translateX(-50%)";
-    const TRICK_LAYOUTS = {
+    if (off === 0) return "bottom:20%;left:50%;transform:translateX(-50%)";
+    const BID_LAYOUTS = {
       1:["pos-top"],2:["pos-left","pos-right"],3:["pos-left","pos-top","pos-right"],
-      4:["pos-left","pos-top","pos-top","pos-right"],5:["pos-left","pos-tl","pos-top","pos-tr","pos-right"],
-      6:["pos-left","pos-tl","pos-top","pos-top","pos-tr","pos-right"],
-      7:["pos-left","pos-tl","pos-top","pos-top","pos-top","pos-tr","pos-right"],
+      4:["pos-bl","pos-left","pos-right","pos-br"],5:["pos-bl","pos-left","pos-top","pos-right","pos-br"],
+      6:["pos-bl","pos-left","pos-tl","pos-tr","pos-right","pos-br"],
+      7:["pos-bl","pos-left","pos-tl","pos-top","pos-tr","pos-right","pos-br"],
     };
-    const pos = (TRICK_LAYOUTS[n-1]||TRICK_LAYOUTS[7])[off-1]||"pos-top";
-    if (pos.includes("pos-left")) return "left:6%;top:50%;transform:translateY(-50%)";
-    if (pos.includes("pos-right")) return "right:6%;top:50%;transform:translateY(-50%)";
-    if (pos.includes("pos-tl")) return "top:14%;left:22%;transform:none";
-    if (pos.includes("pos-tr")) return "top:14%;right:22%;transform:none";
-    return "top:8%;left:50%;transform:translateX(-50%)";
+    const pos = (BID_LAYOUTS[n-1]||BID_LAYOUTS[7])[off-1]||"pos-top";
+    if (pos.includes("pos-left")) return "left:22%;top:50%;transform:translateY(-50%)";
+    if (pos.includes("pos-right")) return "right:22%;top:50%;transform:translateY(-50%)";
+    if (pos.includes("pos-tl")) return "top:26%;left:24%;transform:none";
+    if (pos.includes("pos-tr")) return "top:26%;right:24%;transform:none";
+    if (pos.includes("pos-bl")) return "bottom:22%;left:24%;transform:none";
+    if (pos.includes("pos-br")) return "bottom:22%;right:24%;transform:none";
+    return "top:28%;left:50%;transform:translateX(-50%)";
   };
   const bidTokens = v.phase === "bidding"
     ? bidHistory.map(b => {
@@ -1300,7 +1301,7 @@ function renderRummy(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
-            count: null, // all hands same size in Hearts
+            count: v.handCounts[i],
             pts: v.scores[i],
             note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
           }) },
@@ -1589,7 +1590,7 @@ function renderHearts(v) {
         ? null
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
-            count: v.handCounts[i],
+            backs: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
           }) },

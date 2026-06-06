@@ -862,30 +862,35 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick .who{font-size:11px;color:var(--ink-soft);font-weight:600;max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trick .play.lead .who{color:var(--brass-hi)}
 
-/* Positioned trick layout — cards placed near each player's edge of the felt */
+/* Positioned trick layout — inner circle, well inside the pod outer ring */
 .trick.positioned{position:absolute;inset:0;pointer-events:none;z-index:2}
 .trick.positioned .play{
   position:absolute;pointer-events:all;
   display:flex;flex-direction:column;align-items:center;gap:5px;
 }
 .trick.positioned .play.pos-top{
-  top:8%;left:50%;transform:translateX(-50%);
+  top:28%;left:50%;transform:translateX(-50%);
 }
 .trick.positioned .play.pos-bottom{
-  bottom:8%;left:50%;transform:translateX(-50%);
+  bottom:20%;left:50%;transform:translateX(-50%);
 }
 .trick.positioned .play.pos-left{
-  left:6%;top:50%;transform:translateY(-50%);
+  left:22%;top:50%;transform:translateY(-50%);
 }
 .trick.positioned .play.pos-right{
-  right:6%;top:50%;transform:translateY(-50%);
+  right:22%;top:50%;transform:translateY(-50%);
 }
-/* diagonal positions for 5-8 player games */
 .trick.positioned .play.pos-tl{
-  top:14%;left:22%;transform:none;
+  top:26%;left:24%;transform:none;
 }
 .trick.positioned .play.pos-tr{
-  top:14%;right:22%;transform:none;
+  top:26%;right:24%;transform:none;
+}
+.trick.positioned .play.pos-bl{
+  bottom:22%;left:24%;transform:none;
+}
+.trick.positioned .play.pos-br{
+  bottom:22%;right:24%;transform:none;
 }
 
 /* piles (Rummy) */
