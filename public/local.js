@@ -621,7 +621,7 @@ function scoreHand(state) {
     pointsByTeam,
     made,
     deltaByTeam,
-    detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam },
+    detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam, gameCount },
     dealtHands: state.dealtHands ?? []
   };
   const autoWin = bid === 6 && made && preScore >= 0;
