@@ -797,10 +797,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .pod .ministack{
   position:relative;
   display:flex;align-items:flex-end;justify-content:center;
-  min-height:30px;
+  min-height:40px;
 }
 .pod .ministack .mb{
-  width:16px;height:24px;border-radius:4px;margin-left:-10px;flex-shrink:0;
+  width:22px;height:32px;border-radius:5px;margin-left:-13px;flex-shrink:0;
   /* default neutral back — overridden per team below */
   background:repeating-linear-gradient(45deg,#0e1a30 0 3px,#1a2a48 3px 6px),#0e1a30;
   box-shadow:0 1px 2px rgba(0,0,0,.6),inset 0 0 0 1px rgba(140,180,255,.2);
@@ -817,8 +817,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 /* Name label printed on the card back stack */
 .pod .back-name{
-  position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
-  font-size:9px;font-weight:800;font-family:"Hanken Grotesk",sans-serif;
+  position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+  font-size:10px;font-weight:800;font-family:"Hanken Grotesk",sans-serif;
   white-space:nowrap;pointer-events:none;
   color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.9);
   letter-spacing:.02em;max-width:80px;overflow:hidden;text-overflow:ellipsis;
@@ -1183,6 +1183,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* last trick (shown when current trick is empty) */
 .lasttrick{display:flex;flex-direction:column;align-items:center;gap:7px}
+.lt-row{display:flex;gap:6px;justify-content:center;align-items:flex-end}
 .lt-label{font-family:"Fraunces",serif;font-style:italic;font-size:12.5px;color:var(--ink-soft)}
 .trick.faded{opacity:.6}
 .trick.faded .play{animation:none}
@@ -1360,16 +1361,16 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-bid-token{
   position:absolute;
   pointer-events:all;
-  font-family:"Fraunces",serif;font-size:15px;font-weight:700;
+  font-family:"Fraunces",serif;font-size:13px;font-weight:700;
   display:grid;place-items:center;
   animation:dropin .35s cubic-bezier(.2,.8,.2,1) both;
 }
 .hlj-bid-token.chip{
-  width:42px;height:42px;border-radius:50%;
+  width:34px;height:34px;border-radius:50%;
   background:radial-gradient(circle at 38% 35%,rgba(255,255,255,.18),transparent 55%),
-             linear-gradient(145deg,#2a5a2a,#1a3a1a);
-  border:3px solid rgba(205,160,90,.6);color:var(--brass-hi);
-  box-shadow:0 4px 10px rgba(0,0,0,.5);
+             linear-gradient(145deg,#1a3a6a,#0e2048);
+  border:2px solid rgba(130,170,255,.5);color:#a8c8ff;
+  box-shadow:0 3px 8px rgba(0,0,0,.5);
 }
 .hlj-bid-token.chip.steal{
   background:radial-gradient(circle at 38% 35%,rgba(255,255,255,.15),transparent 55%),
@@ -1377,21 +1378,21 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   color:#ff9090;
 }
 .hlj-bid-token.dealer{
-  width:42px;height:42px;border-radius:50%;
-  font-family:"Hanken Grotesk",sans-serif;font-size:8px;font-weight:900;
+  width:34px;height:34px;border-radius:50%;
+  font-family:"Hanken Grotesk",sans-serif;font-size:7px;font-weight:900;
   letter-spacing:.1em;text-transform:uppercase;color:#2a1f0e;
   background:radial-gradient(circle at 38% 32%,#fff 0%,#f0ead8 55%,#d8ceb4 100%);
-  border:3px solid rgba(180,160,100,.5);
-  box-shadow:0 4px 12px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.95);
+  border:2px solid rgba(180,160,100,.5);
+  box-shadow:0 3px 10px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.95);
 }
 .hlj-bid-token.pass{
-  width:42px;height:42px;border-radius:50%;
-  font-family:"Hanken Grotesk",sans-serif;font-size:10px;font-weight:800;
+  width:34px;height:34px;border-radius:50%;
+  font-family:"Hanken Grotesk",sans-serif;font-size:9px;font-weight:800;
   letter-spacing:.06em;text-transform:uppercase;color:#c8c0b0;
   background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.12),transparent 52%),
              linear-gradient(145deg,#3a3830,#1e1c18);
-  border:3px solid rgba(180,170,140,.35);
-  box-shadow:0 4px 10px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);
+  border:2px solid rgba(180,170,140,.35);
+  box-shadow:0 3px 8px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);
 }
 
 /* Felt-anchored chip panel — your bid turn, sits above the selfwrap */
@@ -1408,10 +1409,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-chip{
   width:48px;height:48px;border-radius:50%;
   font-family:"Fraunces",serif;font-size:18px;font-weight:700;
-  border:3px solid rgba(205,160,90,.6);
+  border:3px solid rgba(130,170,255,.5);
   background:radial-gradient(circle at 38% 35%, rgba(255,255,255,.18), transparent 55%),
-             linear-gradient(145deg,#2a5a2a,#1a3a1a);
-  color:var(--brass-hi);cursor:pointer;
+             linear-gradient(145deg,#1a3a6a,#0e2048);
+  color:#a8c8ff;cursor:pointer;
   box-shadow:0 4px 10px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.15);
   transition:transform .12s,box-shadow .12s,background .12s;
   display:grid;place-items:center;

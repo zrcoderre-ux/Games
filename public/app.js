@@ -561,7 +561,7 @@ function tableShell(v, parts) {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
-      const { x, y } = perimPos(off / n);
+      const { x, y } = perimPos(off / n, { x1: 8, x2: 92, y1: 8, y2: 90 });
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     };
     const slots = podItems.length
@@ -922,7 +922,7 @@ function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
 // `you`    – viewer's seat index (null = spectator → top centre)
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
-function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
+function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true } = {}) {
   // rx/ry: circle radii as % of felt width/height. Using a slight
   // horizontal stretch so cards don't crowd the sides on tall mobile screens.
   const circleStyle = (seat) => {
@@ -932,7 +932,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
     return `top:${y}%;left:${x}%`;
   };
   const inner = plays.map((p, idx) =>
-    `<div class="play${idx === 0 ? " lead" : ""}" style="${circleStyle(p.seat)}">${cardHTML(p.card, { mini: true, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
+    `<div class="play${idx === 0 ? " lead" : ""}" style="${circleStyle(p.seat)}">${cardHTML(p.card, { mini, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
   ).join("");
   return `<div class="trick positioned${faded ? " faded" : ""}">${inner}</div>`;
 }
@@ -998,12 +998,16 @@ function renderHLJ(v) {
   let centerExtra = "";
   if (v.currentTrick.length) {
     const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-    hljTrick = trickHTML(trickPlays, you, v.seats.length);
+    hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
-    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="trick faded">${v.lastTrick.cards
-      .map((c, idx) => `<div class="play">${cardHTML(c, { mini: true, win: idx === winIdx })}</div>`)
-      .join("")}</div></div>`;
+    const ltCards = v.lastTrick.cards;
+    const ltCardHTML = (c, idx) => `<div class="play">${cardHTML(c, { win: idx === winIdx })}</div>`;
+    const half = Math.ceil(ltCards.length / 2);
+    const ltRows = ltCards.length > 4
+      ? `<div class="lt-row">${ltCards.slice(0, half).map(ltCardHTML).join("")}</div><div class="lt-row">${ltCards.slice(half).map((c, i) => ltCardHTML(c, half + i)).join("")}</div>`
+      : `<div class="lt-row">${ltCards.map(ltCardHTML).join("")}</div>`;
+    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div>${ltRows}</div>`;
   } else if (v.phase === "bidding") {
     centerExtra = "";
   } else {
@@ -1127,7 +1131,7 @@ function renderHLJ(v) {
     <span class="hlj-score-chip t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
   </div>`;
 
-  const selfExtra = `${teamScores}${signalControl}${trumpControl}${playHint}`;
+  const selfExtra = `${teamScores}${signalControl}${playHint}`;
 
   const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
   const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
@@ -1234,7 +1238,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra }) + hljHandModal;
+  app.__set = tableShell(v, { pods, center, trick: hljTrick || bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, feltBottom: trumpControl }) + hljHandModal;
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
