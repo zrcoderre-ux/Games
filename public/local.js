@@ -842,10 +842,32 @@ function opponentThreatLevel(state, opponentSeat, bidAmount) {
   if (after >= state.target - 2) return 1;
   return 0;
 }
+function estimateSixBidProb(hand, players) {
+  const { suit } = bestSuit(hand, players);
+  const trumps = hand.filter((c) => isTrump(c, suit));
+  const has = (r) => trumps.some((c) => !isJoker(c) && c.rank === r);
+  const hasJoker = trumps.some(isJoker);
+  const n = trumps.length;
+  if (!has(14)) return 0;
+  const remaining = players * 6 + 5 - 6;
+  const pJokerLive = hasJoker ? 1 : (remaining - 5) / remaining;
+  let sweepProb = 0.99;
+  if (!hasJoker) sweepProb -= 0.01;
+  if (!has(11)) sweepProb -= 0.2;
+  if (!has(13) && !has(12)) sweepProb -= 0.08;
+  sweepProb += 5e-3 * Math.max(0, n - 4);
+  sweepProb = clamp(sweepProb, 0, 0.99);
+  return pJokerLive * sweepProb;
+}
 function decideBid(state, seat, rng, p) {
   const hand = state.hands[seat];
   const best = bestSuit(hand, state.players);
-  const willing = clamp(Math.round(best.score - p.bidSafety), 0, 6);
+  const myTeam = teamOf(seat);
+  const oppTeam = 1 - myTeam;
+  const oppGap = state.target - state.scores[oppTeam];
+  const desperationBonus = oppGap <= 6 ? (6 - oppGap) * 0.18 : 0;
+  const effectiveSafety = Math.max(0, p.bidSafety - desperationBonus);
+  const willing = clamp(Math.round(best.score - effectiveSafety), 0, 6);
   const myConf = confFromScore(best.score);
   const isDealer = seat === state.dealerSeat;
   const high = state.highBid;
@@ -873,6 +895,14 @@ function decideBid(state, seat, rng, p) {
     } else if (sameTeam && myConf === 2 && theirConf <= 0.5) {
       if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
     }
+  }
+  if (needed === 6) {
+    const sixProb = estimateSixBidProb(hand, state.players);
+    const autoWin = state.scores[myTeam] >= 0;
+    const autoWinBonus = autoWin ? 0.08 : 0;
+    const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
+    const sixThresh = Math.max(0.5, 0.65 + p.bidSafety * 0.2 - autoWinBonus - despSixBonus);
+    if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
   }
   return { type: "pass", seat };
 }
