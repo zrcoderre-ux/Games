@@ -597,6 +597,7 @@ function tableShell(v, parts) {
       ${parts.feltBid || ""}
       ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
     </div>
+    <div class="selfwrap-spacer"></div>
     ${parts.aboveSelf ? `<div class="above-self">${parts.aboveSelf}</div>` : ""}
     <div class="selfwrap">${self}</div>
   </div>${logSheet()}`;
