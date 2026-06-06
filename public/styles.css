@@ -774,12 +774,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .pod-slot.pos-right{
   right:8px;top:50%;transform:translateY(-50%);
 }
-/* bottom-left / bottom-right flanking the user */
+/* bottom-left / bottom-right — raised onto the side walls, lower half */
 .pod-slot.pos-bl{
-  bottom:10px;left:8%;
+  left:8px;bottom:28%;
 }
 .pod-slot.pos-br{
-  bottom:10px;right:8%;
+  right:8px;bottom:28%;
 }
 
 /* opponent pod */
@@ -862,35 +862,13 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick .who{font-size:11px;color:var(--ink-soft);font-weight:600;max-width:64px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trick .play.lead .who{color:var(--brass-hi)}
 
-/* Positioned trick layout — inner circle, well inside the pod outer ring */
+/* Positioned trick layout — each play element is placed via inline style
+   computed by trickHTML() so all cards sit on the same radius circle */
 .trick.positioned{position:absolute;inset:0;pointer-events:none;z-index:2}
 .trick.positioned .play{
   position:absolute;pointer-events:all;
   display:flex;flex-direction:column;align-items:center;gap:5px;
-}
-.trick.positioned .play.pos-top{
-  top:28%;left:50%;transform:translateX(-50%);
-}
-.trick.positioned .play.pos-bottom{
-  bottom:20%;left:50%;transform:translateX(-50%);
-}
-.trick.positioned .play.pos-left{
-  left:22%;top:50%;transform:translateY(-50%);
-}
-.trick.positioned .play.pos-right{
-  right:22%;top:50%;transform:translateY(-50%);
-}
-.trick.positioned .play.pos-tl{
-  top:26%;left:24%;transform:none;
-}
-.trick.positioned .play.pos-tr{
-  top:26%;right:24%;transform:none;
-}
-.trick.positioned .play.pos-bl{
-  bottom:22%;left:24%;transform:none;
-}
-.trick.positioned .play.pos-br{
-  bottom:22%;right:24%;transform:none;
+  transform:translate(-50%,-50%); /* inline top/left is the centre point */
 }
 
 /* piles (Rummy) */

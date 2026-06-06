@@ -857,31 +857,27 @@ function renderGameOver(v, title, scoresHTML) {
 // Which card in a completed High Low Jack trick won it (port of engine
 // trickWinner): highest trump — joker is the lowest trump — else highest of the
 // led suit. Returns the index into the play-order cards array.
-// Build a spatially-positioned trick div: each card floats toward its player's edge.
+// Build a spatially-positioned trick div: each card placed on a circle,
+// equidistant from center, evenly spaced by angle.
 // `plays`  – [{card, seat, name?}]
-// `you`    – viewer's seat index (null = spectator → all top)
+// `you`    – viewer's seat index (null = spectator → top centre)
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
 function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
-  // Mirror the pod LAYOUTS table so cards land near each player's pod
-  const TRICK_LAYOUTS = {
-    1: ["pos-top"],
-    2: ["pos-left","pos-right"],
-    3: ["pos-left","pos-top","pos-right"],
-    4: ["pos-bl","pos-left","pos-right","pos-br"],
-    5: ["pos-bl","pos-left","pos-top","pos-right","pos-br"],
-    6: ["pos-bl","pos-left","pos-tl","pos-tr","pos-right","pos-br"],
-    7: ["pos-bl","pos-left","pos-tl","pos-top","pos-tr","pos-right","pos-br"],
-  };
-  const posClass = (seat) => {
-    if (you == null) return "pos-top";
+  // rx/ry: circle radii as % of felt width/height. Using a slight
+  // horizontal stretch so cards don't crowd the sides on tall mobile screens.
+  const rx = 26, ry = 22;
+  const circleStyle = (seat) => {
+    if (you == null) return "top:20%;left:50%";
     const off = (seat - you + n) % n;
-    if (off === 0) return "pos-bottom";
-    const layout = TRICK_LAYOUTS[n - 1] || TRICK_LAYOUTS[7];
-    return layout[off - 1] || "pos-top";
+    // angle measured clockwise from bottom (the viewer's own position)
+    const a = Math.PI - off * (2 * Math.PI / n);
+    const x = (50 + rx * Math.sin(a)).toFixed(1);
+    const y = (50 - ry * Math.cos(a)).toFixed(1);
+    return `top:${y}%;left:${x}%`;
   };
   const inner = plays.map((p, idx) =>
-    `<div class="play ${posClass(p.seat)}${idx === 0 ? " lead" : ""}">${cardHTML(p.card, { mini: true, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
+    `<div class="play${idx === 0 ? " lead" : ""}" style="${circleStyle(p.seat)}">${cardHTML(p.card, { mini: true, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
   ).join("");
   return `<div class="trick positioned${faded ? " faded" : ""}">${inner}</div>`;
 }
@@ -983,26 +979,16 @@ function renderHLJ(v) {
   const curHighAmt = v.highBid ? v.highBid.amount : null;
   const bidHistory = Array.isArray(v.bidHistory) ? v.bidHistory : [];
 
-  // Bid token positions mirror the inner trick circle (same coords as .trick.positioned .play)
+  // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    if (you == null) return "top:28%;left:50%;transform:translateX(-50%)";
+    const rx = 26, ry = 22;
+    if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    if (off === 0) return "bottom:20%;left:50%;transform:translateX(-50%)";
-    const BID_LAYOUTS = {
-      1:["pos-top"],2:["pos-left","pos-right"],3:["pos-left","pos-top","pos-right"],
-      4:["pos-bl","pos-left","pos-right","pos-br"],5:["pos-bl","pos-left","pos-top","pos-right","pos-br"],
-      6:["pos-bl","pos-left","pos-tl","pos-tr","pos-right","pos-br"],
-      7:["pos-bl","pos-left","pos-tl","pos-top","pos-tr","pos-right","pos-br"],
-    };
-    const pos = (BID_LAYOUTS[n-1]||BID_LAYOUTS[7])[off-1]||"pos-top";
-    if (pos.includes("pos-left")) return "left:22%;top:50%;transform:translateY(-50%)";
-    if (pos.includes("pos-right")) return "right:22%;top:50%;transform:translateY(-50%)";
-    if (pos.includes("pos-tl")) return "top:26%;left:24%;transform:none";
-    if (pos.includes("pos-tr")) return "top:26%;right:24%;transform:none";
-    if (pos.includes("pos-bl")) return "bottom:22%;left:24%;transform:none";
-    if (pos.includes("pos-br")) return "bottom:22%;right:24%;transform:none";
-    return "top:28%;left:50%;transform:translateX(-50%)";
+    const a = Math.PI - off * (2 * Math.PI / n);
+    const x = (50 + rx * Math.sin(a)).toFixed(1);
+    const y = (50 - ry * Math.cos(a)).toFixed(1);
+    return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = v.phase === "bidding"
     ? bidHistory.map(b => {
