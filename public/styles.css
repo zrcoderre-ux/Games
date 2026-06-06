@@ -1417,7 +1417,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-bid-token.pass{
   width:40px;height:40px;border-radius:50%;
   font-family:"Hanken Grotesk",sans-serif;font-size:9px;font-weight:800;
-  letter-spacing:.06em;text-transform:uppercase;color:#c8c0b0;
+  letter-spacing:.06em;text-transform:uppercase;color:#fff;
   background:
     radial-gradient(circle at 50% 50%, #2a2820 0% 56%, #1a1810 56% 60%, transparent 60%),
     repeating-conic-gradient(#2a2820 0deg 35deg, rgba(255,255,255,.35) 35deg 45deg);
@@ -1471,7 +1471,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   background:
     radial-gradient(circle at 50% 50%, #2a2820 0% 56%, #1a1810 56% 60%, transparent 60%),
     repeating-conic-gradient(#2a2820 0deg 35deg, rgba(255,255,255,.35) 35deg 45deg);
-  color:rgba(200,200,200,.8);cursor:pointer;
+  color:#fff;cursor:pointer;
   box-shadow:0 4px 10px rgba(0,0,0,.5);
   transition:transform .12s,box-shadow .12s;
   display:grid;place-items:center;
