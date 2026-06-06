@@ -66,6 +66,7 @@ export type PlayerView = {
 
   dealerSeat: number;
   trump: Suit | null;
+  trumpRevealed: boolean;
 
   toAct: number | null; // whose turn it is (bidder during bidding)
   yourTurn: boolean;
@@ -113,6 +114,7 @@ export function redact(
     winsNeeded: state.winsNeeded,
     dealerSeat: state.dealerSeat,
     trump: state.trump,
+    trumpRevealed: state.trumpRevealed,
     toAct,
     yourTurn,
     legalMoves: yourTurn ? legalMoves(state) : [],

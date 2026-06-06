@@ -374,6 +374,7 @@ function createGame(players, seed, target = 21, winsNeeded = 1) {
     hands: [],
     kitty: [],
     trump: null,
+    trumpRevealed: false,
     bidTurn: 0,
     bidsActed: 0,
     highBid: null,
@@ -409,6 +410,7 @@ function deal(state) {
     dealtHands: hands.map((h) => [...h]),
     kitty,
     trump: null,
+    trumpRevealed: false,
     bidTurn: firstBidder,
     bidsActed: 0,
     highBid: null,
@@ -486,7 +488,7 @@ function applyMove(state, move) {
   }
   if (state.phase === "bidding") return applyBid(state, move);
   if (state.phase === "playing") {
-    if (move.type === "selectTrump") return { ...state, trump: move.suit };
+    if (move.type === "selectTrump") return { ...state, trump: move.suit, trumpRevealed: true };
     return applyPlay(state, move);
   }
   throw new Error("game over");
@@ -541,7 +543,9 @@ function applyPlay(state, move) {
   const seat = move.seat;
   if (state.trump === null) {
     if (isJoker(move.card)) throw new Error("Cannot lead the joker on the first trick");
-    state = { ...state, trump: move.card.suit };
+    state = { ...state, trump: move.card.suit, trumpRevealed: true };
+  } else if (!state.trumpRevealed) {
+    state = { ...state, trumpRevealed: true };
   }
   const hands = state.hands.map(
     (h, s) => s === seat ? h.filter((c) => !sameCard(c, move.card)) : h
@@ -1038,6 +1042,7 @@ function redact(state, seat, meta) {
     winsNeeded: state.winsNeeded,
     dealerSeat: state.dealerSeat,
     trump: state.trump,
+    trumpRevealed: state.trumpRevealed,
     toAct,
     yourTurn,
     legalMoves: yourTurn ? legalMoves(state) : [],

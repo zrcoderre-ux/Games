@@ -193,6 +193,7 @@ export type GameState = {
   hands: Card[][]; // hands[seat] = remaining cards
   kitty: Card[]; // dead cards, never played, kept only to know what's out of play
   trump: Suit | null;
+  trumpRevealed: boolean; // true after selectTrump or the first card is played
 
   // Bidding:
   bidTurn: number; // seat to act during bidding
@@ -259,6 +260,7 @@ export function createGame(players: PlayerCount, seed: number, target = 21, wins
     hands: [],
     kitty: [],
     trump: null,
+    trumpRevealed: false,
     bidTurn: 0,
     bidsActed: 0,
     highBid: null,
@@ -299,6 +301,7 @@ function deal(state: GameState): GameState {
     dealtHands: hands.map(h => [...h]),
     kitty,
     trump: null,
+    trumpRevealed: false,
     bidTurn: firstBidder,
     bidsActed: 0,
     highBid: null,
@@ -407,7 +410,7 @@ export function applyMove(state: GameState, move: Move): GameState {
     // The bidder may declare a trump suit before leading (the uncommon case of
     // wanting to lead something other than trump). Otherwise they just lead and
     // applyPlay sets trump from that first card.
-    if (move.type === "selectTrump") return { ...state, trump: move.suit };
+    if (move.type === "selectTrump") return { ...state, trump: move.suit, trumpRevealed: true };
     return applyPlay(state, move);
   }
   throw new Error("game over");
@@ -479,7 +482,9 @@ function applyPlay(state: GameState, move: Move): GameState {
   // this first card is always a natural, suited card.
   if (state.trump === null) {
     if (isJoker(move.card)) throw new Error("Cannot lead the joker on the first trick");
-    state = { ...state, trump: move.card.suit };
+    state = { ...state, trump: move.card.suit, trumpRevealed: true };
+  } else if (!state.trumpRevealed) {
+    state = { ...state, trumpRevealed: true };
   }
 
   const hands = state.hands.map((h, s) =>

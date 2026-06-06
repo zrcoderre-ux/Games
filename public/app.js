@@ -1012,8 +1012,8 @@ function renderHLJ(v) {
   }
   const center = centerExtra;
 
-  // Trump watermark on felt fabric; joker placeholder when no trump yet
-  const feltOverlay = v.trump
+  // Joker watermark until trump is revealed (explicit selectTrump or first card played).
+  const feltOverlay = v.trump && v.trumpRevealed
     ? `<span class="trump-watermark ${RED.has(v.trump) ? "red" : ""}">${SUIT[v.trump]}</span>`
     : `<span class="trump-watermark joker-placeholder" role="img" aria-label="No trump chosen yet"></span>`;
 
