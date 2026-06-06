@@ -1390,8 +1390,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* Felt-anchored chip panel — your bid turn, sits above the selfwrap */
 .hlj-felt-bid{
-  display:flex;flex-direction:column;align-items:center;gap:8px;
-  padding:8px 0 4px;
+  position:absolute;bottom:2%;left:50%;transform:translateX(-50%);
+  z-index:4;display:flex;flex-direction:column;align-items:center;gap:8px;
 }
 
 /* Poker chip bid buttons */
