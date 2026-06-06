@@ -721,7 +721,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   flex:1;position:relative;
   margin:0 8px;
   border-radius:22px;
-  overflow:hidden;
+  overflow:visible;
   background:
     radial-gradient(130% 90% at 50% 30%, var(--felt-2) 0%, var(--felt-1) 45%, var(--felt-0) 100%);
   box-shadow:
@@ -916,7 +916,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   flex:none;z-index:3;
   display:flex;flex-direction:column;align-items:center;
   padding:4px 8px max(8px,env(safe-area-inset-bottom));
+  overflow:visible;
 }
+/* When trump row appears, hand naturally overlaps the felt */
+.selfwrap .hand{z-index:4;position:relative}
 .selfbar{
   display:flex;align-items:center;gap:10px;
   background:linear-gradient(180deg,rgba(20,32,56,.92),rgba(10,16,30,.92));
