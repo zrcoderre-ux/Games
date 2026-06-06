@@ -1018,14 +1018,11 @@ function renderHLJ(v) {
           ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">DEALER</div>`
           : "";
         const highBidSeat = v.highBid?.seat ?? null;
-        const histToks = bidHistory.map(b => {
-          const style = bidPosStyle(b.seat);
-          const label = b.type === "pass" ? "Pass" : String(b.amount);
-          const isHigh = b.type === "bid" && b.seat === highBidSeat;
-          const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
-          return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
-        }).join("");
-        return dealerTok + histToks;
+        // Only show the current high bid token on the felt (in front of that player)
+        const highTok = highBidSeat !== null
+          ? `<div class="hlj-bid-token chip steal" style="${bidPosStyle(highBidSeat)}">${v.highBid.amount}</div>`
+          : "";
+        return dealerTok + highTok;
       })()
     : "";
   const bidOverlay = bidTokens
@@ -1045,7 +1042,7 @@ function renderHLJ(v) {
             if (claimedAmounts.has(n)) {
               // Dealer can steal the current high bid — show red number + STEAL pair
               if (isDealer && n === curHighAmt)
-                return `<span class="hlj-chip steal">${n}</span><button class="hlj-chip steal" data-action="move-bid" data-amount="${n}">STEAL</button>`;
+                return `<button class="hlj-chip steal" data-action="move-bid" data-amount="${n}">STEAL</button>`;
               return ""; // already claimed, hide for everyone else
             }
             const legal = n >= minBid;
