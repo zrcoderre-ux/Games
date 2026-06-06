@@ -538,13 +538,13 @@ function tableShell(v, parts) {
       if (you == null) {
         // spectator: spread evenly starting from top
         const idx = podItems.findIndex(p => p.seat === seat);
-        const a = Math.PI - (idx + 1) * (2 * Math.PI / n);
+        const a = Math.PI + (idx + 1) * (2 * Math.PI / n);
         const x = (50 + rx * Math.sin(a)).toFixed(1);
         const y = (50 - ry * Math.cos(a)).toFixed(1);
         return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
       }
       const off = (seat - you + n) % n; // 1..n-1
-      const a = Math.PI - off * (2 * Math.PI / n);
+      const a = Math.PI + off * (2 * Math.PI / n);
       const x = (50 + rx * Math.sin(a)).toFixed(1);
       const y = (50 - ry * Math.cos(a)).toFixed(1);
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
@@ -868,7 +868,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false } = {}) {
     if (you == null) return "top:20%;left:50%";
     const off = (seat - you + n) % n;
     // angle measured clockwise from bottom (the viewer's own position)
-    const a = Math.PI - off * (2 * Math.PI / n);
+    const a = Math.PI + off * (2 * Math.PI / n);
     const x = (50 + rx * Math.sin(a)).toFixed(1);
     const y = (50 - ry * Math.cos(a)).toFixed(1);
     return `top:${y}%;left:${x}%`;
@@ -982,18 +982,25 @@ function renderHLJ(v) {
     const rx = 26, ry = 22;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const a = Math.PI - off * (2 * Math.PI / n);
+    const a = Math.PI + off * (2 * Math.PI / n);
     const x = (50 + rx * Math.sin(a)).toFixed(1);
     const y = (50 - ry * Math.cos(a)).toFixed(1);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = v.phase === "bidding"
-    ? bidHistory.map(b => {
-        const style = bidPosStyle(b.seat);
-        const label = b.type === "pass" ? "Pass" : String(b.amount);
-        const cls = b.type === "pass" ? "pass" : "chip";
-        return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
-      }).join("")
+    ? (() => {
+        const dealerActed = bidHistory.some(b => b.seat === v.dealerSeat);
+        const dealerTok = !dealerActed
+          ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">DEALER</div>`
+          : "";
+        const histToks = bidHistory.map(b => {
+          const style = bidPosStyle(b.seat);
+          const label = b.type === "pass" ? "Pass" : String(b.amount);
+          const cls = b.type === "pass" ? "pass" : "chip";
+          return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
+        }).join("");
+        return dealerTok + histToks;
+      })()
     : "";
   const bidOverlay = bidTokens
     ? `<div class="hlj-bid-overlay">${bidTokens}</div>`
@@ -1009,11 +1016,9 @@ function renderHLJ(v) {
     ? `<div class="hlj-felt-bid">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
+            if (claimedAmounts.has(n)) return ""; // each number can only be bid once
             const legal = n >= minBid;
-            const isCur = curHighAmt === n;
-            // Hide buttons for amounts already bid, unless this is the dealer's steal option
-            const isSteal = isDealer && isCur;
-            if (claimedAmounts.has(n) && !isSteal) return "";
+            const isSteal = isDealer && curHighAmt != null && n === curHighAmt;
             return `<button class="hlj-chip${isSteal ? " steal" : ""}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${!legal ? "disabled" : ""}>${n}</button>`;
           }).join("")}
           ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}

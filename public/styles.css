@@ -1361,6 +1361,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   border:3px solid rgba(205,160,90,.6);color:var(--brass-hi);
   box-shadow:0 4px 10px rgba(0,0,0,.5);
 }
+.hlj-bid-token.dealer{
+  width:48px;height:48px;border-radius:50%;
+  font-family:"Hanken Grotesk",sans-serif;font-size:8px;font-weight:900;
+  letter-spacing:.1em;text-transform:uppercase;color:#2a1f0e;
+  background:radial-gradient(circle at 38% 32%,#fff 0%,#f0ead8 55%,#d8ceb4 100%);
+  border:3px solid rgba(180,160,100,.5);
+  box-shadow:0 4px 12px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.95);
+}
 .hlj-bid-token.pass{
   width:42px;height:42px;border-radius:50%;
   font-family:"Hanken Grotesk",sans-serif;font-size:10px;font-weight:800;
