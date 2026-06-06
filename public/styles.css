@@ -1403,14 +1403,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   width:40px;height:40px;border-radius:50%;
   background:
     radial-gradient(circle at 50% 50%, #1a3a6a 0% 56%, #0a1a40 56% 60%, transparent 60%),
-    repeating-conic-gradient(#1a3a6a 0deg 35deg, #fff 35deg 45deg);
+    repeating-conic-gradient(#1a3a6a 0deg 28deg, #fff 28deg 45deg);
   color:#d0e4ff;
   box-shadow:0 3px 8px rgba(0,0,0,.55);
 }
 .hlj-bid-token.chip.steal{
   background:
     radial-gradient(circle at 50% 50%, #5a1a1a 0% 56%, #3a0808 56% 60%, transparent 60%),
-    repeating-conic-gradient(#5a1a1a 0deg 35deg, #fff 35deg 45deg);
+    repeating-conic-gradient(#5a1a1a 0deg 28deg, #fff 28deg 45deg);
   color:#ff9090;
 }
 .hlj-bid-token.dealer{
@@ -1427,7 +1427,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   letter-spacing:.06em;text-transform:uppercase;color:#fff;
   background:
     radial-gradient(circle at 50% 50%, #2a2820 0% 56%, #1a1810 56% 60%, transparent 60%),
-    repeating-conic-gradient(#2a2820 0deg 35deg, rgba(255,255,255,.35) 35deg 45deg);
+    repeating-conic-gradient(#2a2820 0deg 28deg, rgba(255,255,255,.35) 28deg 45deg);
   box-shadow:0 3px 8px rgba(0,0,0,.55);
 }
 
@@ -1447,7 +1447,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   font-family:"Fraunces",serif;font-size:16px;font-weight:700;
   background:
     radial-gradient(circle at 50% 50%, #1a3a6a 0% 56%, #0a1a40 56% 60%, transparent 60%),
-    repeating-conic-gradient(#1a3a6a 0deg 35deg, #fff 35deg 45deg);
+    repeating-conic-gradient(#1a3a6a 0deg 28deg, #fff 28deg 45deg);
   color:#d0e4ff;cursor:pointer;
   box-shadow:0 4px 10px rgba(0,0,0,.5);
   transition:transform .12s,box-shadow .12s;
@@ -1462,7 +1462,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-chip.steal{
   background:
     radial-gradient(circle at 50% 50%, #5a1a1a 0% 56%, #3a0808 56% 60%, transparent 60%),
-    repeating-conic-gradient(#5a1a1a 0deg 35deg, #fff 35deg 45deg);
+    repeating-conic-gradient(#5a1a1a 0deg 28deg, #fff 28deg 45deg);
   color:#ff9090;
 }
 /* Non-clickable stolen-number display chip */
@@ -1477,7 +1477,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   letter-spacing:.04em;text-transform:uppercase;
   background:
     radial-gradient(circle at 50% 50%, #2a2820 0% 56%, #1a1810 56% 60%, transparent 60%),
-    repeating-conic-gradient(#2a2820 0deg 35deg, rgba(255,255,255,.35) 35deg 45deg);
+    repeating-conic-gradient(#2a2820 0deg 28deg, rgba(255,255,255,.35) 28deg 45deg);
   color:#fff;cursor:pointer;
   box-shadow:0 4px 10px rgba(0,0,0,.5);
   transition:transform .12s,box-shadow .12s;
