@@ -364,7 +364,7 @@ function createGame(players, seed, target = 21) {
     target,
     seed,
     phase: "bidding",
-    dealerSeat: 0,
+    dealerSeat: seed % players,
     scores: [0, 0],
     winner: null,
     hands: [],

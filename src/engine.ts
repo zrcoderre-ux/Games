@@ -249,7 +249,7 @@ export function createGame(players: PlayerCount, seed: number, target = 21): Gam
     target,
     seed,
     phase: "bidding",
-    dealerSeat: 0,
+    dealerSeat: seed % players,
     scores: [0, 0],
     winner: null,
     hands: [],
