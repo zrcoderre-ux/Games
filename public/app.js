@@ -561,7 +561,7 @@ function tableShell(v, parts) {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
-      const { x, y } = perimPos(off / n, { x1: 8, x2: 92, y1: 8, y2: 90 });
+      const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 9, y2: 88 });
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     };
     const slots = podItems.length
@@ -928,7 +928,8 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true }
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const { x, y } = perimPos(off / n, { x1: 18, x2: 82, y1: 10, y2: 88 });
+    const bounds = mini ? { x1: 18, x2: 82, y1: 10, y2: 88 } : { x1: 20, x2: 80, y1: 16, y2: 74 };
+    const { x, y } = perimPos(off / n, bounds);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const halfH = mini ? 31 : 44;
