@@ -644,11 +644,36 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .lby-act:hover{background:rgba(205,160,90,.12);color:var(--brass-hi);border-color:rgba(205,160,90,.35)}
 
 /* config section */
+/* Gear icon — absolute top-right of the lobby card */
+.lby-gear-btn{
+  position:absolute;top:14px;right:14px;
+  background:none;border:none;padding:6px;cursor:pointer;
+  font-size:18px;color:rgba(201,144,30,.65);line-height:1;
+  border-radius:8px;transition:color .15s,background .15s;
+}
+.lby-gear-btn:hover{color:var(--brass-hi);background:rgba(201,144,30,.12)}
+
+/* Scrollable seats section */
+.lby-seats-scroll{
+  max-height:36dvh;
+  overflow-y:auto;overflow-x:hidden;
+  margin-bottom:14px;
+  /* subtle inner shadow to hint scrollability */
+  mask-image:linear-gradient(to bottom,transparent 0,black 8px,black calc(100% - 8px),transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,black 8px,black calc(100% - 8px),transparent 100%);
+}
+.lby-seats-scroll::-webkit-scrollbar{width:3px}
+.lby-seats-scroll::-webkit-scrollbar-thumb{background:rgba(201,144,30,.3);border-radius:2px}
+
+/* CTA row — deal button always pinned at bottom, full width */
+.lby-cta-row{width:100%;margin-top:6px}
+.lby-cta-row .felt-cta,.lby-cta-row .lby-waiting{width:100%}
+.lby-cta-row .lby-waiting{text-align:center}
+
 .lby-cfg{
   background:rgba(0,0,0,.2);border:1px solid rgba(180,180,140,.12);
   border-radius:14px;padding:14px 16px;margin-bottom:10px;
 }
-.lby-settings-btn{margin-bottom:14px}
 .lby-set-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .lby-set-row:last-child{margin-bottom:0}
 .lby-set-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-dim);min-width:60px;flex:none}
