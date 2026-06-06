@@ -24,7 +24,7 @@ export interface Env {
 export class HighLowJackServer extends RoomServer<GameState, Move, HLJConfig, PlayerView, Env> {
   readonly game = hljModule;
   protected defaultConfig(): HLJConfig {
-    return { players: 4, target: 21 };
+    return { players: 6, target: 21 };
   }
 }
 
