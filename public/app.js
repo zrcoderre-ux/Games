@@ -1106,6 +1106,7 @@ function renderHLJ(v) {
   const youHaveBid = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "bid");
   // Signal control hidden for now — architecture kept for later
   const signalControl = "";
+  const trumpControl = "";
 
   const playHint = v.yourTurn && plays.size ? `<span class="hint">Tap a glowing card to play.</span>` : "";
 
