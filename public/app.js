@@ -932,9 +932,14 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true }
     const { x, y } = perimPos(off / n, bounds);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
+  const cardRotation = (seat) => {
+    if (you == null) return 0;
+    const off = (seat - you + n) % n;
+    return Math.round(off / n * 360);
+  };
   const halfH = mini ? 31 : 44;
   const inner = plays.map((p, idx) =>
-    `<div class="play${idx === 0 ? " lead" : ""}" style="${circleStyle(p.seat)};--card-half-h:${halfH}px">${cardHTML(p.card, { mini, win: p.seat === winSeat })}<span class="who">${esc(p.name ?? "")}</span></div>`
+    `<div class="play${idx === 0 ? " lead" : ""}" style="${circleStyle(p.seat)};--card-half-h:${halfH}px"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat)}deg)">${cardHTML(p.card, { mini, win: p.seat === winSeat })}</div><span class="who">${esc(p.name ?? "")}</span></div>`
   ).join("");
   return `<div class="trick positioned${faded ? " faded" : ""}">${inner}</div>`;
 }
