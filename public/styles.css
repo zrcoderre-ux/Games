@@ -835,7 +835,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .pod .pts{font-size:10px;color:var(--ink-soft);font-weight:600;flex-shrink:0}
 .pod .dealer{
-  position:absolute;top:0;right:2px;width:18px;height:18px;border-radius:50%;
+  position:absolute;top:-10px;right:-10px;width:18px;height:18px;border-radius:50%;
   background:radial-gradient(circle at 35% 30%,#fff,#d8d0bd 60%,#a89870);
   color:#5a4a28;font-size:10px;font-weight:800;display:grid;place-items:center;
   box-shadow:0 1px 3px rgba(0,0,0,.5);border:1px solid rgba(0,0,0,.15);
@@ -881,7 +881,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick.positioned .play{
   position:absolute;pointer-events:all;
   display:flex;flex-direction:column;align-items:center;gap:5px;
-  transform:translate(-50%,-50%); /* inline top/left is the centre point */
+  /* anchor = card centre: shift left by half card width, up by half card height */
+  transform:translate(-50%,-50%);
+}
+/* who label doesn't affect the card's centring — pull it out of flow */
+.trick.positioned .play .who{
+  position:absolute;top:100%;margin-top:4px;white-space:nowrap;
 }
 
 /* piles (Rummy) */
@@ -1187,6 +1192,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .lt-label{font-family:"Fraunces",serif;font-style:italic;font-size:12.5px;color:var(--ink-soft)}
 .trick.faded{opacity:.6}
 .trick.faded .play{animation:none}
+.lasttrick .play .card{opacity:.75}
 
 /* move-log slide-up sheet */
 .logsheet{position:fixed;left:0;right:0;bottom:0;z-index:120;max-height:62vh;display:flex;flex-direction:column;
@@ -1339,6 +1345,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .felt-corner-suit.bl{bottom:10px;left:12px}
 
 /* self-extra strip between selfbar and actions */
+.above-self{
+  position:relative;height:0;overflow:visible;
+  display:flex;justify-content:center;align-items:flex-end;
+  z-index:4;
+}
+.above-self>*{
+  position:absolute;bottom:8px;
+}
 .self-extra{
   width:100%;padding:0 8px;box-sizing:border-box;
   display:flex;flex-direction:column;gap:6px;
@@ -1365,20 +1379,23 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   display:grid;place-items:center;
   animation:dropin .35s cubic-bezier(.2,.8,.2,1) both;
 }
+/* Shared notched-chip look for table tokens */
 .hlj-bid-token.chip{
-  width:34px;height:34px;border-radius:50%;
-  background:radial-gradient(circle at 38% 35%,rgba(255,255,255,.18),transparent 55%),
-             linear-gradient(145deg,#1a3a6a,#0e2048);
-  border:2px solid rgba(130,170,255,.5);color:#a8c8ff;
-  box-shadow:0 3px 8px rgba(0,0,0,.5);
+  width:40px;height:40px;border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%, #1a3a6a 0% 56%, #0a1a40 56% 60%, transparent 60%),
+    repeating-conic-gradient(#1a3a6a 0deg 35deg, #fff 35deg 45deg);
+  color:#d0e4ff;
+  box-shadow:0 3px 8px rgba(0,0,0,.55);
 }
 .hlj-bid-token.chip.steal{
-  background:radial-gradient(circle at 38% 35%,rgba(255,255,255,.15),transparent 55%),
-             linear-gradient(145deg,#5a1a1a,#3a0e0e);
+  background:
+    radial-gradient(circle at 50% 50%, #5a1a1a 0% 56%, #3a0808 56% 60%, transparent 60%),
+    repeating-conic-gradient(#5a1a1a 0deg 35deg, #fff 35deg 45deg);
   color:#ff9090;
 }
 .hlj-bid-token.dealer{
-  width:34px;height:34px;border-radius:50%;
+  width:40px;height:40px;border-radius:50%;
   font-family:"Hanken Grotesk",sans-serif;font-size:7px;font-weight:900;
   letter-spacing:.1em;text-transform:uppercase;color:#2a1f0e;
   background:radial-gradient(circle at 38% 32%,#fff 0%,#f0ead8 55%,#d8ceb4 100%);
@@ -1386,13 +1403,13 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   box-shadow:0 3px 10px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.95);
 }
 .hlj-bid-token.pass{
-  width:34px;height:34px;border-radius:50%;
+  width:40px;height:40px;border-radius:50%;
   font-family:"Hanken Grotesk",sans-serif;font-size:9px;font-weight:800;
   letter-spacing:.06em;text-transform:uppercase;color:#c8c0b0;
-  background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.12),transparent 52%),
-             linear-gradient(145deg,#3a3830,#1e1c18);
-  border:2px solid rgba(180,170,140,.35);
-  box-shadow:0 3px 8px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);
+  background:
+    radial-gradient(circle at 50% 50%, #2a2820 0% 56%, #1a1810 56% 60%, transparent 60%),
+    repeating-conic-gradient(#2a2820 0deg 35deg, rgba(255,255,255,.35) 35deg 45deg);
+  box-shadow:0 3px 8px rgba(0,0,0,.55);
 }
 
 /* Felt-anchored chip panel — your bid turn, sits above the selfwrap */
@@ -1407,14 +1424,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .hlj-chips{display:flex;gap:10px;justify-content:center;align-items:center}
 .hlj-chip{
-  width:48px;height:48px;border-radius:50%;
-  font-family:"Fraunces",serif;font-size:18px;font-weight:700;
-  border:3px solid rgba(130,170,255,.5);
-  background:radial-gradient(circle at 38% 35%, rgba(255,255,255,.18), transparent 55%),
-             linear-gradient(145deg,#1a3a6a,#0e2048);
-  color:#a8c8ff;cursor:pointer;
-  box-shadow:0 4px 10px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.15);
-  transition:transform .12s,box-shadow .12s,background .12s;
+  width:40px;height:40px;border-radius:50%;
+  font-family:"Fraunces",serif;font-size:16px;font-weight:700;
+  background:
+    radial-gradient(circle at 50% 50%, #1a3a6a 0% 56%, #0a1a40 56% 60%, transparent 60%),
+    repeating-conic-gradient(#1a3a6a 0deg 35deg, #fff 35deg 45deg);
+  color:#d0e4ff;cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.5);
+  transition:transform .12s,box-shadow .12s;
   display:grid;place-items:center;
 }
 .hlj-chip:hover:not(:disabled){
@@ -1422,11 +1439,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   box-shadow:0 7px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.2);
 }
 .hlj-chip:active:not(:disabled){transform:translateY(0) scale(.97)}
-/* Steal chips keep the gold ring, use red fill */
+/* Steal chips use red fill */
 .hlj-chip.steal{
-  border-color:rgba(205,160,90,.6);
-  background:radial-gradient(circle at 38% 35%, rgba(255,255,255,.15), transparent 55%),
-             linear-gradient(145deg,#5a1a1a,#3a0e0e);
+  background:
+    radial-gradient(circle at 50% 50%, #5a1a1a 0% 56%, #3a0808 56% 60%, transparent 60%),
+    repeating-conic-gradient(#5a1a1a 0deg 35deg, #fff 35deg 45deg);
   color:#ff9090;
 }
 /* Non-clickable stolen-number display chip */
@@ -1436,14 +1453,14 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 .hlj-chip.blocked{opacity:.3;cursor:not-allowed}
 .hlj-chip:disabled{pointer-events:none}
 .hlj-pass-btn{
-  width:48px;height:48px;border-radius:50%;
-  font-family:"Hanken Grotesk",sans-serif;font-size:11px;font-weight:700;
+  width:40px;height:40px;border-radius:50%;
+  font-family:"Hanken Grotesk",sans-serif;font-size:10px;font-weight:700;
   letter-spacing:.04em;text-transform:uppercase;
-  border:3px solid rgba(180,180,180,.35);
-  background:radial-gradient(circle at 38% 35%, rgba(255,255,255,.14), transparent 55%),
-             linear-gradient(145deg,#3a3a3a,#1e1e1e);
+  background:
+    radial-gradient(circle at 50% 50%, #2a2820 0% 56%, #1a1810 56% 60%, transparent 60%),
+    repeating-conic-gradient(#2a2820 0deg 35deg, rgba(255,255,255,.35) 35deg 45deg);
   color:rgba(200,200,200,.8);cursor:pointer;
-  box-shadow:0 4px 10px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.1);
+  box-shadow:0 4px 10px rgba(0,0,0,.5);
   transition:transform .12s,box-shadow .12s;
   display:grid;place-items:center;
 }
