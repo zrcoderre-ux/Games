@@ -243,7 +243,7 @@ function podHTML(v, i, o = {}) {
     <div class="pod-info">
       <span class="name">${esc(name)}${disconnectedBadge}</span>
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
-      <span class="count">${o.count}</span>
+      ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
     </div>
     ${o.note ? `<div class="note">${esc(o.note)}</div>` : ""}
     ${replaceBtn}
