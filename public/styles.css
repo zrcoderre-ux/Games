@@ -1198,13 +1198,19 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick .who.tA{color:var(--teamA)}
 .trick .who.tB{color:var(--teamB)}
 
-/* last trick (shown when current trick is empty) */
-.lasttrick{display:flex;flex-direction:column;align-items:center;gap:7px}
-.lt-row{display:flex;gap:6px;justify-content:center;align-items:flex-end}
+/* last trick fan (shown when current trick is empty) */
+.lasttrick{display:flex;flex-direction:column;align-items:center;gap:10px}
 .lt-label{font-family:"Fraunces",serif;font-style:italic;font-size:12.5px;color:var(--ink-soft)}
+.lt-fan{position:relative;height:110px;width:220px;display:flex;align-items:flex-end;justify-content:center}
+.lt-fan-card{
+  position:absolute;bottom:0;
+  transform-origin:bottom center;
+  transform:rotate(var(--fan-angle));
+  opacity:.82;
+}
+.lt-fan-card:has(.card.win){opacity:1;transform:rotate(var(--fan-angle)) translateY(-10px)}
 .trick.faded{opacity:.6}
 .trick.faded .play{animation:none}
-.lasttrick .play .card{opacity:.75}
 
 /* move-log slide-up sheet */
 .logsheet{position:fixed;left:0;right:0;bottom:0;z-index:120;max-height:62vh;display:flex;flex-direction:column;

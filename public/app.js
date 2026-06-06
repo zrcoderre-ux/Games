@@ -1032,13 +1032,23 @@ function renderHLJ(v) {
     hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.winSeat });
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
-    const ltCards = v.lastTrick.cards;
-    const ltCardHTML = (c, idx) => `<div class="play">${cardHTML(c, { win: idx === winIdx })}</div>`;
-    const half = Math.ceil(ltCards.length / 2);
-    const ltRows = ltCards.length > 4
-      ? `<div class="lt-row">${ltCards.slice(0, half).map(ltCardHTML).join("")}</div><div class="lt-row">${ltCards.slice(half).map((c, i) => ltCardHTML(c, half + i)).join("")}</div>`
-      : `<div class="lt-row">${ltCards.map(ltCardHTML).join("")}</div>`;
-    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div>${ltRows}</div>`;
+    const ltCards = [...v.lastTrick.cards].sort((a, b) => {
+      if (a.joker && b.joker) return 0;
+      if (a.joker) return -1;
+      if (b.joker) return 1;
+      const suitOrder = { S: 0, H: 1, D: 2, C: 3 };
+      return (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank);
+    });
+    const origCards = v.lastTrick.cards;
+    const total = ltCards.length;
+    const spread = Math.min(14, (total - 1) * 3); // degrees total spread
+    const fanCards = ltCards.map((c, i) => {
+      const origIdx = origCards.indexOf(c);
+      const angle = total > 1 ? -spread / 2 + (spread / (total - 1)) * i : 0;
+      const isWin = origIdx === winIdx;
+      return `<div class="lt-fan-card" style="--fan-angle:${angle}deg;--fan-i:${i};z-index:${isWin ? total + 1 : i}">${cardHTML(c, { win: isWin })}</div>`;
+    }).join("");
+    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="lt-fan">${fanCards}</div></div>`;
   } else if (v.phase === "bidding") {
     centerExtra = "";
   } else {
