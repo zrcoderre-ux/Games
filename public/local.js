@@ -1041,6 +1041,17 @@ function hljEntries(prev, next, move) {
   }
   return out;
 }
+var PERSONALITY_TABLE = [
+  PERSONALITIES.aggressive,
+  PERSONALITIES.balanced,
+  PERSONALITIES.aggressive,
+  PERSONALITIES.balanced,
+  PERSONALITIES.conservative
+];
+function botPersonality(state, seat) {
+  const h = (state.seed >>> 0 ^ Math.imul(seat + 1, 2654435769)) >>> 0;
+  return PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
+}
 var hljModule = {
   meta: { id: "high-low-jack", name: "High Low Jack", supportedPlayerCounts: [4, 6, 8] },
   seatCount: (config) => config.players,
@@ -1064,7 +1075,7 @@ var hljModule = {
     const blanked = { ...g, hands: g.hands.map(() => []), kitty: [], phase: "bidding" };
     return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats, phase: "lobby" });
   },
-  aiMove: (s, seat) => aiMove(s, seat),
+  aiMove: (s, seat) => aiMove(s, seat, void 0, botPersonality(s, seat)),
   // Hand signals: a non-turn side action that must preserve the log untouched.
   aux: {
     apply: (s, seat, payload) => {

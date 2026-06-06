@@ -22,7 +22,7 @@ import {
   type HandSignal,
 } from "./engine.ts";
 import { redact, type PlayerView } from "./protocol.ts";
-import { aiMove, handConfidence } from "./ai.ts";
+import { aiMove, handConfidence, PERSONALITIES, type Personality } from "./ai.ts";
 import type { Game, LogEntry } from "./game.ts";
 
 export type HLJConfig = { players: PlayerCount; target: number };
@@ -94,6 +94,22 @@ function hljEntries(prev: HljState, next: GameState, move: Move): Omit<LogEntry,
   return out;
 }
 
+// Assign each bot a personality derived from the game seed + seat so bots vary
+// naturally across games without needing UI controls.
+// Weights: 40% aggressive, 40% balanced, 20% conservative — competitive but not
+// uniformly hard (simulation shows aggressive wins ~68%, balanced ~53%, conservative ~28%).
+const PERSONALITY_TABLE: Personality[] = [
+  PERSONALITIES.aggressive,
+  PERSONALITIES.balanced,
+  PERSONALITIES.aggressive,
+  PERSONALITIES.balanced,
+  PERSONALITIES.conservative,
+];
+function botPersonality(state: GameState, seat: number): Personality {
+  const h = ((state.seed >>> 0) ^ Math.imul(seat + 1, 0x9e3779b9)) >>> 0;
+  return PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
+}
+
 export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   meta: { id: "high-low-jack", name: "High Low Jack", supportedPlayerCounts: [4, 6, 8] },
 
@@ -127,7 +143,7 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
     return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats, phase: "lobby" });
   },
 
-  aiMove: (s, seat) => aiMove(s, seat),
+  aiMove: (s, seat) => aiMove(s, seat, undefined, botPersonality(s, seat)),
 
   // Hand signals: a non-turn side action that must preserve the log untouched.
   aux: {
