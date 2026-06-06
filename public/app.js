@@ -340,8 +340,26 @@ function onFrame(e) {
     }
     maybePromptPass();
     render();
+    maybeAutoPlay(msg.view);
   }
   else if (msg.t === "error") { toast(msg.message); }
+}
+
+// Auto-play: when it's your turn in HLJ playing phase and only one card is legal,
+// play it automatically after a short delay so the game flows without tap-spam.
+let _autoPlayTimer = null;
+function maybeAutoPlay(v) {
+  if (_autoPlayTimer) { clearTimeout(_autoPlayTimer); _autoPlayTimer = null; }
+  if (!v || !v.yourTurn || S.party !== "high-low-jack") return;
+  if (v.phase !== "playing") return;
+  const playMoves = (v.legalMoves || []).filter((m) => m.type === "play");
+  if (playMoves.length !== 1) return;
+  const move = playMoves[0];
+  _autoPlayTimer = setTimeout(() => {
+    _autoPlayTimer = null;
+    // Guard: view must not have changed since we scheduled
+    if (S.view === v) send({ t: "move", move: { type: "play", seat: v.you, card: move.card } });
+  }, 1800);
 }
 
 // Pass-and-play privacy gate: when the active hand belongs to a different local
