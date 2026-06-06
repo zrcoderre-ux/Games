@@ -529,34 +529,31 @@ function tableShell(v, parts) {
     // legacy / special (e.g. pjstrip) — render in top rail
     feltPods = `<div class="rail top deal">${podItems.join("") || `<div class="callout">Waiting for players to arrive…</div>`}</div>`;
   } else {
-    // compass layout: distribute opponents around the table
+    // compass layout: place each opponent pod on a circle, equidistant by angle.
+    // rx/ry are radii as % of felt width/height (larger than the trick card circle).
     const n = v.seats.length;
     const you = v.you;
-    // Map seat offset (1..n-1) to a CSS position class
-    // Layout per player count (opponents = n-1), spread fully around the table:
-    //   2p: [top]
-    //   3p: [left, right]
-    //   4p: [left, top, right]
-    //   5p: [bl, left, right, br]
-    //   6p: [bl, left, top, right, br]
-    //   7p: [bl, left, tl, tr, right, br]
-    //   8p: [bl, left, tl, top, tr, right, br]
-    const LAYOUTS = {
-      1: ["pos-top"],
-      2: ["pos-left", "pos-right"],
-      3: ["pos-left", "pos-top", "pos-right"],
-      4: ["pos-bl", "pos-left", "pos-right", "pos-br"],
-      5: ["pos-bl", "pos-left", "pos-top", "pos-right", "pos-br"],
-      6: ["pos-bl", "pos-left", "pos-top pos-tl", "pos-top pos-tr", "pos-right", "pos-br"],
-      7: ["pos-bl", "pos-left", "pos-top pos-tl", "pos-top", "pos-top pos-tr", "pos-right", "pos-br"],
+    const rx = 38, ry = 34;
+    const podStyle = (seat) => {
+      if (you == null) {
+        // spectator: spread evenly starting from top
+        const idx = podItems.findIndex(p => p.seat === seat);
+        const a = Math.PI - (idx + 1) * (2 * Math.PI / n);
+        const x = (50 + rx * Math.sin(a)).toFixed(1);
+        const y = (50 - ry * Math.cos(a)).toFixed(1);
+        return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
+      }
+      const off = (seat - you + n) % n; // 1..n-1
+      const a = Math.PI - off * (2 * Math.PI / n);
+      const x = (50 + rx * Math.sin(a)).toFixed(1);
+      const y = (50 - ry * Math.cos(a)).toFixed(1);
+      return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     };
-    const layout = LAYOUTS[n - 1] || LAYOUTS[7];
     const slots = podItems.length
-      ? podItems.map(({ seat, html }, idx) => {
-          const cls = layout[idx] || "pos-top";
-          return `<div class="pod-slot ${cls}">${html}</div>`;
-        }).join("")
-      : `<div class="pod-slot pos-top"><div class="callout">Waiting for players to arrive…</div></div>`;
+      ? podItems.map(({ seat, html }) =>
+          `<div class="pod-slot" style="position:absolute;${podStyle(seat)};z-index:2">${html}</div>`
+        ).join("")
+      : `<div class="pod-slot" style="position:absolute;top:14%;left:50%;transform:translate(-50%,-50%);z-index:2"><div class="callout">Waiting for players to arrive…</div></div>`;
     feltPods = slots;
   }
 
