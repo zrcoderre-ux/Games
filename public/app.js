@@ -1041,7 +1041,7 @@ function renderHLJ(v) {
     });
     const origCards = v.lastTrick.cards;
     const total = ltCards.length;
-    const spread = Math.min(14, (total - 1) * 3); // degrees total spread
+    const spread = Math.min(70, (total - 1) * 12); // degrees total spread
     const fanCards = ltCards.map((c, i) => {
       const origIdx = origCards.indexOf(c);
       const angle = total > 1 ? -spread / 2 + (spread / (total - 1)) * i : 0;
