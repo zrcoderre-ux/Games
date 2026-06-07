@@ -208,7 +208,7 @@ export type GameState = {
   leaderSeat: number; // who leads the current trick
   trickIndex: number; // 0..5
   currentTrick: TrickPlay[];
-  tricksWon: { seat: number; cards: Card[] }[]; // resolved tricks this hand
+  tricksWon: { seat: number; plays: TrickPlay[] }[]; // resolved tricks this hand
 
   lastHand: HandResult | null;
   dealtHands: Card[][] | null; // starting hands this round, revealed at end of hand
@@ -501,7 +501,7 @@ function applyPlay(state: GameState, move: Move): GameState {
   // Trick complete — resolve it.
   const trump = state.trump!;
   const winnerSeat = trickWinner(currentTrick, trump);
-  const tricksWon = [...state.tricksWon, { seat: winnerSeat, cards: currentTrick.map((p) => p.card) }];
+  const tricksWon = [...state.tricksWon, { seat: winnerSeat, plays: [...currentTrick] }];
   const trickIndex = state.trickIndex + 1;
 
   // Hand still in progress.
@@ -549,7 +549,7 @@ export function scoreHand(state: GameState): GameState {
   // Find the team that captured a given card.
   const capturingTeam = (target: Card): number | null => {
     for (const t of state.tricksWon) {
-      if (t.cards.some((c) => sameCard(c, target))) return teamOf(t.seat);
+      if (t.plays.some((p) => sameCard(p.card, target))) return teamOf(t.seat);
     }
     return null;
   };
@@ -563,7 +563,7 @@ export function scoreHand(state: GameState): GameState {
   const gameCount: [number, number] = [0, 0];
   for (const t of state.tricksWon) {
     const team = teamOf(t.seat);
-    for (const c of t.cards) gameCount[team] += gameValue(c);
+    for (const p of t.plays) gameCount[team] += gameValue(p.card);
   }
   const gameTeam = gameCount[0] === gameCount[1] ? null : gameCount[0] > gameCount[1] ? 0 : 1;
 
