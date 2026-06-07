@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body { background: #1a4a2e; display: flex; gap: 40px; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; flex-direction: column; }
+  h2 { color: rgba(255,255,255,.4); font-size: 13px; text-align: center; margin: 0 0 8px; letter-spacing: .1em; text-transform: uppercase; }
+  .row { display: flex; gap: 60px; align-items: flex-end; }
+  .item { display: flex; flex-direction: column; align-items: center; }
+
+  /* Method 1: mask (old silhouette) */
+  .old-mask {
+    width: 260px; height: 260px;
+    background-color: rgba(45,122,74,.7);
+    -webkit-mask: url(/joker-silhouette.png) center / contain no-repeat;
+            mask: url(/joker-silhouette.png) center / contain no-repeat;
+  }
+
+  /* Method 2: mask (new hat) */
+  .new-mask {
+    width: 260px; height: 260px;
+    background-color: rgba(45,122,74,.7);
+    -webkit-mask: url(/joker-hat.png) center / contain no-repeat;
+            mask: url(/joker-hat.png) center / contain no-repeat;
+  }
+
+  /* Method 3: opacity (new hat, no mask) */
+  .new-opacity {
+    width: 260px; height: 260px;
+    background: url(/joker-hat.png) center / contain no-repeat;
+    filter: grayscale(1);
+    opacity: .22;
+  }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item">
+      <h2>Old silhouette<br>mask</h2>
+      <div class="old-mask"></div>
+    </div>
+    <div class="item">
+      <h2>New hat<br>mask</h2>
+      <div class="new-mask"></div>
+    </div>
+    <div class="item">
+      <h2>New hat<br>grayscale + opacity</h2>
+      <div class="new-opacity"></div>
+    </div>
+  </div>
+</body>
+</html>
