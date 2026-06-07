@@ -902,15 +902,11 @@ function renderLobby(v) {
       return `<div class="lby-felt-seat-slot you">${renderSeat(s, i)}</div>`;
     }
     // Distribute other seats around top half of felt.
-    // off = how far ahead of "you" going clockwise, but we want them spread top.
     const off = you == null
       ? i + 1
       : (i - you + n) % n; // 1..n-1
-    // Map offset to angle: off=1 is top-left, off=n-1 is top-right, off=middle is top-center
-    // We place in the top arc: from ~15% to 85% horizontally, 15% to 50% vertically
     const others = n - 1; // number of non-you seats
     const idx = off - 1; // 0-indexed among others
-    // Divide top arc into `others` positions
     const xPct = others === 1 ? 50 : 15 + (idx / (others - 1)) * 70;
     const yPct = others <= 2 ? 15 : 15 + Math.sin((idx / (others - 1)) * Math.PI) * 25;
     return `<div class="lby-felt-seat-slot" style="left:${xPct.toFixed(1)}%;top:${yPct.toFixed(1)}%">${renderSeat(s, i)}</div>`;
