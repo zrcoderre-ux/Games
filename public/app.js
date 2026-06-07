@@ -331,7 +331,7 @@ function onFrame(e) {
     // HLJ: when the trick just resolved (currentTrick went from full → empty),
     // hold the completed trick display for one "extra player" turn worth of time.
     if (S.party === "high-low-jack" && prev?.currentTrick?.length === prev?.seats?.length
-        && msg.view?.currentTrick?.length === 0 && msg.view?.phase === "playing") {
+        && msg.view?.currentTrick?.length === 0 && prev?.phase === "playing") {
       if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
       const n = prev.seats.length;
       const winSeat = (() => {
