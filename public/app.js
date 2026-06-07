@@ -768,76 +768,54 @@ function renderLobby(v) {
   const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
   const isRummyLobby = S.party === "rummy500";
   const DIFF_LABELS = ["Easy", "Medium", "Hard", "Expert"];
+  const n = v.seats.length;
+  const you = v.you;
 
-  const renderSeat = (s, i) => {
-    const you = i === v.you;
+  // Build a pod for each non-self seat (same positions as gameplay pods).
+  const lbyPod = (s, i) => {
     const isEmpty = s.kind === "empty";
-    const reserved = !you && isHost && S.hotseats[i];
+    const isBot = s.kind === "bot";
+    const reserved = isHost && S.hotseats[i];
     const tc = isTeamGame ? (i % 2 === 0 ? "tA" : "tB") : "";
+    const name = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open" : esc(s.name || "Player");
+    const initial = isEmpty ? "+" : isBot && !reserved ? "B" : name.charAt(0).toUpperCase();
+    const avCls = isEmpty ? "empty" : reserved ? "local" : isBot ? "bot" : "human";
+    const role = isEmpty ? "tap to add" : reserved ? "pass &amp; play" : isBot ? "bot" : i === v.hostSeat ? "host" : "player";
+    const seatClick = isEmpty && isHost ? ` data-action="reserve-hotseat" data-seat="${i}" style="cursor:pointer"` : "";
 
-    // Action: only a ✕ to remove a reserved or bot seat
-    let action = "";
+    let removeBtn = "";
     if (reserved) {
-      action = `<button class="lby-act danger" data-action="clear-hotseat" data-seat="${i}">✕</button>`;
-    } else if (s.kind === "bot" && isHost) {
+      removeBtn = `<button class="lby-pod-remove" data-action="clear-hotseat" data-seat="${i}">✕</button>`;
+    } else if (isBot && isHost) {
       const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
       const diffPicker = isRummyLobby
         ? `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`
         : "";
-      action = diffPicker + `<button class="lby-act danger" data-action="removebot" data-seat="${i}">✕</button>`;
-    } else if (S.offline && s.kind === "human" && !you) {
-      action = `<button class="lby-act danger" data-action="clearseat" data-seat="${i}">✕</button>`;
+      removeBtn = diffPicker + `<button class="lby-pod-remove" data-action="removebot" data-seat="${i}">✕</button>`;
+    } else if (S.offline && s.kind === "human") {
+      removeBtn = `<button class="lby-pod-remove" data-action="clearseat" data-seat="${i}">✕</button>`;
     }
 
-    // Tapping an empty seat (as host, not your own) reserves it for pass & play
-    const seatClick = isEmpty && isHost && !you ? ` data-action="reserve-hotseat" data-seat="${i}" style="cursor:pointer"` : "";
-
-    const displayName = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open" : esc(s.name || "Player");
-    const initials = reserved ? S.hotseats[i].charAt(0).toUpperCase()
-      : !isEmpty ? (s.name || "?").charAt(0).toUpperCase()
-      : "";
-    const avClass = isEmpty ? "empty" : reserved ? "local" : you ? "you" : s.kind === "bot" ? "bot" : "human";
-    const avIcon = isEmpty ? "+" : s.kind === "bot" && !reserved ? "B" : initials;
-
-    let roleLabel = isEmpty ? "tap to add" : reserved ? "pass &amp; play" : s.kind === "bot" ? "bot" : you ? "you" : i === v.hostSeat ? "host" : "player";
-
-    return `<div class="lby-seat ${isEmpty ? "empty" : ""} ${you ? "me" : ""} ${tc}"${seatClick}>
-      <div class="lby-av ${avClass}">${avIcon}</div>
-      <div class="lby-seat-info">
-        <div class="lby-seat-name">${displayName}</div>
-        <div class="lby-seat-role">${roleLabel}</div>
-      </div>
-      ${action ? `<div class="lby-seat-action">${action}</div>` : ""}
+    return `<div class="pod lby-pod ${tc} ${isEmpty ? "lby-pod-empty" : ""}"${seatClick}>
+      <div class="lby-pod-av ${avCls}">${initial}</div>
+      <div class="lby-pod-name">${name}</div>
+      <div class="lby-pod-role">${role}</div>
+      ${removeBtn}
     </div>`;
   };
 
-  // Layout: two-column team grid for team games, single list otherwise
-  let seatsHTML;
-  if (isTeamGame) {
-    const idxA = v.seats.map((_, i) => i).filter(i => i % 2 === 0);
-    const idxB = v.seats.map((_, i) => i).filter(i => i % 2 === 1);
-    seatsHTML = `<div class="lby-teams">
-      <div class="lby-team tA">
-        <div class="lby-team-hdr">Team A</div>
-        ${idxA.map(i => renderSeat(v.seats[i], i)).join("")}
-      </div>
-      <div class="lby-team tB">
-        <div class="lby-team-hdr">Team B</div>
-        ${idxB.map(i => renderSeat(v.seats[i], i)).join("")}
-      </div>
-    </div>`;
-  } else {
-    seatsHTML = `<div class="lby-seat-list">${v.seats.map((s, i) => renderSeat(s, i)).join("")}</div>`;
-  }
+  // Pods: every seat that isn't "you" (or all seats if spectating)
+  const pods = v.seats
+    .map((s, i) => ({ seat: i, html: lbyPod(s, i) }))
+    .filter(({ seat }) => seat !== you);
 
-  // Poker-chip player count picker — shared by all games
+  // Poker-chip player count picker
   const chipRow = (action, opts, selected, note = "") =>
     `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-       <div class="lby-chip-row">${opts.map((c, i) =>
-         `<button class="lby-count-chip${c === selected ? " on" : ""}${i % 2 === 1 ? " red" : ""}" data-action="${action}" data-count="${c}">${c}</button>`
+       <div class="lby-chip-row">${opts.map((c, idx) =>
+         `<button class="lby-count-chip${c === selected ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="${action}" data-count="${c}">${c}</button>`
        ).join("")}</div></div>${note ? `<p class="sub" style="margin:2px 0 10px 72px">${note}</p>` : ""}`;
 
-  // Config controls (host only)
   const cfgControls = isPJ
     ? chipRow("pj-setplayers", [4, 6], v.players, v.players === 6 ? "Two teams of three." : "Two pairs, partners opposite.") +
       `<div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
@@ -863,11 +841,39 @@ function renderLobby(v) {
     </div>`;
   }
 
-  const dealBtn = isHost
-    ? `<button class="felt-cta" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button>`
-    : `<p class="lby-waiting">Waiting for the host to deal…</p>`;
+  // Score strip (shown in center for ongoing series)
+  const seatedCount = v.seats.filter(s => s.kind !== "empty").length;
+  const centerScore = isTeamGame && v.scores
+    ? `<div class="lby-center-score">
+        <span class="tA">A <b>${v.scores[0]}</b></span>
+        <span class="lby-center-score-sep">vs</span>
+        <span class="tB">B <b>${v.scores[1]}</b></span>
+        <span class="lby-center-score-to">· to ${v.target ?? 21}</span>
+      </div>`
+    : `<div class="lby-center-status">${seatedCount} of ${n} seated</div>`;
 
-  // Settings modal (host only)
+  const center = `<div class="lby-center">
+    <div class="lby-center-title">${esc(GAMES[S.party].label)}</div>
+    ${centerScore}
+  </div>`;
+
+  // Self area: config + share in selfExtra, deal/wait as actions
+  const cfgSection = isHost ? `<div class="lby-cfg">${cfgControls}</div>` : "";
+  const selfExtra = (cfgSection || shareRow)
+    ? `<div class="lby-self-panel">${cfgSection}${shareRow}</div>`
+    : "";
+
+  const dealAction = isHost
+    ? `<button class="felt-cta" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button>`
+    : `<span class="hint">Waiting for the host to deal…</span>`;
+
+  // My team badge for selfMeta
+  const myTc = you != null && isTeamGame ? (you % 2 === 0 ? "A" : "B") : null;
+  const selfMeta = myTc
+    ? `<span class="teambadge t${myTc}">Team ${myTc}</span>`
+    : you != null && v.seats[you] ? `<span class="lby-pod-role">${v.seats[you].kind === "human" ? (you === v.hostSeat ? "host" : "player") : ""}</span>` : "";
+
+  // Settings modal
   const winsNeeded = v.winsNeeded ?? 1;
   const bestOf = winsNeeded <= 1 ? 1 : winsNeeded * 2 - 1;
   const settingsModal = isHost && S.lbySettingsOpen
@@ -878,7 +884,7 @@ function renderLobby(v) {
             ${isHLJ ? `<div class="lby-set-row">
               <span class="lby-set-label">Best of</span>
               <div class="seg">
-                ${[1, 3, 5].map(n => `<button class="${n === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${n}">${n === 1 ? "1 game" : `${n} games`}</button>`).join("")}
+                ${[1, 3, 5].map(nn => `<button class="${nn === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${nn}">${nn === 1 ? "1 game" : `${nn} games`}</button>`).join("")}
               </div>
             </div>` : ""}
             ${!S.offline ? `<div class="lby-set-row">
@@ -893,54 +899,33 @@ function renderLobby(v) {
     : "";
 
   const settingsBtn = isHost
-    ? `<button class="lby-gear-btn" data-action="open-lby-settings" title="Settings">⚙</button>`
+    ? `<button class="btn sm ghost lby-gear-btn" data-action="open-lby-settings" title="Settings">⚙ Settings</button>`
     : "";
 
-  const cfgSection = isHost
-    ? `<div class="lby-cfg">${cfgControls}</div>`
-    : "";
+  // Spectator view: show all seats as pods (no selfwrap)
+  if (you === null) {
+    app.__set = tableShell(v, {
+      pods: v.seats.map((s, i) => ({ seat: i, html: lbyPod(s, i) })),
+      center,
+      hand: null,
+      selfMeta: "",
+      selfTurn: null,
+      selfExtra: null,
+      actions: null,
+    }) + settingsModal;
+    return;
+  }
 
-  // Compass layout: place seats on the felt at perimeter positions.
-  // "You" always sits at the bottom center. Other seats distribute around the top.
-  const n = v.seats.length;
-  const you = v.you;
-
-  // Build seat slots positioned on the felt using the same perimPos as gameplay.
-  const seatSlotsHTML = v.seats.map((s, i) => {
-    const off = you == null ? i : (i - you + n) % n;
-    const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 8, y2: 88 });
-    const isYou = i === you || (you == null && i === 0);
-    return `<div class="lby-felt-seat-slot${isYou ? " you" : ""}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;transform:translate(-50%,-50%)">${renderSeat(s, i)}</div>`;
-  }).join("");
-
-  const seatedCount = v.seats.filter(s => s.kind !== "empty").length;
-  const centerSub = `${seatedCount} of ${n} seated`;
-
-  // Score strip for team games
-  const scoreStrip = isTeamGame && v.scores
-    ? `<div class="lby-score-strip">
-        <span>● Team A <b>${v.scores[0]}</b></span>
-        <span class="sep">|</span>
-        <span>● Team B <b>${v.scores[1]}</b></span>
-        <span class="sep">·</span>
-        <span>to ${v.target ?? 21}</span>
-      </div>`
-    : `<div class="lby-score-strip"><span>${seatedCount} seated</span></div>`;
-
-  app.__set = `<div class="felt-table lby-table">
-    <div class="cb cb1"></div><div class="cb cb2"></div>
-    <div class="cb cb3"></div><div class="cb cb4"></div>
-    ${settingsBtn}
-    <div class="lby-felt-seats">${seatSlotsHTML}</div>
-    <div class="lby-felt-center lby-felt-overlay">
-      <div class="lby-felt-center-title">${esc(GAMES[S.party].label)}</div>
-      <div class="lby-felt-center-sub">${centerSub}</div>
-      ${scoreStrip}
-      ${cfgSection}
-      ${shareRow}
-    </div>
-    <div class="lby-deal-row">${dealBtn}</div>
-  </div>${settingsModal}`;
+  app.__set = tableShell(v, {
+    pods,
+    center,
+    hand: "",  // empty hand area keeps selfwrap consistent with gameplay
+    selfMeta,
+    selfTurn: settingsBtn,  // reuse selfTurn slot for settings button (right side)
+    selfExtra,
+    actions: dealAction,
+  }) + settingsModal;
+}
 }
 
 // ---------- shared: game over ----------
