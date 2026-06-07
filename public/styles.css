@@ -175,9 +175,9 @@ body:has(.felt-table)::before{
 .felt-table::before{
   content:"";position:absolute;
   top:50%;left:50%;transform:translate(-50%,-52%);
-  width:min(520px,90vw);height:min(520px,90vw);
+  width:min(720px,110vw);height:min(720px,110vw);
   background:url('/joker-hat.png') center/contain no-repeat;
-  opacity:.13;pointer-events:none;z-index:0;
+  opacity:.22;pointer-events:none;z-index:0;
 }
 /* Inner vignette */
 .felt-table::after{
