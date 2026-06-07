@@ -1214,7 +1214,9 @@ function isSet(cards) {
   if (naturals.length === 0) return false;
   if (!naturals.every((c) => c.rank === naturals[0].rank)) return false;
   const suits = naturals.map((c) => c.suit);
-  return new Set(suits).size === suits.length;
+  if (new Set(suits).size !== suits.length) return false;
+  if (cards.length > 4) return false;
+  return true;
 }
 function orderRunCards(cards) {
   const naturals = cards.filter((c) => !c.joker);
@@ -1306,6 +1308,7 @@ function createGame2(config, seed) {
   const base = {
     players: config.players,
     target: config.target,
+    requireDiscard: config.requireDiscard ?? false,
     seed,
     phase: "playing",
     dealerSeat: 0,
@@ -1423,6 +1426,10 @@ function isLegal(state, move) {
           if (!canStillPlay) return false;
         }
       }
+      if (state.requireDiscard) {
+        const remainAfter = hand.filter((c) => !move.cards.includes(c.id));
+        if (remainAfter.length === 0) return false;
+      }
       return true;
     }
     case "layoff": {
@@ -1443,6 +1450,10 @@ function isLegal(state, move) {
           const canStillPlay = canFormMeldWith(remainHand, mustCard) || updatedMelds.some((mx) => mx.kind === "set" ? isSet([...mx.cards, mustCard]) : isRun([...mx.cards, mustCard]));
           if (!canStillPlay) return false;
         }
+      }
+      if (state.requireDiscard) {
+        const remainAfter = hand.filter((c) => !move.cards.includes(c.id));
+        if (remainAfter.length === 0) return false;
       }
       return true;
     }
@@ -1582,6 +1593,7 @@ function redact2(state, seat, meta) {
     melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: state.cardOwner[m.cards[0].id] ?? -1, cards: m.cards })),
     mustMeldCardId: yours ? state.mustMeldCardId : null,
     lastRound: state.lastRound,
+    requireDiscard: state.requireDiscard,
     botDifficulty: state.botDifficulty,
     log: state.log
   };
@@ -1611,6 +1623,7 @@ function lobbyView(config, seat, meta) {
     melds: [],
     mustMeldCardId: null,
     lastRound: null,
+    requireDiscard: config.requireDiscard ?? false,
     botDifficulty: Array.from({ length: players }, (_, i) => config.botDifficulty?.[i] ?? 2),
     log: []
   };
@@ -2117,7 +2130,7 @@ function aiMove2(state, seat) {
 }
 var rummy500Module = {
   meta: { id: "rummy-500", name: "Rummy 500", supportedPlayerCounts: [2, 3, 4, 5, 6, 7, 8] },
-  botStepMs: 400,
+  botStepMs: 900,
   seatCount: (config) => config.players,
   createGame: createGame2,
   seatToAct,
@@ -2497,7 +2510,7 @@ function aiMove3(state, seat) {
 }
 var heartsModule = {
   meta: { id: "hearts", name: "Hearts", supportedPlayerCounts: [3, 4, 5] },
-  botStepMs: 400,
+  botStepMs: (s) => Math.round(1600 * 4 / s.players),
   seatCount: (config) => config.players,
   createGame: createGame3,
   seatToAct: seatToAct2,

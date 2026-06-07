@@ -232,14 +232,20 @@ function avatarHTML(name, o = {}) {
 function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
   const backs = 4;
-  const mb = Array.from({ length: backs }, () => `<span class="mb"></span>`).join("");
+  const cardCount = o.cardCount != null ? o.cardCount : null;
+  const mbArr = Array.from({ length: backs }, (_, idx) =>
+    idx === backs - 1 && cardCount != null
+      ? `<span class="mb mb-last"><span class="mb-count">${cardCount}</span></span>`
+      : `<span class="mb"></span>`
+  );
+  const mb = mbArr.join("");
   const isDisconnected = v.disconnectedSeats && v.disconnectedSeats.includes(i);
   const isHost = v.you === v.hostSeat && v.you !== null;
   const replaceBtn = isDisconnected && isHost && !S.offline
     ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
     : "";
   const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
-  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""}">
+  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""} ${o.extraClass || ""}">
     <div class="ministack">
       ${mb}
       <span class="back-name">${esc(name)}${disconnectedBadge}</span>
@@ -608,6 +614,8 @@ function tableShell(v, parts) {
   }
   return `<div class="table">
     ${appbar(v, { log: true })}
+    <div class="felt-frame">
+    ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
     <div class="felt">
       ${feltPods}
       ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
@@ -616,6 +624,7 @@ function tableShell(v, parts) {
       ${parts.trick || ""}
       ${parts.feltBid || ""}
       ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
+    </div>
     </div>
     <div class="selfwrap-spacer"></div>
     ${parts.aboveSelf ? `<div class="above-self">${parts.aboveSelf}</div>` : ""}
@@ -810,20 +819,27 @@ function renderLobby(v) {
     seatsHTML = `<div class="lby-seat-list">${v.seats.map((s, i) => renderSeat(s, i)).join("")}</div>`;
   }
 
+  // Poker-chip player count picker — shared by all games
+  const chipRow = (action, opts, selected, note = "") =>
+    `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
+       <div class="lby-chip-row">${opts.map((c) =>
+         `<button class="lby-count-chip${c === selected ? " on" : ""}" data-action="${action}" data-count="${c}">${c}</button>`
+       ).join("")}</div></div>${note ? `<p class="sub" style="margin:2px 0 10px 72px">${note}</p>` : ""}`;
+
   // Config controls (host only)
   const cfgControls = isPJ
-    ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-         <div class="seg">${[4, 6].map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="pj-setplayers" data-count="${c}">${c}</button>`).join("")}</div></div>
-         <p class="sub" style="margin:2px 0 10px 72px">${v.players === 6 ? "Two teams of three." : "Two pairs, partners opposite."}</p>
-         <div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
+    ? chipRow("pj-setplayers", [4, 6], v.players, v.players === 6 ? "Two teams of three." : "Two pairs, partners opposite.") +
+      `<div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
          <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
     : isHLJ
-    ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>`
-    : `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>
-       <div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
-         <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>`;
+    ? chipRow("setcount", counts, v.players)
+    : chipRow("setcount", counts, v.players) +
+      `<div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
+         <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>` +
+      (S.party === "rummy500"
+        ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Must discard</span>
+             <button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard">${v.requireDiscard ? "On" : "Off"}</button></div>`
+        : "");
 
   const hasHotseats = Object.keys(S.hotseats).length > 0;
   let shareRow = "";
@@ -873,17 +889,63 @@ function renderLobby(v) {
     ? `<div class="lby-cfg">${cfgControls}</div>`
     : "";
 
-  app.__set = `${appbar(v)}
-    <div class="lby-wrap">
-      <div class="felt-content">
+  // Compass layout: place seats on the felt at perimeter positions.
+  // "You" always sits at the bottom center. Other seats distribute around the top.
+  const n = v.seats.length;
+  const you = v.you;
+
+  // Build seat slots positioned on the felt
+  const seatSlotsHTML = v.seats.map((s, i) => {
+    const isYou = i === you;
+    if (isYou) {
+      // Always bottom center
+      return `<div class="lby-felt-seat-slot you">${renderSeat(s, i)}</div>`;
+    }
+    // Distribute other seats around top half of felt.
+    const off = you == null
+      ? i + 1
+      : (i - you + n) % n; // 1..n-1
+    const others = n - 1; // number of non-you seats
+    const idx = off - 1; // 0-indexed among others
+    const xPct = others === 1 ? 50 : 15 + (idx / (others - 1)) * 70;
+    const yPct = others <= 2 ? 15 : 15 + Math.sin((idx / (others - 1)) * Math.PI) * 25;
+    return `<div class="lby-felt-seat-slot" style="left:${xPct.toFixed(1)}%;top:${yPct.toFixed(1)}%">${renderSeat(s, i)}</div>`;
+  }).join("");
+
+  const seatedCount = v.seats.filter(s => s.kind !== "empty").length;
+  const centerSub = `${seatedCount} of ${n} seated`;
+
+  // Score strip for team games
+  const scoreStrip = isTeamGame && v.scores
+    ? `<div class="lby-score-strip">
+        <span>● Team A <b>${v.scores[0]}</b></span>
+        <span class="sep">|</span>
+        <span>● Team B <b>${v.scores[1]}</b></span>
+        <span class="sep">·</span>
+        <span>to ${v.target ?? 21}</span>
+      </div>`
+    : `<div class="lby-score-strip"><span>${seatedCount} seated</span></div>`;
+
+  app.__set = `<div class="lby-outer">
+    <div class="lby-felt">
+      <div class="lby-felt-inner">
         ${settingsBtn}
-        <div class="lby-title">${esc(GAMES[S.party].label)}</div>
-        ${shareRow}
-        <div class="lby-seats-scroll">${seatsHTML}</div>
-        ${cfgSection}
-        <div class="lby-cta-row">${dealBtn}</div>
+        <div class="lby-felt-seats">
+          ${seatSlotsHTML}
+        </div>
+        <div class="lby-felt-center">
+          <div class="lby-felt-center-title">${esc(GAMES[S.party].label)}</div>
+          <div class="lby-felt-center-sub">${centerSub}</div>
+        </div>
       </div>
-    </div>${settingsModal}`;
+    </div>
+    <div class="lby-controls">
+      ${scoreStrip}
+      ${cfgSection}
+      ${shareRow}
+      <div class="lby-cta-row">${dealBtn}</div>
+    </div>
+  </div>${settingsModal}`;
 }
 
 // ---------- shared: game over ----------
@@ -1014,6 +1076,7 @@ function renderHLJ(v) {
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             backs: v.handCounts[i],
+            cardCount: v.handCounts[i],
           }) },
     )
     .filter(Boolean);
@@ -1414,6 +1477,7 @@ function renderRummy(v) {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
             count: v.handCounts[i],
+            cardCount: v.handCounts[i],
             pts: v.scores[i],
             note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
           }) },
@@ -1445,24 +1509,37 @@ function renderRummy(v) {
       </div>
       <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
     </div>`;
+  // Compute selected cards early so melds can highlight valid layoff targets
+  const orderedForMelds = rummyOrdered(v.yourHand);
+  const selCardsForMelds = orderedForMelds.filter((c) => S.rummySel.has(c.id));
+
   const melds = v.melds.length
     ? `<div class="melds">${v.melds.map((m) => {
           const active = S.rummyLayoff === m.id;
+          // Highlight melds that can accept the current hand selection as a layoff
+          const validLayoff = inPlay && selCardsForMelds.length >= 1
+            && S.rummyLayoff === null && rCanLayoff(m, selCardsForMelds);
           const jokerRes = resolveJokers(m);
           const meldAttrs = `data-action="open-meld" data-meldid="${m.id}"`;
           let inner;
           if (m.kind === "set") {
-            // Compact: one card showing rank + a pip per suit present
+            // Fan like runs; put the odd-color card on top (last = highest z-index)
             const naturals = m.cards.filter((c) => !c.joker);
-            const suits = naturals.map((c) => c.suit);
-            const jk = m.cards.filter((c) => c.joker).length;
-            const rank = naturals.length ? rankLabel(naturals[0].rank) : "★";
-            const CORNERS = [["S","sc-tl"],["H","sc-tr"],["C","sc-bl"],["D","sc-br"]];
-            const pips = CORNERS.map(([s, cls]) =>
-              suits.includes(s) ? `<span class="${cls}${RED.has(s)?" red":""}">${SUIT[s]}</span>` : ""
-            ).join("");
-            const jkBadge = jk ? `<span class="set-jk">★×${jk}</span>` : "";
-            inner = `<div class="card mini set-merged tappable" ${meldAttrs}>${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
+            const redCount = naturals.filter((c) => RED.has(c.suit)).length;
+            const blackCount = naturals.length - redCount;
+            const oddIsRed = redCount < blackCount; // minority color is the odd one
+            const sorted = [...m.cards].sort((a, b) => {
+              const aOdd = a.joker ? 0 : (RED.has(a.suit) === oddIsRed ? 1 : 0);
+              const bOdd = b.joker ? 0 : (RED.has(b.suit) === oddIsRed ? 1 : 0);
+              return aOdd - bOdd; // odd-color card sorts last (on top)
+            });
+            const n = sorted.length;
+            const negMargin = n <= 1 ? 0 : Math.round(44 * (n - 2) / (n - 1));
+            const allCards = sorted.map((c, ci) => {
+              const ml = ci === 0 ? "" : `margin-left:-${negMargin}px`;
+              return cardHTML(c, { mini: true, inMeld: true, style: ml });
+            }).join("");
+            inner = `<div class="run-dense tappable">${allCards}</div>`;
           } else {
             // Run: fixed total width of 2 mini cards; margin shrinks as count grows
             const n = m.cards.length;
@@ -1473,7 +1550,8 @@ function renderRummy(v) {
             }).join("");
             inner = `<div class="run-dense tappable">${allCards}</div>`;
           }
-          return `<div class="meld tappable ${active ? "target" : ""}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
+          const meldClass = active ? "target" : validLayoff ? "layoff-hint" : "";
+          return `<div class="meld tappable ${meldClass}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         }).join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
   const center = `<div class="piles">${stock}${discard}</div>`;
@@ -1548,7 +1626,10 @@ function renderRummy(v) {
     acts.push(sortBar);
   }
 
-  const selfMeta = v.you != null ? `Score ${v.scores[v.you]} \u00b7 play to ${v.target}` : `play to ${v.target}`;
+  const myScore = v.you != null ? v.scores[v.you] : null;
+  const selfMeta = myScore != null
+    ? `<span class="score-chip">${myScore}</span><span class="score-meta"> of ${v.target}</span>`
+    : `play to ${v.target}`;
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
@@ -1703,8 +1784,10 @@ function renderHearts(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             backs: v.handCounts[i],
+            cardCount: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
+            extraClass: "hearts-backs",
           }) },
     )
     .filter(Boolean);
@@ -1776,11 +1859,30 @@ function renderHearts(v) {
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
 
-  const heartsFeltOverlay = `<span class="trump-watermark red">♥</span>`;
+  const heartsFeltOverlay = v.heartsBroken
+    ? `<span class="trump-watermark hearts-broken">♥</span>`
+    : `<span class="trump-watermark hearts-unbroken">♥</span>`;
   const heartsCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2?'red':''} ${['tl','tr','br','bl'][i]}">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, trick: heartsTrick, feltOverlay: heartsFeltOverlay, cornerSuits: heartsCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn });
+
+  // Cylinder counters embedded in the wood rail — one per seat, compass-positioned
+  const cylinderHTML = (count, pos) => {
+    const d = String(count ?? 0).padStart(2, "0");
+    return `<div class="rail-cyl rail-cyl-${pos}" title="${d} cards">
+      <div class="cyl-drum"><span class="cyl-digit">${d[0]}</span><span class="cyl-digit">${d[1]}</span></div>
+    </div>`;
+  };
+  const cylinders = v.seats.map((_, i) => {
+    if (i === v.you) return "";
+    const offset = ((i - (v.you ?? 0)) + v.players) % v.players;
+    const pos = v.players === 2 ? "top"
+      : v.players === 3 ? (offset === 1 ? "left" : "right")
+      : offset === 1 ? "left" : offset === v.players - 1 ? "right" : "top";
+    return cylinderHTML(v.handCounts[i], pos);
+  }).join("");
+
+  app.__set = tableShell(v, { pods, center, trick: heartsTrick, feltOverlay: heartsFeltOverlay, cornerSuits: heartsCornerSuits, railCounters: cylinders, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
 // ---------- Pegs & Jokers ----------
@@ -2112,6 +2214,13 @@ app.addEventListener("click", (e) => {
       const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
       const config = { players: +t.dataset.count, target };
       if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
+      if (v.requireDiscard != null) config.requireDiscard = v.requireDiscard;
+      return send({ t: "setConfig", config });
+    }
+    case "rummy-toggle-discard": {
+      const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
+      const config = { players: v.players, target, requireDiscard: !v.requireDiscard };
+      if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
       return send({ t: "setConfig", config });
     }
     case "start": return doStart();
@@ -2149,7 +2258,18 @@ app.addEventListener("click", (e) => {
       if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
       return render();
     }
-    case "open-meld": S.rummyMeldOpen = +t.dataset.meldid; return render();
+    case "open-meld": {
+      const meldId = +t.dataset.meldid;
+      const selNow = [...S.rummySel].map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
+      const meldTarget = v.melds.find((m) => m.id === meldId);
+      // If cards already selected and this meld accepts them, go straight to layoff mode
+      if (selNow.length >= 1 && S.rummyLayoff === null && meldTarget && rCanLayoff(meldTarget, selNow)) {
+        S.rummyLayoff = meldId;
+      } else {
+        S.rummyMeldOpen = meldId;
+      }
+      return render();
+    }
     case "close-meld": S.rummyMeldOpen = null; return render();
     case "layoff-meld": S.rummyLayoff = +t.dataset.meldid; S.rummyMeldOpen = null; return render();
     case "unlayoff-meld": S.rummyLayoff = null; S.rummyMeldOpen = null; return render();
@@ -2169,6 +2289,7 @@ app.addEventListener("click", (e) => {
       if (S.heartsPass.size !== 3) return toast("Select exactly 3 cards to pass.");
       send({ t: "move", move: { type: "pass", seat: v.you, cards: [...S.heartsPass] } });
       S.heartsPass.clear();
+      render();
       return;
     }
     case "clear-pass": S.heartsPass.clear(); return render();
