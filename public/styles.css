@@ -171,16 +171,18 @@ body:has(.felt-table)::before{
     0 0 0 3px #2a1508,
     0 0 0 5px rgba(160,120,60,.5);
 }
-/* Overhead lamp glow */
+/* Joker hat watermark — centered on home/lobby felt */
 .felt-table::before{
-  content:"";position:absolute;top:-80px;left:50%;transform:translateX(-50%);
-  width:600px;height:480px;pointer-events:none;z-index:0;
-  background:radial-gradient(ellipse at 50% 0%,rgba(220,150,40,.24) 0%,rgba(200,130,30,.1) 35%,transparent 65%);
+  content:"";position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-52%);
+  width:min(520px,90vw);height:min(520px,90vw);
+  background:url('/joker-hat.png') center/contain no-repeat;
+  opacity:.13;pointer-events:none;z-index:0;
 }
 /* Inner vignette */
 .felt-table::after{
   content:"";position:absolute;inset:0;border-radius:20px;pointer-events:none;z-index:20;
-  box-shadow:inset 0 0 40px rgba(0,0,0,.4),inset 0 10px 25px rgba(0,0,0,.3);
+  box-shadow:inset 0 0 60px rgba(0,0,0,.5),inset 0 10px 30px rgba(0,0,0,.35);
 }
 
 /* Scattered face-down card backs */
