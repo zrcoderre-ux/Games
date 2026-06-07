@@ -615,6 +615,7 @@ function tableShell(v, parts) {
   return `<div class="table">
     ${appbar(v, { log: true })}
     <div class="felt-frame">
+    ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
     <div class="felt">
       ${feltPods}
       ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
@@ -1868,7 +1869,24 @@ function renderHearts(v) {
   const heartsCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2?'red':''} ${['tl','tr','br','bl'][i]}">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, trick: heartsTrick, feltOverlay: heartsFeltOverlay, cornerSuits: heartsCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn });
+
+  // Cylinder counters embedded in the wood rail — one per seat, compass-positioned
+  const cylinderHTML = (count, pos) => {
+    const d = String(count ?? 0).padStart(2, "0");
+    return `<div class="rail-cyl rail-cyl-${pos}" title="${d} cards">
+      <div class="cyl-drum"><span class="cyl-digit">${d[0]}</span><span class="cyl-digit">${d[1]}</span></div>
+    </div>`;
+  };
+  const cylinders = v.seats.map((_, i) => {
+    if (i === v.you) return "";
+    const offset = ((i - (v.you ?? 0)) + v.players) % v.players;
+    const pos = v.players === 2 ? "top"
+      : v.players === 3 ? (offset === 1 ? "left" : "right")
+      : offset === 1 ? "left" : offset === v.players - 1 ? "right" : "top";
+    return cylinderHTML(v.handCounts[i], pos);
+  }).join("");
+
+  app.__set = tableShell(v, { pods, center, trick: heartsTrick, feltOverlay: heartsFeltOverlay, cornerSuits: heartsCornerSuits, railCounters: cylinders, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
 
 // ---------- Pegs & Jokers ----------

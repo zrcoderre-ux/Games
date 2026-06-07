@@ -1765,3 +1765,35 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   transition:background .15s,color .15s,border-color .15s;
 }
 .lby-toggle.on{background:var(--brass);border-color:var(--brass-hi);color:#1a1208;font-weight:700}
+/* ---------- Rail cylinder counters (Hearts) ---------- */
+.rail-counters{position:absolute;inset:0;pointer-events:none;z-index:10}
+.rail-cyl{
+  position:absolute;
+  display:flex;align-items:center;justify-content:center;
+}
+/* Compass positions within the wood rail */
+.rail-cyl-top{top:4px;left:50%;transform:translateX(-50%)}
+.rail-cyl-left{left:4px;top:50%;transform:translateY(-50%)}
+.rail-cyl-right{right:4px;top:50%;transform:translateY(-50%)}
+.rail-cyl-bottom{bottom:4px;left:50%;transform:translateX(-50%)}
+/* The physical drum barrel */
+.cyl-drum{
+  display:flex;gap:1px;
+  background:linear-gradient(180deg,#3a2508 0%,#6a3e10 30%,#8a5520 50%,#6a3e10 70%,#3a2508 100%);
+  border-radius:6px;
+  padding:2px 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,220,120,.25),
+    inset 0 -1px 0 rgba(0,0,0,.5),
+    0 1px 3px rgba(0,0,0,.8),
+    0 0 0 1px rgba(0,0,0,.4);
+}
+.cyl-digit{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:18px;
+  font-family:"Fraunces",serif;font-size:13px;font-weight:900;
+  color:#f0d878;
+  text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 6px rgba(220,150,20,.4);
+  background:linear-gradient(180deg,rgba(0,0,0,.3) 0%,transparent 40%,rgba(0,0,0,.3) 100%);
+  border-radius:3px;
+}
