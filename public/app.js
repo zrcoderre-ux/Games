@@ -64,6 +64,7 @@ const S = {
   rummyMeldOpen: null, // meld id whose popup is open
   rummyRoundAcked: null, // JSON key of the lastRound already dismissed
   rummyRoundTimer: null, // auto-dismiss setTimeout handle
+  rummyRoundVisible: false, // true once the pause after going-out has elapsed
   hljHandAcked: null, // JSON key of the lastHand already dismissed
   hljHandTimer: null, // auto-dismiss setTimeout handle
   hljTrickHold: null, // {trick, winSeat} held briefly after last card played
@@ -350,6 +351,7 @@ function onFrame(e) {
     const newKey  = msg.view?.lastRound ? JSON.stringify(msg.view.scores) : null;
     if (newKey && newKey !== prevKey && newKey !== S.rummyRoundAcked) {
       if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
+      S.rummyRoundVisible = false;
     }
     // Auto-sort rummy hand on draw: whenever the hand gains card(s), re-apply the current sort.
     const v = msg.view;
@@ -527,9 +529,32 @@ function logSheet() {
         return `<div class="logrow hlj-dealt-row"><span class="hlj-dealt-name">${name}</span><div class="hlj-dealt-cards">${cards}</div></div>`;
       }).join("");
     }
+    // For Rummy: show own hand at the bottom (dealt state), and last-round held cards
+    let rummyHandRows = "";
+    if (S.party === "rummy500" && v) {
+      // At round end, show held cards (what was in your hand when the round ended)
+      if (v.lastRound && v.you != null) {
+        const heldCards = v.lastRound.heldCards?.[v.you] ?? [];
+        if (heldCards.length) {
+          const heldMinis = heldCards.map((c) => cardHTML(c, { mini: true })).join("");
+          rummyHandRows += `<div class="logrow hlj-dealt-row"><span class="hlj-dealt-name hlj-dealt-kitty">Your held cards</span><div class="hlj-dealt-cards">${heldMinis}</div></div>`;
+        }
+      }
+      // Current hand at the very bottom
+      if (v.yourHand && v.yourHand.length) {
+        const RUMMY_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
+        const sortedHand = [...v.yourHand].sort((a, b) =>
+          (a.joker ? 1 : 0) - (b.joker ? 1 : 0) ||
+          (RUMMY_SUIT_ORDER[a.suit] ?? 4) - (RUMMY_SUIT_ORDER[b.suit] ?? 4) ||
+          a.rank - b.rank
+        );
+        const handMinis = sortedHand.map((c) => cardHTML(c, { mini: true })).join("");
+        rummyHandRows += `<div class="logrow hlj-dealt-row"><span class="hlj-dealt-name">Your hand</span><div class="hlj-dealt-cards">${handMinis}</div></div>`;
+      }
+    }
     const rows = entries.length
-      ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("") + dealtRows
-      : dealtRows || `<div class="logrow" style="color:var(--ink-dim)">No moves yet.</div>`;
+      ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("") + dealtRows + rummyHandRows
+      : dealtRows + rummyHandRows || `<div class="logrow" style="color:var(--ink-dim)">No moves yet.</div>`;
     return `<div class="loglist">${rows}</div>`;
   };
 
@@ -1644,10 +1669,23 @@ function rummyRoundModal(v) {
   const roundKey = JSON.stringify(v.scores); // unique per round result
   if (S.rummyRoundAcked === roundKey) return "";
 
+  // Brief pause before showing the summary so players can see the final state.
+  if (!S.rummyRoundVisible) {
+    if (S.rummyRoundTimer === null) {
+      S.rummyRoundTimer = setTimeout(() => {
+        S.rummyRoundVisible = true;
+        S.rummyRoundTimer = null;
+        render();
+      }, 1800);
+    }
+    return ""; // modal not visible yet during the pause
+  }
+
   // Start the 20s auto-dismiss timer once per round popup.
   if (S.rummyRoundTimer === null) {
     S.rummyRoundTimer = setTimeout(() => {
       S.rummyRoundAcked = roundKey;
+      S.rummyRoundVisible = false;
       S.rummyRoundTimer = null;
       render();
     }, 20000);
@@ -2256,6 +2294,7 @@ app.addEventListener("click", (e) => {
       const lr = S.view && S.view.lastRound;
       if (lr) S.rummyRoundAcked = JSON.stringify(S.view.scores);
       if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
+      S.rummyRoundVisible = false;
       return render();
     }
     case "open-meld": {
