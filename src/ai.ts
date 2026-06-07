@@ -333,8 +333,12 @@ function estimateSixBidProb(hand: Card[], players: number): number {
   // Simulation result: A+K+Q+J makes 6 ≈99% when joker is in play, for all player counts.
   let sweepProb = 0.99;
   if (!hasJoker)   sweepProb -= 0.01;           // tiny extra risk vs. holding it
-  if (!has(11))    sweepProb -= 0.20;           // Jack point likely lost
-  if (!has(13) && !has(12)) sweepProb -= 0.08; // no K or Q: weaker capture control
+  if (!has(11))    sweepProb -= 0.30;           // Jack not held: must capture it from opponents
+  if (!has(13) && !has(12)) sweepProb -= 0.12; // no K or Q: weaker capture control
+  // Sparse trump count: heavy penalty when holding fewer than 3 trumps.
+  // With only A+Joker you need perfect luck (Jack falls on Ace trick, game pips align).
+  if (n < 3) sweepProb -= 0.35;
+  else if (n < 4) sweepProb -= 0.15;
   sweepProb += 0.005 * Math.max(0, n - 4);     // each extra trump adds marginal safety
   sweepProb = clamp(sweepProb, 0, 0.99);
 
@@ -571,8 +575,20 @@ export function aiMove(
   if (turnSeat !== seat) throw new Error(`not seat ${seat}'s turn (it is seat ${turnSeat}'s)`);
 
   if (state.phase === "bidding") return decideBid(state, seat, rng, personality);
-  if (state.trump === null)
-    return { type: "selectTrump", seat, suit: bestSuit(state.hands[seat], state.players).suit };
+  if (state.trump === null) {
+    // Lead the best trump card directly (establishes trump from the lead, matching Pitch rules).
+    // Never use selectTrump — that would reveal trump before the first card is played.
+    const trump = bestSuit(state.hands[seat], state.players).suit;
+    const hand = state.hands[seat];
+    const trumpCards = hand.filter((c): c is Extract<typeof c, { rank: number }> =>
+      !isJoker(c) && c.suit === trump
+    );
+    // Lead highest trump to assert High; fall back to any non-joker card in the hand.
+    const lead = trumpCards.length
+      ? trumpCards.reduce((a, b) => a.rank >= b.rank ? a : b)
+      : hand.filter((c) => !isJoker(c))[0];
+    return { type: "play", seat, card: lead };
+  }
   return decidePlay(state, seat, personality);
 }
 

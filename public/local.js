@@ -631,7 +631,8 @@ function scoreHand(state) {
     made,
     deltaByTeam,
     detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam, gameCount },
-    dealtHands: state.dealtHands ?? []
+    dealtHands: state.dealtHands ?? [],
+    kitty: state.kitty
   };
   const autoWin = bid === 6 && made && preScore >= 0;
   let winner = null;
@@ -877,8 +878,10 @@ function estimateSixBidProb(hand, players) {
   const pJokerLive = hasJoker ? 1 : (remaining - 5) / remaining;
   let sweepProb = 0.99;
   if (!hasJoker) sweepProb -= 0.01;
-  if (!has(11)) sweepProb -= 0.2;
-  if (!has(13) && !has(12)) sweepProb -= 0.08;
+  if (!has(11)) sweepProb -= 0.3;
+  if (!has(13) && !has(12)) sweepProb -= 0.12;
+  if (n < 3) sweepProb -= 0.35;
+  else if (n < 4) sweepProb -= 0.15;
   sweepProb += 5e-3 * Math.max(0, n - 4);
   sweepProb = clamp(sweepProb, 0, 0.99);
   return pJokerLive * sweepProb;
@@ -1011,8 +1014,15 @@ function aiMove(state, seat, rng = stateRng(state, seat), personality = PERSONAL
   const turnSeat = state.phase === "bidding" ? state.bidTurn : state.turn;
   if (turnSeat !== seat) throw new Error(`not seat ${seat}'s turn (it is seat ${turnSeat}'s)`);
   if (state.phase === "bidding") return decideBid(state, seat, rng, personality);
-  if (state.trump === null)
-    return { type: "selectTrump", seat, suit: bestSuit(state.hands[seat], state.players).suit };
+  if (state.trump === null) {
+    const trump = bestSuit(state.hands[seat], state.players).suit;
+    const hand = state.hands[seat];
+    const trumpCards = hand.filter(
+      (c) => !isJoker(c) && c.suit === trump
+    );
+    const lead = trumpCards.length ? trumpCards.reduce((a, b) => a.rank >= b.rank ? a : b) : hand.filter((c) => !isJoker(c))[0];
+    return { type: "play", seat, card: lead };
+  }
   return decidePlay(state, seat, personality);
 }
 function handConfidence(hand, players) {
@@ -1055,7 +1065,7 @@ function redact(state, seat, meta) {
     currentTrick: state.currentTrick,
     lastTrick,
     lastHand: state.lastHand,
-    lastKitty: state.lastHand ? state.kitty : null,
+    lastKitty: state.lastHand ? state.lastHand.kitty : null,
     lastDealtHands: state.lastHand ? state.lastHand.dealtHands : null,
     log: state.log ?? []
   };
@@ -1063,7 +1073,7 @@ function redact(state, seat, meta) {
 
 // src/hlj-module.ts
 var moveEq2 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-var LOG_CAP = 120;
+var LOG_CAP = 600;
 var teamName = (seat) => seat % 2 === 0 ? "Team A" : "Team B";
 var teamLetter = (t) => t === 0 ? "A" : "B";
 function attach(next, prevLog, prevSeq, parts) {
