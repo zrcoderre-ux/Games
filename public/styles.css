@@ -176,8 +176,10 @@ body:has(.felt-table)::before{
   content:"";position:absolute;
   top:50%;left:50%;transform:translate(-50%,-52%);
   width:min(720px,110vw);height:min(720px,110vw);
-  background:url('/joker-hat.png') center/contain no-repeat;
-  opacity:.22;pointer-events:none;z-index:0;
+  background-color:rgba(45,122,74,.55);
+  -webkit-mask:url('/joker-hat.png') center/contain no-repeat;
+          mask:url('/joker-hat.png') center/contain no-repeat;
+  pointer-events:none;z-index:0;
 }
 /* Inner vignette */
 .felt-table::after{
