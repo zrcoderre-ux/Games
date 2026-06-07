@@ -126,7 +126,7 @@ export function redact(
     currentTrick: state.currentTrick,
     lastTrick,
     lastHand: state.lastHand,
-    lastKitty: state.lastHand ? state.kitty : null,
+    lastKitty: state.lastHand ? state.lastHand.kitty : null,
     lastDealtHands: state.lastHand ? state.lastHand.dealtHands : null,
     log: (state as { log?: LogEntry[] }).log ?? [],
   };

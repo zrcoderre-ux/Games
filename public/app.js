@@ -378,16 +378,17 @@ function onFrame(e) {
 let _autoPlayTimer = null;
 function maybeAutoPlay(v) {
   if (_autoPlayTimer) { clearTimeout(_autoPlayTimer); _autoPlayTimer = null; }
-  if (!v || !v.yourTurn || S.party !== "high-low-jack") return;
-  if (v.phase !== "playing") return;
-  const playMoves = (v.legalMoves || []).filter((m) => m.type === "play");
-  if (playMoves.length !== 1) return;
-  const move = playMoves[0];
+  if (!v || !v.yourTurn) return;
+  const legal = v.legalMoves || [];
+  if (legal.length !== 1) return;
+  const move = legal[0];
+  // Only auto-play card-play moves (not bidding choices, select-trump, etc.)
+  if (move.type !== "play") return;
+  const delay = S.party === "high-low-jack" ? 1200 : 900;
   _autoPlayTimer = setTimeout(() => {
     _autoPlayTimer = null;
-    // Guard: view must not have changed since we scheduled
-    if (S.view === v) send({ t: "move", move: { type: "play", seat: v.you, card: move.card } });
-  }, 1800);
+    if (S.view === v) send({ t: "move", move });
+  }, delay);
 }
 
 // Pass-and-play privacy gate: when the active hand belongs to a different local
@@ -553,7 +554,7 @@ function logSheet() {
       }
     }
     const rows = entries.length
-      ? entries.slice(-40).reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("") + dealtRows + rummyHandRows
+      ? [...entries].reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("") + dealtRows + rummyHandRows
       : dealtRows + rummyHandRows || `<div class="logrow" style="color:var(--ink-dim)">No moves yet.</div>`;
     return `<div class="loglist">${rows}</div>`;
   };
@@ -847,8 +848,8 @@ function renderLobby(v) {
   // Poker-chip player count picker — shared by all games
   const chipRow = (action, opts, selected, note = "") =>
     `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-       <div class="lby-chip-row">${opts.map((c) =>
-         `<button class="lby-count-chip${c === selected ? " on" : ""}" data-action="${action}" data-count="${c}">${c}</button>`
+       <div class="lby-chip-row">${opts.map((c, i) =>
+         `<button class="lby-count-chip${c === selected ? " on" : ""}${i % 2 === 1 ? " red" : ""}" data-action="${action}" data-count="${c}">${c}</button>`
        ).join("")}</div></div>${note ? `<p class="sub" style="margin:2px 0 10px 72px">${note}</p>` : ""}`;
 
   // Config controls (host only)
@@ -1181,7 +1182,7 @@ function renderHLJ(v) {
     if (v.phase === "bidding") {
       const dealerActed = bidHistory.some(b => b.seat === v.dealerSeat);
       const dealerTok = !dealerActed && v.dealerSeat !== you
-        ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">DEALER</div>`
+        ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">D</div>`
         : "";
       const highBidSeat = v.highBid?.seat ?? null;
       const histToks = bidHistory.map(b => {

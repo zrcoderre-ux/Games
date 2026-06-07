@@ -32,7 +32,7 @@ export type HljState = GameState & { log: LogEntry[]; logSeq: number };
 
 const moveEq = (a: Move, b: Move): boolean => JSON.stringify(a) === JSON.stringify(b);
 
-const LOG_CAP = 120;
+const LOG_CAP = 600;
 const teamName = (seat: number): string => (seat % 2 === 0 ? "Team A" : "Team B");
 const teamLetter = (t: number): string => (t === 0 ? "A" : "B");
 

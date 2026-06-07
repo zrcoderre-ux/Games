@@ -158,6 +158,7 @@ export type HandResult = {
     gameCount: [number, number]; // pip counts for both teams (for display)
   };
   dealtHands: Card[][]; // each player's starting hand, revealed post-hand
+  kitty: Card[];        // kitty for this hand, revealed post-hand
 };
 
 // Per-seat statistics accumulated across hands, observable by the AI.
@@ -598,6 +599,7 @@ export function scoreHand(state: GameState): GameState {
     deltaByTeam,
     detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam, gameCount },
     dealtHands: state.dealtHands ?? [],
+    kitty: state.kitty,
   };
 
   // Win conditions.
