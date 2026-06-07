@@ -1214,7 +1214,9 @@ function isSet(cards) {
   if (naturals.length === 0) return false;
   if (!naturals.every((c) => c.rank === naturals[0].rank)) return false;
   const suits = naturals.map((c) => c.suit);
-  return new Set(suits).size === suits.length;
+  if (new Set(suits).size !== suits.length) return false;
+  if (cards.length > 4) return false;
+  return true;
 }
 function orderRunCards(cards) {
   const naturals = cards.filter((c) => !c.joker);

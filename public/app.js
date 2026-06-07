@@ -232,7 +232,13 @@ function avatarHTML(name, o = {}) {
 function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
   const backs = 4;
-  const mb = Array.from({ length: backs }, () => `<span class="mb"></span>`).join("");
+  const cardCount = o.cardCount != null ? o.cardCount : null;
+  const mbArr = Array.from({ length: backs }, (_, idx) =>
+    idx === backs - 1 && cardCount != null
+      ? `<span class="mb mb-last"><span class="mb-count">${cardCount}</span></span>`
+      : `<span class="mb"></span>`
+  );
+  const mb = mbArr.join("");
   const isDisconnected = v.disconnectedSeats && v.disconnectedSeats.includes(i);
   const isHost = v.you === v.hostSeat && v.you !== null;
   const replaceBtn = isDisconnected && isHost && !S.offline
@@ -1069,6 +1075,7 @@ function renderHLJ(v) {
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             backs: v.handCounts[i],
+            cardCount: v.handCounts[i],
           }) },
     )
     .filter(Boolean);
@@ -1469,6 +1476,7 @@ function renderRummy(v) {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
             count: v.handCounts[i],
+            cardCount: v.handCounts[i],
             pts: v.scores[i],
             note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
           }) },
@@ -1758,6 +1766,7 @@ function renderHearts(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             backs: v.handCounts[i],
+            cardCount: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
             extraClass: "hearts-backs",
@@ -2227,6 +2236,7 @@ app.addEventListener("click", (e) => {
       if (S.heartsPass.size !== 3) return toast("Select exactly 3 cards to pass.");
       send({ t: "move", move: { type: "pass", seat: v.you, cards: [...S.heartsPass] } });
       S.heartsPass.clear();
+      render();
       return;
     }
     case "clear-pass": S.heartsPass.clear(); return render();

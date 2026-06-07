@@ -109,7 +109,10 @@ function isSet(cards: RummyCard[]): boolean {
   if (naturals.length === 0) return false;
   if (!naturals.every((c) => c.rank === naturals[0].rank)) return false;
   const suits = naturals.map((c) => c.suit);
-  return new Set(suits).size === suits.length; // no duplicate suits
+  if (new Set(suits).size !== suits.length) return false; // no duplicate suits
+  // A set has at most 4 cards (one per suit); jokers cannot push it past 4
+  if (cards.length > 4) return false;
+  return true;
 }
 
 // Order a run's cards low->high, slotting jokers into the gaps/ends they fill,

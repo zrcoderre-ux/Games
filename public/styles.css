@@ -953,13 +953,21 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   background:repeating-linear-gradient(45deg,#0a1a5a 0 3px,#1a2e8a 3px 6px),#0a1a5a;
   box-shadow:0 1px 2px rgba(0,0,0,.6),inset 0 0 0 1px rgba(140,180,255,.25);
 }
-/* Name label printed on the card back stack */
+/* Name label — moved to top of stack */
 .pod .back-name{
-  position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+  position:absolute;top:3px;left:50%;transform:translateX(-50%);
   font-size:10px;font-weight:800;font-family:"Hanken Grotesk",sans-serif;
   white-space:nowrap;pointer-events:none;
   color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.9);
   letter-spacing:.02em;max-width:80px;overflow:hidden;text-overflow:ellipsis;
+}
+/* Card count badge on rightmost card back */
+.pod .ministack .mb-last{position:relative}
+.pod .ministack .mb-count{
+  position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+  font-size:9px;font-weight:900;font-family:"Hanken Grotesk",sans-serif;
+  color:rgba(255,255,255,.95);text-shadow:0 1px 2px rgba(0,0,0,.8);
+  line-height:1;pointer-events:none;
 }
 
 /* pts + count row — only shows when those values exist */
