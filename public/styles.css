@@ -259,6 +259,7 @@ body:has(.felt-table)::before{
 }
 /* no tbl-card::after override needed */
 .tbl-card-suit{font-size:30px;line-height:1;margin-bottom:4px;color:#1a1a2e;position:relative;z-index:1}
+.tbl-card.red .tbl-card-suit{color:#8b1a1a}
 .tbl-card-name{
   font-family:"Fraunces",serif;font-size:10px;font-weight:600;
   text-align:center;line-height:1.3;color:#2a1a08;
@@ -268,6 +269,7 @@ body:has(.felt-table)::before{
   position:absolute;font-size:9px;font-family:"Fraunces",serif;font-weight:700;line-height:1;
   color:#1a1a2e;z-index:1;
 }
+.tbl-card.red .tbl-card-corner{color:#8b1a1a}
 .tbl-card-corner.tl{top:5px;left:6px}
 .tbl-card-corner.br{bottom:5px;right:6px;transform:rotate(180deg)}
 .tbl-card.selected{
@@ -354,11 +356,10 @@ button{font-family:inherit}
   padding:max(10px,env(safe-area-inset-top)) 10px max(14px,env(safe-area-inset-bottom));
   display:flex;flex-direction:column;
 }
-/* When table is present: lock to screen height, warm wood background */
+/* When table is present: dark room so octagonal frame corners show */
 #app:has(.table){
   height:100dvh;overflow:hidden;padding:0;
-  background:linear-gradient(135deg,#7a5030 0%,#5c3a1e 25%,#3e2510 50%,#5c3a1e 75%,#7a5030 100%);
-  background-attachment:fixed;
+  background:#1a0e06;
 }
 /* When lobby is present: wood surround */
 #app:has(.lby-outer){
@@ -1502,16 +1503,16 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hcd-suit.cl{top:50%;left:-18%;transform:translateY(-50%)}
 
 /* Corner suit watermarks */
-.felt-corners{position:absolute;inset:0;pointer-events:none;user-select:none}
+.felt-corners{position:absolute;inset:0;pointer-events:none;user-select:none;z-index:0}
 .felt-corner-suit{
-  position:absolute;font-size:clamp(22px,5vw,34px);line-height:1;
-  color:rgba(255,255,255,.22);
+  position:absolute;font-size:clamp(36px,7vw,52px);line-height:1;
+  color:rgba(255,255,255,.14);
 }
-.felt-corner-suit.red{color:rgba(255,255,255,.22)}
-.felt-corner-suit.tl{top:10px;left:12px}
-.felt-corner-suit.tr{top:10px;right:12px}
-.felt-corner-suit.br{bottom:10px;right:12px}
-.felt-corner-suit.bl{bottom:10px;left:12px}
+.felt-corner-suit.red{color:rgba(200,60,60,.2)}
+.felt-corner-suit.tl{top:14px;left:16px}
+.felt-corner-suit.tr{top:14px;right:16px}
+.felt-corner-suit.br{bottom:14px;right:16px}
+.felt-corner-suit.bl{bottom:14px;left:16px}
 
 /* self-extra strip between selfbar and actions */
 .above-self{
@@ -1724,26 +1725,30 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   box-shadow:0 1px 2px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,160,160,.25) !important;
 }
 
-/* Lobby poker-chip player count picker */
+/* Lobby poker-chip player count picker — match HLJ bid chip notched style */
 .lby-chip-row{display:flex;gap:10px;flex-wrap:wrap}
 .lby-count-chip{
   width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;
   font-family:"Fraunces",serif;font-size:17px;font-weight:700;
   background:
-    radial-gradient(circle at 38% 32%,rgba(255,255,255,.22) 0%,transparent 55%),
-    conic-gradient(#5a4010 0deg 30deg,#c8960a 30deg 60deg,#5a4010 60deg 90deg,#c8960a 90deg 120deg,#5a4010 120deg 150deg,#c8960a 150deg 180deg,#5a4010 180deg 210deg,#c8960a 210deg 240deg,#5a4010 240deg 270deg,#c8960a 270deg 300deg,#5a4010 300deg 330deg,#c8960a 330deg 360deg);
-  color:#f0d878;
-  box-shadow:0 3px 0 #3a2800,0 4px 8px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.2);
-  transition:transform .1s,box-shadow .1s;
+    radial-gradient(circle at 50% 50%, #1a3a6a 0% 56%, #0a1a40 56% 60%, transparent 60%),
+    repeating-conic-gradient(#1a3a6a 0deg 28deg, #fff 28deg 45deg);
+  color:#d0e4ff;
+  box-shadow:0 4px 10px rgba(0,0,0,.5);
+  transition:transform .12s,box-shadow .12s;
+  display:grid;place-items:center;
 }
-.lby-count-chip:hover{filter:brightness(1.12)}
+.lby-count-chip:hover:not(:disabled){
+  transform:translateY(-3px) scale(1.08);
+  box-shadow:0 7px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.2);
+}
+.lby-count-chip:active:not(:disabled){transform:translateY(0) scale(.97)}
 .lby-count-chip.on{
   background:
-    radial-gradient(circle at 38% 32%,rgba(255,255,255,.3) 0%,transparent 55%),
-    conic-gradient(#7a5010 0deg 30deg,#f0b80a 30deg 60deg,#7a5010 60deg 90deg,#f0b80a 90deg 120deg,#7a5010 120deg 150deg,#f0b80a 150deg 180deg,#7a5010 180deg 210deg,#f0b80a 210deg 240deg,#7a5010 240deg 270deg,#f0b80a 270deg 300deg,#7a5010 300deg 330deg,#f0b80a 330deg 360deg);
-  box-shadow:0 1px 0 #3a2800,0 2px 4px rgba(0,0,0,.5),inset 0 2px 6px rgba(0,0,0,.3);
-  transform:translateY(2px);
-  color:#fff;
+    radial-gradient(circle at 50% 50%, #6a3010 0% 56%, #4a1800 56% 60%, transparent 60%),
+    repeating-conic-gradient(#6a3010 0deg 28deg, #f0d060 28deg 45deg);
+  color:#f0d878;
+  box-shadow:0 2px 4px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.15);
 }
 /* Rummy score poker chip */
 .score-chip{
