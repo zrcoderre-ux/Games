@@ -501,7 +501,7 @@ function appbar(v, opts = {}) {
     <div class="spacer"></div>
     ${S.offline ? `<div class="roomtag">offline · ${S.hotseat ? "pass &amp; play" : "vs bots"}</div>` : `<div class="roomtag">room <b>${esc(S.room)}</b></div>`}
     ${opts.log ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
-    ${S.offline ? "" : `<button class="btn sm ghost" data-action="copy-link">Share</button>`}
+    ${S.offline ? "" : `<button class="btn sm ghost" data-action="share-link">Share</button>`}
     <button class="btn sm ghost" data-action="leave">Leave</button>
   </div>`;
 }
@@ -836,8 +836,10 @@ function renderLobby(v) {
     shareRow = `<p class="lby-mode-note">${hasHotseats ? "Pass &amp; Play — device is shared between turns." : "Offline — all bots play on this device."}</p>`;
   } else {
     shareRow = `<div class="lby-share-row">
-      <input class="lby-link-input" readonly value="${esc(link)}" onclick="this.select()" />
-      <button class="btn sm" data-action="copy-link">Copy link</button>
+      <button class="btn lby-share-btn" data-action="share-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Invite Players
+      </button>
     </div>`;
   }
 
@@ -2081,9 +2083,14 @@ function doConnect() {
   connect();
 }
 
-function copyLink() {
+function shareLink() {
   const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
-  navigator.clipboard?.writeText(link).then(() => toast("Link copied."), () => toast(link));
+  const game = GAMES[S.party]?.label ?? "Parlor";
+  if (navigator.share) {
+    navigator.share({ title: game, text: `Join my ${game} game!`, url: link }).catch(() => {});
+  } else {
+    navigator.clipboard?.writeText(link).then(() => toast("Link copied."), () => toast(link));
+  }
 }
 
 function doLeave() {
@@ -2181,7 +2188,7 @@ app.addEventListener("click", (e) => {
     case "log-tab": S.logTab = t.dataset.tab; return render();
     case "expand-log": { const eid = +t.dataset.entryid; S.logExpandedId = S.logExpandedId === eid ? null : eid; return render(); }
     case "connect": return doConnect();
-    case "copy-link": return copyLink();
+    case "share-link": return shareLink();
     case "leave": return doLeave();
     case "sit": return send({ t: "sit", seat: +t.dataset.seat });
     case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
