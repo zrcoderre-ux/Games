@@ -301,6 +301,11 @@ function logEntryHTML(v, e) {
   const who = e.seat != null ? `<b>${esc(seatName(v, e.seat))}</b> ` : "";
   const body = e.seat == null ? `<i>${esc(e.msg)}</i>` : esc(e.msg);
   const suit = e.suit ? ` <span class="lc ${RED.has(e.suit) ? "red" : ""}">${SUIT[e.suit]}</span>` : "";
+  // "was dealt" and "kitty" entries use mini card images instead of text glyphs
+  if ((e.msg === "was dealt" || e.msg === "kitty") && e.cards?.length) {
+    const miniCards = e.cards.map(c => cardHTML(c, { mini: true })).join("");
+    return `<div class="hlj-dealt-row">${who}${body}<div class="hlj-dealt-cards">${miniCards}</div></div>`;
+  }
   const cards = (e.cards || []).map((c) => cardText(c)).join(" ");
   let tail = "";
   if (e.tail && e.extraCards && e.extraCards.length) {
@@ -509,27 +514,7 @@ function logSheet() {
   // --- Log tab ---
   const logBody = () => {
     const entries = v && v.log ? v.log : [];
-    // Append dealt-hand rows at the end of the log list (they appear at bottom = start of hand)
-    // Only revealed once the hand is over (lastDealtHands is set)
     let dealtRows = "";
-    if (S.party === "high-low-jack" && v && v.lastDealtHands) {
-      const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
-      const sortHand = (hand) => [...hand].sort((a, b) =>
-        (a.joker ? 1 : 0) - (b.joker ? 1 : 0) ||
-        (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
-        a.rank - b.rank
-      );
-      let kittyRow = "";
-      if (v.lastKitty && v.lastKitty.length) {
-        const cards = sortHand(v.lastKitty).map(c => cardHTML(c, { mini: true })).join("");
-        kittyRow = `<div class="logrow hlj-dealt-row"><span class="hlj-dealt-name hlj-dealt-kitty">Kitty</span><div class="hlj-dealt-cards">${cards}</div></div>`;
-      }
-      dealtRows = kittyRow + v.lastDealtHands.map((hand, seat) => {
-        const name = esc(seatName(v, seat));
-        const cards = sortHand(hand).map(c => cardHTML(c, { mini: true })).join("");
-        return `<div class="logrow hlj-dealt-row"><span class="hlj-dealt-name">${name}</span><div class="hlj-dealt-cards">${cards}</div></div>`;
-      }).join("");
-    }
     // For Rummy: show own hand at the bottom (dealt state), and last-round held cards
     let rummyHandRows = "";
     if (S.party === "rummy500" && v) {
