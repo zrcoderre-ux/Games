@@ -926,7 +926,6 @@ function renderLobby(v) {
     actions: dealAction,
   }) + settingsModal;
 }
-}
 
 // ---------- shared: game over ----------
 function scoreList(rows) {
