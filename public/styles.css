@@ -521,14 +521,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 
 /* ---------- Full-screen felt surface (connecting + lobby) ---------- */
-/* Shared green felt texture — same pattern as .felt-table but no oak margin */
+/* Shared green felt — no oak margin */
 .felt-screen,
 .lby-wrap{
   flex:1;
   background-color:var(--felt-0);
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='%231a4a2e'/%3E%3Cpath d='M0 10L10 0L20 10L10 20Z' fill='none' stroke='%23163d26' stroke-width='0.9' opacity='0.8'/%3E%3C/svg%3E"),
-    repeating-linear-gradient(45deg,transparent,transparent 9px,rgba(0,0,0,.015) 9px,rgba(0,0,0,.015) 10px);
   /* Lamp glow from top */
   background-attachment:scroll;
   position:relative;
@@ -570,9 +567,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .lby-felt-inner{
   flex:1;position:relative;border-radius:16px;
   background-color:var(--felt-0);
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='%231a4a2e'/%3E%3Cpath d='M0 10L10 0L20 10L10 20Z' fill='none' stroke='%23163d26' stroke-width='0.9' opacity='0.8'/%3E%3C/svg%3E"),
-    repeating-linear-gradient(45deg,transparent,transparent 9px,rgba(0,0,0,.015) 9px,rgba(0,0,0,.015) 10px);
   overflow:hidden;
 }
 .lby-felt-inner::before{
