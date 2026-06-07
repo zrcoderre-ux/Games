@@ -920,22 +920,12 @@ function renderLobby(v) {
   const n = v.seats.length;
   const you = v.you;
 
-  // Build seat slots positioned on the felt
+  // Build seat slots positioned on the felt using the same perimPos as gameplay.
   const seatSlotsHTML = v.seats.map((s, i) => {
-    const isYou = i === you;
-    if (isYou) {
-      // Always bottom center
-      return `<div class="lby-felt-seat-slot you">${renderSeat(s, i)}</div>`;
-    }
-    // Distribute other seats around top half of felt.
-    const off = you == null
-      ? i + 1
-      : (i - you + n) % n; // 1..n-1
-    const others = n - 1; // number of non-you seats
-    const idx = off - 1; // 0-indexed among others
-    const xPct = others === 1 ? 50 : 15 + (idx / (others - 1)) * 70;
-    const yPct = others <= 2 ? 15 : 15 + Math.sin((idx / (others - 1)) * Math.PI) * 25;
-    return `<div class="lby-felt-seat-slot" style="left:${xPct.toFixed(1)}%;top:${yPct.toFixed(1)}%">${renderSeat(s, i)}</div>`;
+    const off = you == null ? i : (i - you + n) % n;
+    const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 8, y2: 88 });
+    const isYou = i === you || (you == null && i === 0);
+    return `<div class="lby-felt-seat-slot${isYou ? " you" : ""}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;transform:translate(-50%,-50%)">${renderSeat(s, i)}</div>`;
   }).join("");
 
   const seatedCount = v.seats.filter(s => s.kind !== "empty").length;

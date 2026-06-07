@@ -593,9 +593,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .lby-felt-seat-slot{
   position:absolute;transform:translate(-50%,-50%);z-index:2;
 }
-/* "you" seat always bottom-center */
-.lby-felt-seat-slot.you{
-  bottom:12px;top:auto;left:50%;transform:translateX(-50%);
+/* "you" seat — perimPos puts it at bottom-center, highlight with gold border */
+.lby-felt-seat-slot.you .lby-seat{
+  border-color:rgba(196,184,90,.7);
 }
 /* lby-seat compact variant on the felt */
 .lby-felt-seat-slot .lby-seat{
