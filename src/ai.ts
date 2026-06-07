@@ -19,6 +19,7 @@ import {
   trickWinner,
   teamOf,
   lowRankFor,
+  ledInfo,
   SUITS,
   type GameState,
   type Move,
@@ -156,7 +157,7 @@ function bossTrumpValue(state: GameState, trump: Suit): number {
   for (let r = low; r <= 14; r++) all.push({ rank: r, suit: trump });
 
   const seen: Card[] = [];
-  for (const t of state.tricksWon) for (const c of t.cards) if (isTrump(c, trump)) seen.push(c);
+  for (const t of state.tricksWon) for (const p of t.plays) if (isTrump(p.card, trump)) seen.push(p.card);
   for (const p of state.currentTrick) if (isTrump(p.card, trump)) seen.push(p.card);
 
   const seenVals = new Set(seen.map((c) => trumpValue(c, trump)));
@@ -168,10 +169,70 @@ function bossTrumpValue(state: GameState, trump: Suit): number {
 function unseenTrumpCount(state: GameState, trump: Suit, myCards: Card[]): number {
   const low = lowRankFor(state.players);
   const totalTrumps = 1 + (14 - low + 1); // joker + natural trumps
-  const seenInTricks = state.tricksWon.flatMap((t) => t.cards).filter((c) => isTrump(c, trump)).length
+  const seenInTricks = state.tricksWon.flatMap((t) => t.plays).filter((p) => isTrump(p.card, trump)).length
     + state.currentTrick.filter((p) => isTrump(p.card, trump)).length;
   const myTrumps = myCards.filter((c) => isTrump(c, trump)).length;
   return totalTrumps - seenInTricks - myTrumps;
+}
+
+// Seats that have shown trump-void: they played a non-trump when trump was led.
+function trumpVoidSeats(state: GameState, trump: Suit): Set<number> {
+  const voids = new Set<number>();
+  for (const trick of state.tricksWon) {
+    const { trumpLed } = ledInfo(trick.plays[0].card, trump);
+    if (!trumpLed) continue;
+    for (const p of trick.plays) {
+      if (!isTrump(p.card, trump)) voids.add(p.seat);
+    }
+  }
+  // Also check the in-progress trick
+  if (state.currentTrick.length > 0) {
+    const { trumpLed } = ledInfo(state.currentTrick[0].card, trump);
+    if (trumpLed) {
+      for (const p of state.currentTrick) {
+        if (!isTrump(p.card, trump)) voids.add(p.seat);
+      }
+    }
+  }
+  return voids;
+}
+
+// Returns true if all trump cards that could beat `card` have already been
+// played in completed tricks or are in the AI's own hand — i.e., no opponent
+// can over-trump it. For the joker this means all other trumps are accounted for.
+function higherTrumpsAllAccountedFor(state: GameState, trump: Suit, card: Card, myCards: Card[]): boolean {
+  const cardVal = trumpValue(card, trump)!;
+  const low = lowRankFor(state.players);
+  const playedOrOwned = new Set<number>();
+  for (const t of state.tricksWon) {
+    for (const p of t.plays) {
+      const v = trumpValue(p.card, trump);
+      if (v !== null) playedOrOwned.add(v);
+    }
+  }
+  for (const c of myCards) {
+    const v = trumpValue(c, trump);
+    if (v !== null) playedOrOwned.add(v);
+  }
+  // Check that every trump with higher value is accounted for
+  if (isJoker(card)) {
+    // Joker can't be beaten, but "safe to lead" = no other trump is floating in
+    // an opponent's hand — i.e. all non-joker trumps played or in own hand
+    for (let r = low; r <= 14; r++) {
+      const v = trumpValue({ rank: r, suit: trump }, trump)!;
+      if (!playedOrOwned.has(v)) return false;
+    }
+  } else {
+    // Any trump with value > cardVal not yet played/owned is a threat
+    for (let r = low; r <= 14; r++) {
+      const v = trumpValue({ rank: r, suit: trump }, trump)!;
+      if (v > cardVal && !playedOrOwned.has(v)) return false;
+    }
+    // Check joker
+    const jokerVal = trumpValue({ joker: true }, trump)!;
+    if (jokerVal > cardVal && !playedOrOwned.has(jokerVal)) return false;
+  }
+  return true;
 }
 
 // Tricks remaining in the hand (including the current in-progress trick).
@@ -186,7 +247,7 @@ function gamePipTotals(state: GameState): [number, number] {
   const totals: [number, number] = [0, 0];
   for (const t of state.tricksWon) {
     const team = teamOf(t.seat) as 0 | 1;
-    for (const c of t.cards) totals[team] += gameValue(c);
+    for (const p of t.plays) totals[team] += gameValue(p.card);
   }
   return totals;
 }
@@ -484,11 +545,16 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
       const conserve = remaining <= p.endgameCutoff;
 
       if (topVal === boss && !conserve) {
-        // Never lead the Joker while unseen trumps remain — opponents may still
-        // hold trump and could win a later trick we need the Joker for.
-        // Uses only public knowledge: played cards + own hand.
+        // Lead the boss trump only when it's safe.
+        // For the Joker: hold back unless all opponents are known trump-void OR
+        // all other trumps have been played/are in own hand (nothing can threaten).
+        // For any other boss (e.g. Ace after Joker was played): always lead it.
         if (!isJoker(top)) return asMove(top);
-        if (unseenTrumps === 0) return asMove(top);
+        const voids = trumpVoidSeats(state, trump);
+        const allOpponentsVoid = [...Array(state.players).keys()]
+          .filter((i) => i !== seat && teamOf(i) !== myTeam)
+          .every((i) => voids.has(i));
+        if (allOpponentsVoid || higherTrumpsAllAccountedFor(state, trump, top, cards)) return asMove(top);
         // Fall through to find a safer lead.
       }
 
@@ -496,10 +562,11 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
         // Lead highest non-boss trump to strip opponents.
         const nonBoss = myTrumps.filter((c) => trumpValue(c, trump)! !== boss);
         if (nonBoss.length) {
-          // Heuristic 3: never lead unprotected Jack.
-          const hasProtection = myTrumps.some((c) => !isJoker(c) && c.rank > 11);
+          // Heuristic 3: never lead unprotected Jack unless higher trumps are all gone.
           const jack = myTrumps.find((c) => !isJoker(c) && c.rank === 11);
-          const safe = nonBoss.filter((c) => !(c === jack && !hasProtection));
+          const hasProtection = myTrumps.some((c) => !isJoker(c) && c.rank > 11);
+          const jackSafe = jack && (hasProtection || higherTrumpsAllAccountedFor(state, trump, jack, cards));
+          const safe = nonBoss.filter((c) => !(c === jack && !jackSafe));
           if (safe.length) return asMove(pick(safe, (c) => trumpValue(c, trump)!, "max"));
         }
       }

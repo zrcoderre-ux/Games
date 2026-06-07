@@ -99,7 +99,7 @@ export function redact(
   const yourTurn = seat !== null && toAct === seat;
 
   const tricks = state.tricksWon;
-  const lastTrick = tricks.length ? { winner: tricks[tricks.length - 1].seat, cards: tricks[tricks.length - 1].cards } : null;
+  const lastTrick = tricks.length ? { winner: tricks[tricks.length - 1].seat, cards: tricks[tricks.length - 1].plays.map((p) => p.card) } : null;
 
   return {
     you: seat,
