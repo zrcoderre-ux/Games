@@ -1304,31 +1304,40 @@ function renderHLJ(v) {
       ? `<div class="hlj-rr-section"><div class="hlj-rr-seclabel">Kitty</div><div class="hlj-rr-kitty">${kittyCards}</div></div>`
       : "";
 
-    const contractLine = `${bidderName} bid <b>${lh.bid}</b> for Team ${bidderTeamLetter} &mdash; <span class="${made ? "hlj-made" : "hlj-set"}">${made ? "Made it" : "Set back"}</span>`;
-
-    return `<div class="modal-back" data-action="hlj-ack-hand">
-      <div class="modal" data-stop="1">
-        <div class="modalhead"><span>Hand over</span><button class="btn sm ghost" data-action="hlj-ack-hand">Next hand</button></div>
-        <div class="modalbody">
-          <div class="hlj-rr-contract">${contractLine}</div>
-          <div class="hlj-rr-section">
+    return `<div class="hlj-result-page">
+      <div class="hlj-result-felt">
+        <div class="hlj-result-scroll">
+          <div class="hlj-result-headline">
+            <div class="hlj-result-handover">Hand over</div>
+            <div class="hlj-result-bidline">${bidderName} bid <b>${lh.bid}</b> for Team ${bidderTeamLetter}</div>
+            <div class="hlj-result-verdict ${made ? "made" : "set"}">${made ? "Made it" : "Set back"}</div>
+          </div>
+          <div class="hlj-result-card">
             <div class="hlj-rr-seclabel">Points taken</div>
             ${ptRows}
           </div>
-          ${kittySection}
-          <div class="hlj-rr-section hlj-rr-scores">
+          ${kittySection ? `<div class="hlj-result-card">${kittySection}</div>` : ""}
+          <div class="hlj-result-card hlj-result-scores">
             <div class="hlj-rr-seclabel">Score</div>
             ${scoreRows}
           </div>
+          <button class="hlj-result-next-btn" data-action="hlj-ack-hand">Next hand →</button>
         </div>
       </div>
     </div>`;
   })();
 
+  // If a hand result is pending acknowledgment, show a dedicated full-screen
+  // result page instead of the table so the table isn't visible behind it.
+  if (hljHandModal !== "") {
+    app.__set = hljHandModal;
+    return;
+  }
+
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra }) + hljHandModal;
+  app.__set = tableShell(v, { pods, center, trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
