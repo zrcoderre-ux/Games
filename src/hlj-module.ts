@@ -89,6 +89,22 @@ function hljEntries(prev: HljState, next: GameState, move: Move): Omit<LogEntry,
     } else if (next.dealerSeat !== prev.dealerSeat) {
       out.push({ seat: next.dealerSeat, msg: "deals the next hand" });
     }
+    // Retroactive dealt-hand entries so the log preserves every player's
+    // starting hand for look-back. Appended after scoring so they appear
+    // at the bottom of each hand's block (log is shown newest-first in UI).
+    const HLJ_SUIT_ORDER: Record<string, number> = { S: 0, H: 1, D: 2, C: 3 };
+    const sortHand = (hand: import("./engine.ts").Card[]) =>
+      [...hand].sort((a, b) =>
+        (("joker" in a ? 1 : 0) - ("joker" in b ? 1 : 0)) ||
+        ((HLJ_SUIT_ORDER[("suit" in a ? a.suit : "")] ?? 4) - (HLJ_SUIT_ORDER[("suit" in b ? b.suit : "")] ?? 4)) ||
+        (("rank" in a ? a.rank : 0) - ("rank" in b ? b.rank : 0))
+      );
+    if (r.kitty.length) {
+      out.push({ seat: null, msg: "kitty", cards: sortHand(r.kitty) });
+    }
+    for (let seat = 0; seat < r.dealtHands.length; seat++) {
+      out.push({ seat, msg: "was dealt", cards: sortHand(r.dealtHands[seat]) });
+    }
   }
 
   return out;
