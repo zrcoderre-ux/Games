@@ -855,13 +855,19 @@ function renderLobby(v) {
   const center = `<div class="lby-center">
     <div class="lby-center-title">${esc(GAMES[S.party].label)}</div>
     ${centerScore}
+    ${isHost ? `<div class="lby-center-cfg">${cfgControls}</div>` : ""}
   </div>`;
 
-  // Self area: config + share in selfExtra, deal/wait as actions
-  const cfgSection = isHost ? `<div class="lby-cfg">${cfgControls}</div>` : "";
-  const selfExtra = (cfgSection || shareRow)
-    ? `<div class="lby-self-panel">${cfgSection}${shareRow}</div>`
+  // Self area: just share link (chips moved onto felt)
+  const selfExtra = shareRow
+    ? `<div class="lby-self-panel">${shareRow}</div>`
     : "";
+
+  // Joker watermark + corner suits for the felt
+  const feltOverlay = `<div class="lby-felt-watermark"></div>`;
+  const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
+    `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
+  ).join("");
 
   const dealAction = isHost
     ? `<button class="felt-cta" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button>`
@@ -907,6 +913,8 @@ function renderLobby(v) {
     app.__set = tableShell(v, {
       pods: v.seats.map((s, i) => ({ seat: i, html: lbyPod(s, i) })),
       center,
+      feltOverlay,
+      cornerSuits,
       hand: null,
       selfMeta: "",
       selfTurn: null,
@@ -919,7 +927,9 @@ function renderLobby(v) {
   app.__set = tableShell(v, {
     pods,
     center,
-    hand: "",  // empty hand area keeps selfwrap consistent with gameplay
+    feltOverlay,
+    cornerSuits,
+    hand: "",
     selfMeta,
     selfTurn: settingsBtn,  // reuse selfTurn slot for settings button (right side)
     selfExtra,

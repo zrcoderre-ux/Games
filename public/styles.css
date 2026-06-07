@@ -623,6 +623,24 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* Settings button in selfTurn slot */
 .lby-gear-btn{margin-left:auto}
 
+/* Lobby watermark (hat mask, same as home screen) */
+.lby-felt-watermark{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:min(480px,85%);aspect-ratio:1/1;
+  background-color:rgba(45,122,74,.38);
+  -webkit-mask:url('/joker-hat.png') center/contain no-repeat;
+          mask:url('/joker-hat.png') center/contain no-repeat;
+  pointer-events:none;
+}
+
+/* On-felt config (chips + labels) */
+.lby-center-cfg{margin-top:8px;width:100%}
+.lby-center-cfg .lby-cfg-row{margin-bottom:0;display:flex;align-items:center;justify-content:center;gap:8px}
+.lby-center-cfg .lby-cfg-label{font-size:11px;color:rgba(255,255,255,.45);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.lby-center-cfg .lby-chip-row{display:flex;gap:8px}
+.lby-center-cfg .lby-count-chip{width:38px;height:38px;font-size:15px}
+.lby-center-cfg .sub{display:none}
+
 /* Connecting card */
 .felt-screen{display:flex;align-items:center;justify-content:center;min-height:100dvh}
 .connect-card{
