@@ -239,7 +239,7 @@ function podHTML(v, i, o = {}) {
     ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
     : "";
   const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
-  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""}">
+  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""} ${o.extraClass || ""}">
     <div class="ministack">
       ${mb}
       <span class="back-name">${esc(name)}${disconnectedBadge}</span>
@@ -812,19 +812,22 @@ function renderLobby(v) {
     seatsHTML = `<div class="lby-seat-list">${v.seats.map((s, i) => renderSeat(s, i)).join("")}</div>`;
   }
 
+  // Poker-chip player count picker — shared by all games
+  const chipRow = (action, opts, selected, note = "") =>
+    `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
+       <div class="lby-chip-row">${opts.map((c) =>
+         `<button class="lby-count-chip${c === selected ? " on" : ""}" data-action="${action}" data-count="${c}">${c}</button>`
+       ).join("")}</div></div>${note ? `<p class="sub" style="margin:2px 0 10px 72px">${note}</p>` : ""}`;
+
   // Config controls (host only)
   const cfgControls = isPJ
-    ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-         <div class="seg">${[4, 6].map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="pj-setplayers" data-count="${c}">${c}</button>`).join("")}</div></div>
-         <p class="sub" style="margin:2px 0 10px 72px">${v.players === 6 ? "Two teams of three." : "Two pairs, partners opposite."}</p>
-         <div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
+    ? chipRow("pj-setplayers", [4, 6], v.players, v.players === 6 ? "Two teams of three." : "Two pairs, partners opposite.") +
+      `<div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
          <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
     : isHLJ
-    ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>`
-    : `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-         <div class="seg">${counts.map((c) => `<button class="${c === v.players ? "on" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>
-       <div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
+    ? chipRow("setcount", counts, v.players)
+    : chipRow("setcount", counts, v.players) +
+      `<div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
          <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>`;
 
   const hasHotseats = Object.keys(S.hotseats).length > 0;
@@ -1757,6 +1760,7 @@ function renderHearts(v) {
             backs: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
+            extraClass: "hearts-backs",
           }) },
     )
     .filter(Boolean);
@@ -1828,7 +1832,9 @@ function renderHearts(v) {
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
 
-  const heartsFeltOverlay = `<span class="trump-watermark red">♥</span>`;
+  const heartsFeltOverlay = v.heartsBroken
+    ? `<span class="trump-watermark hearts-broken">♥</span>`
+    : `<span class="trump-watermark hearts-unbroken">♥</span>`;
   const heartsCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2?'red':''} ${['tl','tr','br','bl'][i]}">${s}</span>`
   ).join("");
