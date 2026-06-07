@@ -4,46 +4,49 @@
       <stop offset="0%" stop-color="#2a6040"/>
       <stop offset="100%" stop-color="#0f2a1a"/>
     </radialGradient>
-    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="rgba(200,150,10,0.18)"/>
-      <stop offset="100%" stop-color="rgba(200,150,10,0)"/>
-    </radialGradient>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="rgba(0,0,0,0.6)"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="rgba(0,0,0,0.7)"/>
+    </filter>
+    <!-- Turn black silhouette white -->
+    <filter id="white-hat" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix"
+        values="-1 0 0 0 1
+                 0 -1 0 0 1
+                 0  0 -1 0 1
+                 0  0  0 1 0"/>
     </filter>
   </defs>
 
-  <!-- Background rounded square -->
+  <!-- Green felt background -->
   <rect width="512" height="512" rx="96" fill="url(#bg)"/>
 
-  <!-- Subtle overhead lamp glow -->
-  <ellipse cx="256" cy="160" rx="220" ry="180" fill="url(#glow)"/>
+  <!-- Purple border -->
+  <rect width="512" height="512" rx="96" fill="none" stroke="#7b2fbe" stroke-width="22"/>
+  <rect x="14" y="14" width="484" height="484" rx="86" fill="none" stroke="rgba(180,100,255,0.35)" stroke-width="5"/>
 
-  <!-- Gold border -->
-  <rect width="512" height="512" rx="96" fill="none" stroke="#b8860b" stroke-width="16" opacity="0.7"/>
-  <rect x="18" y="18" width="476" height="476" rx="82" fill="none" stroke="rgba(255,220,100,0.25)" stroke-width="4"/>
+  <!-- Spade ♠ — top-left, black -->
+  <text x="108" y="155"
+        font-family="Georgia,serif" font-size="130" text-anchor="middle"
+        fill="#111" filter="url(#shadow)">♠</text>
 
-  <!-- Spade ♠ — top left, white -->
-  <text x="138" y="215"
-        font-family="Georgia,serif" font-size="168" text-anchor="middle"
-        fill="white" filter="url(#shadow)">♠</text>
+  <!-- Heart ♥ — top-right, red -->
+  <text x="404" y="155"
+        font-family="Georgia,serif" font-size="130" text-anchor="middle"
+        fill="#cc1111" filter="url(#shadow)">♥</text>
 
-  <!-- Heart ♥ — top right, red -->
-  <text x="374" y="215"
-        font-family="Georgia,serif" font-size="168" text-anchor="middle"
-        fill="#d42020" filter="url(#shadow)">♥</text>
+  <!-- Club ♣ — bottom-left, black -->
+  <text x="108" y="440"
+        font-family="Georgia,serif" font-size="130" text-anchor="middle"
+        fill="#111" filter="url(#shadow)">♣</text>
 
-  <!-- Club ♣ — bottom left, white -->
-  <text x="138" y="410"
-        font-family="Georgia,serif" font-size="168" text-anchor="middle"
-        fill="white" filter="url(#shadow)">♣</text>
+  <!-- Diamond ♦ — bottom-right, red -->
+  <text x="404" y="440"
+        font-family="Georgia,serif" font-size="130" text-anchor="middle"
+        fill="#cc1111" filter="url(#shadow)">♦</text>
 
-  <!-- Diamond ♦ — bottom right, red -->
-  <text x="374" y="410"
-        font-family="Georgia,serif" font-size="168" text-anchor="middle"
-        fill="#d42020" filter="url(#shadow)">♦</text>
-
-  <!-- Thin gold dividers -->
-  <line x1="256" y1="40" x2="256" y2="472" stroke="rgba(200,160,20,0.3)" stroke-width="2"/>
-  <line x1="40" y1="256" x2="472" y2="256" stroke="rgba(200,160,20,0.3)" stroke-width="2"/>
+  <!-- Joker hat — centered, white silhouette -->
+  <image href="/joker-silhouette.png"
+         x="156" y="176" width="200" height="160"
+         filter="url(#white-hat)"
+         opacity="0.88"/>
 </svg>
