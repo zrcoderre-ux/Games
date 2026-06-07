@@ -1,0 +1,17 @@
+{
+  "name": "Parlor",
+  "short_name": "Parlor",
+  "description": "Card games — High Low Jack, Hearts, Rummy 500, and more",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f2a1a",
+  "theme_color": "#2b1c12",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
