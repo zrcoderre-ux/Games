@@ -1843,8 +1843,7 @@ function renderHearts(v) {
         v.youPassed ? "Your cards are away \u2014 waiting for the table." : `Choose 3 cards to pass ${dir}.`
       }</div>`;
   } else {
-    const broken = `<span class="crest"><span class="suit red">\u2665</span> ${v.heartsBroken ? "broken" : "not broken"}</span>`;
-    const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${broken}<span class="crest">hand ${v.handNo + 1}</span></div>`;
+    const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><span class="crest">hand ${v.handNo + 1}</span></div>`;
     const showLast = v.currentTrick.length === 0 && v.lastTrick;
     const winSeat = showLast ? v.lastTrick.winner : null;
     if (v.currentTrick.length) {

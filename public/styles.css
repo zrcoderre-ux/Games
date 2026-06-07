@@ -1717,7 +1717,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
 /* Hearts watermark — soft red when broken, dim when not */
 .trump-watermark.hearts-unbroken{color:rgba(255,255,255,.07)}
-.trump-watermark.hearts-broken{color:rgba(180,40,40,.18);text-shadow:0 0 40px rgba(160,30,30,.3)}
+.trump-watermark.hearts-broken{color:rgba(210,30,30,.45);text-shadow:0 0 60px rgba(200,20,20,.5),0 0 120px rgba(180,10,10,.25)}
 
 /* Hearts: red card backs for all opponent pods */
 .hearts-backs .mb{
