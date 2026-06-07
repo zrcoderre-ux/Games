@@ -175,8 +175,9 @@ function unseenTrumpCount(state: GameState, trump: Suit, myCards: Card[]): numbe
 }
 
 // Tricks remaining in the hand (including the current in-progress trick).
-function tricksRemaining(state: GameState): number {
-  const handSize = state.hands[0].length + state.tricksWon.length + (state.currentTrick.length > 0 ? 1 : 0);
+// Uses the acting seat's own hand — all players have equal hand sizes throughout.
+function tricksRemaining(state: GameState, seat: number): number {
+  const handSize = state.hands[seat].length + state.tricksWon.length + (state.currentTrick.length > 0 ? 1 : 0);
   return handSize - state.tricksWon.length;
 }
 
@@ -460,7 +461,7 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
   const myTeamAhead = (pips[myTeam] - pips[1 - myTeam]) >= p.tenProtectMargin;
   const kv = (c: Card) => keepValue(c, trump, low, p, myTeamAhead);
 
-  const remaining = tricksRemaining(state);
+  const remaining = tricksRemaining(state, seat);
   const unseenTrumps = unseenTrumpCount(state, trump, cards);
   const myTrumps = cards.filter((c) => isTrump(c, trump));
   const isLast = state.currentTrick.length === players - 1;
@@ -483,13 +484,11 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
       const conserve = remaining <= p.endgameCutoff;
 
       if (topVal === boss && !conserve) {
-        // Never lead the Joker while any opponent still holds trump —
-        // hold it until opponents are void or we're forced.
+        // Never lead the Joker while unseen trumps remain — opponents may still
+        // hold trump and could win a later trick we need the Joker for.
+        // Uses only public knowledge: played cards + own hand.
         if (!isJoker(top)) return asMove(top);
-        const opponentsHaveTrump = state.hands.some(
-          (hand, i) => teamOf(i) !== myTeam && hand.some((c) => isTrump(c, trump))
-        );
-        if (!opponentsHaveTrump) return asMove(top);
+        if (unseenTrumps === 0) return asMove(top);
         // Fall through to find a safer lead.
       }
 
