@@ -194,7 +194,7 @@ function cardHTML(c, o = {}) {
       ? `<span class="joker-as-badge ${RED.has(o.jokerAs.suit) ? "red" : ""}">${rankLabel(o.jokerAs.rank)}${SUIT[o.jokerAs.suit]}</span>`
       : "";
     const action = o.jokerAs && !o.inMeld ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
-    return `<div class="${cls.join(" ")}"${st}${action}><img class="joker-img" src="/joker_black.png" alt="Joker">${badge}</div>`;
+    return `<div class="${cls.join(" ")}"${st}${action}><img class="joker-img" src="/joker-card.png" alt="Joker">${badge}</div>`;
   }
   if (RED.has(c.suit)) cls.push("red");
   const r = rankLabel(c.rank);
