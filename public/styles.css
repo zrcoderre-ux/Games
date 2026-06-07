@@ -250,32 +250,31 @@ body:has(.felt-table)::before{
 }
 .tbl-card{
   position:absolute;width:84px;height:116px;border-radius:7px;
-  background:linear-gradient(160deg,#fdfaf2 0%,#ede6d0 100%);
+  background:linear-gradient(160deg, #fdfaf2 0%, #ede6d0 100%);
   border:1px solid rgba(255,255,255,.88);cursor:pointer;
   box-shadow:2px 4px 14px rgba(0,0,0,.5),1px 2px 4px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,255,255,.55);
   transition:transform .28s cubic-bezier(.34,1.56,.64,1),box-shadow .28s ease;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:8px 6px;user-select:none;appearance:none;
 }
-.tbl-card.red .tbl-card-suit,
-.tbl-card.red .tbl-card-corner{color:#b91c1c}
-.tbl-card.black .tbl-card-suit,
-.tbl-card.black .tbl-card-corner{color:#1c1c1c}
-.tbl-card-suit{font-size:22px;line-height:1;margin-bottom:5px}
+/* no tbl-card::after override needed */
+.tbl-card-suit{font-size:30px;line-height:1;margin-bottom:4px;color:#1a1a2e;position:relative;z-index:1}
 .tbl-card-name{
-  font-family:"Fraunces",serif;font-size:10.5px;font-weight:500;
-  text-align:center;line-height:1.3;color:#2a1a0a;
+  font-family:"Fraunces",serif;font-size:10px;font-weight:600;
+  text-align:center;line-height:1.3;color:#2a1a08;
+  position:relative;z-index:1;
 }
 .tbl-card-corner{
-  position:absolute;font-size:10px;font-family:"Fraunces",serif;font-weight:700;line-height:1;
+  position:absolute;font-size:9px;font-family:"Fraunces",serif;font-weight:700;line-height:1;
+  color:#1a1a2e;z-index:1;
 }
 .tbl-card-corner.tl{top:5px;left:6px}
 .tbl-card-corner.br{bottom:5px;right:6px;transform:rotate(180deg)}
 .tbl-card.selected{
-  transform:translateY(-12px) rotate(0deg) !important;
+  transform:translateY(-14px) scale(1.04) rotate(0deg) !important;
   z-index:10 !important;
-  box-shadow:0 16px 32px rgba(0,0,0,.6),0 6px 12px rgba(0,0,0,.4),
-    inset 0 0 0 1px rgba(255,255,255,.7),0 0 0 2px rgba(201,144,30,.55) !important;
+  box-shadow:0 18px 36px rgba(0,0,0,.7),0 6px 12px rgba(0,0,0,.4),
+    inset 0 0 0 1px rgba(255,255,255,.6),0 0 0 2px rgba(201,144,30,.7) !important;
 }
 
 .felt-toggle{
@@ -355,12 +354,19 @@ button{font-family:inherit}
   padding:max(10px,env(safe-area-inset-top)) 10px max(14px,env(safe-area-inset-bottom));
   display:flex;flex-direction:column;
 }
-/* When table is present: lock to screen height */
+/* When table is present: lock to screen height, warm wood background */
 #app:has(.table){
   height:100dvh;overflow:hidden;padding:0;
-  background:var(--wood-0);
+  background:linear-gradient(135deg,#7a5030 0%,#5c3a1e 25%,#3e2510 50%,#5c3a1e 75%,#7a5030 100%);
+  background-attachment:fixed;
 }
-/* When lobby is present: same lock so lby-wrap can scroll */
+/* When lobby is present: wood surround */
+#app:has(.lby-outer){
+  height:100dvh;overflow:hidden;padding:0;
+  background:linear-gradient(135deg,#7a5030 0%,#5c3a1e 25%,#3e2510 50%,#5c3a1e 75%,#7a5030 100%);
+  background-attachment:fixed;
+}
+/* legacy lby-wrap still used in connecting/etc */
 #app:has(.lby-wrap){
   height:100dvh;overflow:hidden;padding:0;
 }
@@ -543,6 +549,102 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   background:rgba(0,0,0,.32);border:1px solid rgba(201,144,30,.2);
   border-radius:18px;
   box-shadow:0 4px 24px rgba(0,0,0,.4);
+}
+
+/* ---------- New lobby: outer wood surround + felt table + controls below ---------- */
+.lby-outer{
+  display:flex;flex-direction:column;
+  height:100%;overflow:hidden;
+}
+.lby-felt{
+  flex:1;min-height:0;
+  margin:10px;
+  border-radius:22px;
+  padding:8px;
+  background:linear-gradient(135deg,#8a5a28 0%,#6e4218 25%,#5c3a1e 50%,#6e4218 75%,#8a5a28 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(255,210,130,.25),
+    inset 0 -2px 4px rgba(0,0,0,.4),
+    0 4px 16px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;
+  position:relative;
+}
+.lby-felt-inner{
+  flex:1;position:relative;border-radius:16px;
+  background-color:var(--felt-0);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='20' height='20' fill='%231a4a2e'/%3E%3Cpath d='M0 10L10 0L20 10L10 20Z' fill='none' stroke='%23163d26' stroke-width='0.9' opacity='0.8'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(45deg,transparent,transparent 9px,rgba(0,0,0,.015) 9px,rgba(0,0,0,.015) 10px);
+  overflow:hidden;
+}
+.lby-felt-inner::before{
+  content:"";pointer-events:none;position:absolute;inset:0;z-index:0;
+  background:radial-gradient(ellipse 120% 40% at 50% 0%,rgba(220,150,40,.18) 0%,transparent 60%);
+}
+.lby-felt-seats{
+  position:absolute;inset:0;
+}
+.lby-felt-center{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;pointer-events:none;z-index:1;
+}
+.lby-felt-center-title{
+  font-family:"Fraunces",serif;font-size:18px;font-weight:700;
+  color:rgba(248,244,232,.3);letter-spacing:.02em;
+  text-shadow:0 1px 4px rgba(0,0,0,.5);
+}
+.lby-felt-center-sub{
+  font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:rgba(248,244,232,.18);margin-top:4px;
+}
+/* compass seat slot on felt */
+.lby-felt-seat-slot{
+  position:absolute;transform:translate(-50%,-50%);z-index:2;
+}
+/* "you" seat always bottom-center */
+.lby-felt-seat-slot.you{
+  bottom:12px;top:auto;left:50%;transform:translateX(-50%);
+}
+/* lby-seat compact variant on the felt */
+.lby-felt-seat-slot .lby-seat{
+  padding:6px 8px;border-radius:10px;margin-bottom:0;
+  background:rgba(0,0,0,.38);border-color:rgba(180,210,255,.15);
+  min-width:80px;max-width:120px;flex-direction:column;align-items:center;
+  gap:4px;text-align:center;
+}
+.lby-felt-seat-slot .lby-seat.me{
+  border-color:rgba(196,184,90,.55);background:rgba(0,0,0,.45);
+}
+.lby-felt-seat-slot .lby-seat.empty{
+  background:rgba(0,0,0,.22);border-style:dashed;
+}
+.lby-felt-seat-slot .lby-seat-info{flex:none}
+.lby-felt-seat-slot .lby-seat-name{font-size:11px}
+.lby-felt-seat-slot .lby-seat-role{font-size:9px;justify-content:center}
+.lby-felt-seat-slot .lby-av{width:28px;height:28px;font-size:12px}
+.lby-felt-seat-slot .lby-seat-action{position:absolute;top:-6px;right:-6px}
+.lby-felt-seat-slot .lby-act{font-size:10px;padding:2px 6px}
+
+.lby-controls{
+  flex:none;
+  padding:10px 14px max(12px,env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;gap:8px;
+}
+.lby-controls .lby-cfg{margin-bottom:0}
+.lby-controls .lby-cta-row{margin-top:0}
+/* score strip for team games in lobby */
+.lby-score-strip{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  font-size:13px;color:var(--ink-soft);
+  background:rgba(0,0,0,.25);border:1px solid rgba(205,160,90,.18);
+  border-radius:10px;padding:6px 14px;
+}
+.lby-score-strip b{font-family:"Fraunces",serif;font-size:16px;color:var(--ink)}
+.lby-score-strip .sep{color:var(--ink-dim)}
+
+/* gear button on the felt */
+.lby-felt-inner .lby-gear-btn{
+  position:absolute;top:10px;right:10px;z-index:5;
 }
 
 /* Connecting card */
@@ -741,19 +843,30 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
 }
 
+/* Wooden frame around the felt — warm real-wood look */
+.felt-frame{
+  flex:1;
+  margin:0 8px;
+  border-radius:26px;
+  padding:8px;
+  background:linear-gradient(135deg,#8a5a28 0%,#6e4218 25%,#5c3a1e 50%,#6e4218 75%,#8a5a28 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(255,210,130,.25),
+    inset 0 -2px 4px rgba(0,0,0,.4),
+    0 10px 30px -12px rgba(0,0,0,.9),
+    0 2px 8px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;
+}
+
 /* The playing surface — a rounded rectangle floating in the dark room */
 .felt{
   flex:1;position:relative;
-  margin:0 8px;
-  border-radius:22px;
+  border-radius:18px;
   overflow:visible;
   background:
     radial-gradient(130% 90% at 50% 30%, var(--felt-2) 0%, var(--felt-1) 45%, var(--felt-0) 100%);
   box-shadow:
-    inset 0 0 0 9px var(--wood-2),
-    inset 0 0 0 10px var(--wood-edge),
-    inset 0 0 60px rgba(0,0,0,.45),
-    0 10px 30px -12px rgba(0,0,0,.9);
+    inset 0 0 60px rgba(0,0,0,.45);
 }
 /* felt noise */
 .felt::before{

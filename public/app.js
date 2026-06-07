@@ -608,6 +608,7 @@ function tableShell(v, parts) {
   }
   return `<div class="table">
     ${appbar(v, { log: true })}
+    <div class="felt-frame">
     <div class="felt">
       ${feltPods}
       ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
@@ -616,6 +617,7 @@ function tableShell(v, parts) {
       ${parts.trick || ""}
       ${parts.feltBid || ""}
       ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
+    </div>
     </div>
     <div class="selfwrap-spacer"></div>
     ${parts.aboveSelf ? `<div class="above-self">${parts.aboveSelf}</div>` : ""}
@@ -873,17 +875,67 @@ function renderLobby(v) {
     ? `<div class="lby-cfg">${cfgControls}</div>`
     : "";
 
-  app.__set = `${appbar(v)}
-    <div class="lby-wrap">
-      <div class="felt-content">
+  // Compass layout: place seats on the felt at perimeter positions.
+  // "You" always sits at the bottom center. Other seats distribute around the top.
+  const n = v.seats.length;
+  const you = v.you;
+
+  // Build seat slots positioned on the felt
+  const seatSlotsHTML = v.seats.map((s, i) => {
+    const isYou = i === you;
+    if (isYou) {
+      // Always bottom center
+      return `<div class="lby-felt-seat-slot you">${renderSeat(s, i)}</div>`;
+    }
+    // Distribute other seats around top half of felt.
+    // off = how far ahead of "you" going clockwise, but we want them spread top.
+    const off = you == null
+      ? i + 1
+      : (i - you + n) % n; // 1..n-1
+    // Map offset to angle: off=1 is top-left, off=n-1 is top-right, off=middle is top-center
+    // We place in the top arc: from ~15% to 85% horizontally, 15% to 50% vertically
+    const others = n - 1; // number of non-you seats
+    const idx = off - 1; // 0-indexed among others
+    // Divide top arc into `others` positions
+    const xPct = others === 1 ? 50 : 15 + (idx / (others - 1)) * 70;
+    const yPct = others <= 2 ? 15 : 15 + Math.sin((idx / (others - 1)) * Math.PI) * 25;
+    return `<div class="lby-felt-seat-slot" style="left:${xPct.toFixed(1)}%;top:${yPct.toFixed(1)}%">${renderSeat(s, i)}</div>`;
+  }).join("");
+
+  const seatedCount = v.seats.filter(s => s.kind !== "empty").length;
+  const centerSub = `${seatedCount} of ${n} seated`;
+
+  // Score strip for team games
+  const scoreStrip = isTeamGame && v.scores
+    ? `<div class="lby-score-strip">
+        <span>● Team A <b>${v.scores[0]}</b></span>
+        <span class="sep">|</span>
+        <span>● Team B <b>${v.scores[1]}</b></span>
+        <span class="sep">·</span>
+        <span>to ${v.target ?? 21}</span>
+      </div>`
+    : `<div class="lby-score-strip"><span>${seatedCount} seated</span></div>`;
+
+  app.__set = `<div class="lby-outer">
+    <div class="lby-felt">
+      <div class="lby-felt-inner">
         ${settingsBtn}
-        <div class="lby-title">${esc(GAMES[S.party].label)}</div>
-        ${shareRow}
-        <div class="lby-seats-scroll">${seatsHTML}</div>
-        ${cfgSection}
-        <div class="lby-cta-row">${dealBtn}</div>
+        <div class="lby-felt-seats">
+          ${seatSlotsHTML}
+        </div>
+        <div class="lby-felt-center">
+          <div class="lby-felt-center-title">${esc(GAMES[S.party].label)}</div>
+          <div class="lby-felt-center-sub">${centerSub}</div>
+        </div>
       </div>
-    </div>${settingsModal}`;
+    </div>
+    <div class="lby-controls">
+      ${scoreStrip}
+      ${cfgSection}
+      ${shareRow}
+      <div class="lby-cta-row">${dealBtn}</div>
+    </div>
+  </div>${settingsModal}`;
 }
 
 // ---------- shared: game over ----------
