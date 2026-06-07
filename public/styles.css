@@ -1723,10 +1723,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 .lby-count-chip:active:not(:disabled){transform:translateY(0) scale(.97)}
 .lby-count-chip.on{
   background:
-    radial-gradient(circle at 50% 50%, #6a3010 0% 56%, #4a1800 56% 60%, transparent 60%),
-    repeating-conic-gradient(#6a3010 0deg 28deg, #f0d060 28deg 45deg);
-  color:#f0d878;
-  box-shadow:0 2px 4px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.15);
+    radial-gradient(circle at 50% 50%, #2a5ab0 0% 56%, #0e2a70 56% 60%, transparent 60%),
+    repeating-conic-gradient(#2a5ab0 0deg 28deg, #90c0ff 28deg 45deg);
+  color:#fff;
+  box-shadow:0 0 0 3px rgba(140,190,255,.7),0 4px 12px rgba(0,0,0,.5);
 }
 .lby-count-chip.red{
   background:
@@ -1737,8 +1737,9 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 .lby-count-chip.red.on{
   background:
     radial-gradient(circle at 50% 50%, #c02020 0% 56%, #800000 56% 60%, transparent 60%),
-    repeating-conic-gradient(#c02020 0deg 28deg, #ffd0d0 28deg 45deg);
+    repeating-conic-gradient(#c02020 0deg 28deg, #ffb0b0 28deg 45deg);
   color:#fff;
+  box-shadow:0 0 0 3px rgba(255,140,140,.7),0 4px 12px rgba(0,0,0,.5);
 }
 /* Rummy score poker chip */
 .score-chip{
