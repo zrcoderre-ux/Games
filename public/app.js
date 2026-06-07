@@ -1515,17 +1515,23 @@ function renderRummy(v) {
           const meldAttrs = `data-action="open-meld" data-meldid="${m.id}"`;
           let inner;
           if (m.kind === "set") {
-            // Compact: one card showing rank + a pip per suit present
+            // Fan like runs; put the odd-color card on top (last = highest z-index)
             const naturals = m.cards.filter((c) => !c.joker);
-            const suits = naturals.map((c) => c.suit);
-            const jk = m.cards.filter((c) => c.joker).length;
-            const rank = naturals.length ? rankLabel(naturals[0].rank) : "★";
-            const CORNERS = [["S","sc-tl"],["H","sc-tr"],["C","sc-bl"],["D","sc-br"]];
-            const pips = CORNERS.map(([s, cls]) =>
-              suits.includes(s) ? `<span class="${cls}${RED.has(s)?" red":""}">${SUIT[s]}</span>` : ""
-            ).join("");
-            const jkBadge = jk ? `<span class="set-jk">★×${jk}</span>` : "";
-            inner = `<div class="card mini set-merged tappable" ${meldAttrs}>${pips}<span class="sm-rank">${rank}</span>${jkBadge}</div>`;
+            const redCount = naturals.filter((c) => RED.has(c.suit)).length;
+            const blackCount = naturals.length - redCount;
+            const oddIsRed = redCount < blackCount; // minority color is the odd one
+            const sorted = [...m.cards].sort((a, b) => {
+              const aOdd = a.joker ? 0 : (RED.has(a.suit) === oddIsRed ? 1 : 0);
+              const bOdd = b.joker ? 0 : (RED.has(b.suit) === oddIsRed ? 1 : 0);
+              return aOdd - bOdd; // odd-color card sorts last (on top)
+            });
+            const n = sorted.length;
+            const negMargin = n <= 1 ? 0 : Math.round(44 * (n - 2) / (n - 1));
+            const allCards = sorted.map((c, ci) => {
+              const ml = ci === 0 ? "" : `margin-left:-${negMargin}px`;
+              return cardHTML(c, { mini: true, inMeld: true, style: ml });
+            }).join("");
+            inner = `<div class="run-dense tappable">${allCards}</div>`;
           } else {
             // Run: fixed total width of 2 mini cards; margin shrinks as count grows
             const n = m.cards.length;
@@ -1611,7 +1617,10 @@ function renderRummy(v) {
     acts.push(sortBar);
   }
 
-  const selfMeta = v.you != null ? `Score ${v.scores[v.you]} \u00b7 play to ${v.target}` : `play to ${v.target}`;
+  const myScore = v.you != null ? v.scores[v.you] : null;
+  const selfMeta = myScore != null
+    ? `<span class="score-chip">${myScore}</span><span class="score-meta"> of ${v.target}</span>`
+    : `play to ${v.target}`;
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;

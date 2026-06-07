@@ -1741,3 +1741,16 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   transform:translateY(2px);
   color:#fff;
 }
+/* Rummy score poker chip */
+.score-chip{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:36px;height:36px;border-radius:50%;
+  font-family:"Fraunces",serif;font-size:14px;font-weight:700;
+  background:
+    radial-gradient(circle at 38% 32%,rgba(255,255,255,.22) 0%,transparent 55%),
+    conic-gradient(#5a4010 0deg 30deg,#c8960a 30deg 60deg,#5a4010 60deg 90deg,#c8960a 90deg 120deg,#5a4010 120deg 150deg,#c8960a 150deg 180deg,#5a4010 180deg 210deg,#c8960a 210deg 240deg,#5a4010 240deg 270deg,#c8960a 270deg 300deg,#5a4010 300deg 330deg,#c8960a 330deg 360deg);
+  color:#f0d878;
+  box-shadow:0 2px 0 #3a2800,0 3px 6px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.2);
+  vertical-align:middle;
+}
+.score-meta{font-size:12px;color:var(--ink-soft);vertical-align:middle;margin-left:4px}
