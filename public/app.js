@@ -834,7 +834,11 @@ function renderLobby(v) {
     ? chipRow("setcount", counts, v.players)
     : chipRow("setcount", counts, v.players) +
       `<div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
-         <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>`;
+         <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>` +
+      (S.party === "rummy500"
+        ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Must discard</span>
+             <button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard">${v.requireDiscard ? "On" : "Off"}</button></div>`
+        : "");
 
   const hasHotseats = Object.keys(S.hotseats).length > 0;
   let shareRow = "";
@@ -2187,6 +2191,13 @@ app.addEventListener("click", (e) => {
     case "setcount": {
       const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
       const config = { players: +t.dataset.count, target };
+      if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
+      if (v.requireDiscard != null) config.requireDiscard = v.requireDiscard;
+      return send({ t: "setConfig", config });
+    }
+    case "rummy-toggle-discard": {
+      const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
+      const config = { players: v.players, target, requireDiscard: !v.requireDiscard };
       if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
       return send({ t: "setConfig", config });
     }

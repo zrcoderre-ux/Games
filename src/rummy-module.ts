@@ -201,6 +201,7 @@ export type RummyState = {
   winner: number | null;
   lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][] } | null;
 
+  requireDiscard: boolean; // must discard a card (not meld/layoff) to go out
   // Per-seat bot difficulty: 0=Easy, 1=Medium, 2=Hard, 3=Expert. Default 2 (Hard/Aggressive).
   botDifficulty: number[];
 
@@ -219,6 +220,7 @@ export type RummyMove =
 export type RummyConfig = {
   players: number;
   target: number;
+  requireDiscard?: boolean; // if true, player must discard to go out (default: false)
   // Per-seat bot difficulty: 0=Easy, 1=Medium, 2=Hard, 3=Expert. Omit to default all to Hard.
   botDifficulty?: number[];
 };
@@ -246,6 +248,7 @@ export type RummyView = {
   melds: { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] }[];
   mustMeldCardId: number | null; // meaningful only on your own turn
   lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][] } | null;
+  requireDiscard: boolean;
   botDifficulty: number[]; // per-seat difficulty (public, for lobby display)
   log: LogEntry[]; // authoritative move log (public)
 };
@@ -287,6 +290,7 @@ function createGame(config: RummyConfig, seed: number): RummyState {
   const base: RummyState = {
     players: config.players,
     target: config.target,
+    requireDiscard: config.requireDiscard ?? false,
     seed,
     phase: "playing",
     dealerSeat: 0,
@@ -432,6 +436,11 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
           if (!canStillPlay) return false;
         }
       }
+      // requireDiscard: block going out via meld alone (must keep ≥1 card to discard)
+      if (state.requireDiscard) {
+        const remainAfter = hand.filter((c) => !move.cards.includes(c.id));
+        if (remainAfter.length === 0) return false;
+      }
       return true;
     }
     case "layoff": {
@@ -456,6 +465,11 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
             updatedMelds.some((mx) => mx.kind === "set" ? isSet([...mx.cards, mustCard]) : isRun([...mx.cards, mustCard]));
           if (!canStillPlay) return false;
         }
+      }
+      // requireDiscard: block going out via layoff alone
+      if (state.requireDiscard) {
+        const remainAfter = hand.filter((c) => !move.cards.includes(c.id));
+        if (remainAfter.length === 0) return false;
       }
       return true;
     }
@@ -616,6 +630,7 @@ function redact(state: RummyState, seat: number | null, meta: RoomMeta): RummyVi
     melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: state.cardOwner[m.cards[0].id] ?? -1, cards: m.cards })),
     mustMeldCardId: yours ? state.mustMeldCardId : null,
     lastRound: state.lastRound,
+    requireDiscard: state.requireDiscard,
     botDifficulty: state.botDifficulty,
     log: state.log,
   };
@@ -646,6 +661,7 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
     melds: [],
     mustMeldCardId: null,
     lastRound: null,
+    requireDiscard: config.requireDiscard ?? false,
     botDifficulty: Array.from({ length: players }, (_, i) => config.botDifficulty?.[i] ?? 2),
     log: [],
   };

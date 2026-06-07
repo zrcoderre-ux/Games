@@ -1308,6 +1308,7 @@ function createGame2(config, seed) {
   const base = {
     players: config.players,
     target: config.target,
+    requireDiscard: config.requireDiscard ?? false,
     seed,
     phase: "playing",
     dealerSeat: 0,
@@ -1425,6 +1426,10 @@ function isLegal(state, move) {
           if (!canStillPlay) return false;
         }
       }
+      if (state.requireDiscard) {
+        const remainAfter = hand.filter((c) => !move.cards.includes(c.id));
+        if (remainAfter.length === 0) return false;
+      }
       return true;
     }
     case "layoff": {
@@ -1445,6 +1450,10 @@ function isLegal(state, move) {
           const canStillPlay = canFormMeldWith(remainHand, mustCard) || updatedMelds.some((mx) => mx.kind === "set" ? isSet([...mx.cards, mustCard]) : isRun([...mx.cards, mustCard]));
           if (!canStillPlay) return false;
         }
+      }
+      if (state.requireDiscard) {
+        const remainAfter = hand.filter((c) => !move.cards.includes(c.id));
+        if (remainAfter.length === 0) return false;
       }
       return true;
     }
@@ -1584,6 +1593,7 @@ function redact2(state, seat, meta) {
     melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: state.cardOwner[m.cards[0].id] ?? -1, cards: m.cards })),
     mustMeldCardId: yours ? state.mustMeldCardId : null,
     lastRound: state.lastRound,
+    requireDiscard: state.requireDiscard,
     botDifficulty: state.botDifficulty,
     log: state.log
   };
@@ -1613,6 +1623,7 @@ function lobbyView(config, seat, meta) {
     melds: [],
     mustMeldCardId: null,
     lastRound: null,
+    requireDiscard: config.requireDiscard ?? false,
     botDifficulty: Array.from({ length: players }, (_, i) => config.botDifficulty?.[i] ?? 2),
     log: []
   };
