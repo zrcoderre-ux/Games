@@ -942,25 +942,19 @@ function renderLobby(v) {
       </div>`
     : `<div class="lby-score-strip"><span>${seatedCount} seated</span></div>`;
 
-  app.__set = `<div class="lby-outer">
-    <div class="lby-felt">
-      <div class="lby-felt-inner">
-        ${settingsBtn}
-        <div class="lby-felt-seats">
-          ${seatSlotsHTML}
-        </div>
-        <div class="lby-felt-center">
-          <div class="lby-felt-center-title">${esc(GAMES[S.party].label)}</div>
-          <div class="lby-felt-center-sub">${centerSub}</div>
-        </div>
-      </div>
-    </div>
-    <div class="lby-controls">
+  app.__set = `<div class="felt-table lby-table">
+    <div class="cb cb1"></div><div class="cb cb2"></div>
+    <div class="cb cb3"></div><div class="cb cb4"></div>
+    ${settingsBtn}
+    <div class="lby-felt-seats">${seatSlotsHTML}</div>
+    <div class="lby-felt-center lby-felt-overlay">
+      <div class="lby-felt-center-title">${esc(GAMES[S.party].label)}</div>
+      <div class="lby-felt-center-sub">${centerSub}</div>
       ${scoreStrip}
       ${cfgSection}
       ${shareRow}
-      <div class="lby-cta-row">${dealBtn}</div>
     </div>
+    <div class="lby-deal-row">${dealBtn}</div>
   </div>${settingsModal}`;
 }
 

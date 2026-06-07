@@ -546,70 +546,29 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   box-shadow:0 4px 24px rgba(0,0,0,.4);
 }
 
-/* ---------- New lobby: outer wood surround + felt table + controls below ---------- */
-.lby-outer{
-  display:flex;flex-direction:column;
-  height:100%;overflow:hidden;
-}
-.lby-felt{
-  flex:1;min-height:0;
-  margin:10px;
-  border-radius:22px;
-  padding:8px;
-  background:linear-gradient(135deg,#8a5a28 0%,#6e4218 25%,#5c3a1e 50%,#6e4218 75%,#8a5a28 100%);
-  box-shadow:
-    inset 0 2px 4px rgba(255,210,130,.25),
-    inset 0 -2px 4px rgba(0,0,0,.4),
-    0 4px 16px rgba(0,0,0,.6);
-  display:flex;flex-direction:column;
-  position:relative;
-}
-.lby-felt-inner{
-  flex:1;position:relative;border-radius:16px;
-  background-color:var(--felt-0);
-  overflow:hidden;
-}
-.lby-felt-inner::before{
-  content:"";pointer-events:none;position:absolute;inset:0;z-index:0;
-  background:radial-gradient(ellipse 120% 40% at 50% 0%,rgba(220,150,40,.18) 0%,transparent 60%);
+/* ---------- Lobby: full-table layout (reuses .felt-table from home screen) ---------- */
+.felt-table.lby-table{
+  /* Same as home felt-table but we need seats + overlay absolutely positioned */
 }
 .lby-felt-seats{
-  position:absolute;inset:0;
+  position:absolute;inset:0;pointer-events:none;
 }
-.lby-felt-center{
-  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  text-align:center;pointer-events:none;z-index:1;
-}
-.lby-felt-center-title{
-  font-family:"Fraunces",serif;font-size:18px;font-weight:700;
-  color:rgba(248,244,232,.3);letter-spacing:.02em;
-  text-shadow:0 1px 4px rgba(0,0,0,.5);
-}
-.lby-felt-center-sub{
-  font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
-  color:rgba(248,244,232,.18);margin-top:4px;
-}
-/* compass seat slot on felt */
 .lby-felt-seat-slot{
-  position:absolute;transform:translate(-50%,-50%);z-index:2;
+  position:absolute;pointer-events:all;z-index:2;
 }
-/* "you" seat — perimPos puts it at bottom-center, highlight with gold border */
+/* "you" seat highlight */
 .lby-felt-seat-slot.you .lby-seat{
   border-color:rgba(196,184,90,.7);
 }
-/* lby-seat compact variant on the felt */
+/* compact seat cards on felt */
 .lby-felt-seat-slot .lby-seat{
   padding:6px 8px;border-radius:10px;margin-bottom:0;
   background:rgba(0,0,0,.38);border-color:rgba(180,210,255,.15);
   min-width:80px;max-width:120px;flex-direction:column;align-items:center;
   gap:4px;text-align:center;
 }
-.lby-felt-seat-slot .lby-seat.me{
-  border-color:rgba(196,184,90,.55);background:rgba(0,0,0,.45);
-}
-.lby-felt-seat-slot .lby-seat.empty{
-  background:rgba(0,0,0,.22);border-style:dashed;
-}
+.lby-felt-seat-slot .lby-seat.me{border-color:rgba(196,184,90,.55);background:rgba(0,0,0,.45)}
+.lby-felt-seat-slot .lby-seat.empty{background:rgba(0,0,0,.22);border-style:dashed}
 .lby-felt-seat-slot .lby-seat-info{flex:none}
 .lby-felt-seat-slot .lby-seat-name{font-size:11px}
 .lby-felt-seat-slot .lby-seat-role{font-size:9px;justify-content:center}
@@ -617,26 +576,54 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .lby-felt-seat-slot .lby-seat-action{position:absolute;top:-6px;right:-6px}
 .lby-felt-seat-slot .lby-act{font-size:10px;padding:2px 6px}
 
-.lby-controls{
-  flex:none;
-  padding:10px 14px max(12px,env(safe-area-inset-bottom));
-  display:flex;flex-direction:column;gap:8px;
+/* Center overlay: game title + controls */
+.lby-felt-overlay{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:min(260px,56vw);
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  text-align:center;z-index:3;pointer-events:all;
 }
-.lby-controls .lby-cfg{margin-bottom:0}
-.lby-controls .lby-cta-row{margin-top:0}
-/* score strip for team games in lobby */
+.lby-felt-center-title{
+  font-family:"Fraunces",serif;font-size:clamp(15px,3.5vw,20px);font-weight:700;
+  color:rgba(248,244,232,.35);letter-spacing:.02em;
+  text-shadow:0 1px 4px rgba(0,0,0,.5);pointer-events:none;
+}
+.lby-felt-center-sub{
+  font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:rgba(248,244,232,.22);margin-top:-4px;pointer-events:none;
+}
+/* score strip */
 .lby-score-strip{
-  display:flex;align-items:center;justify-content:center;gap:10px;
-  font-size:13px;color:var(--ink-soft);
-  background:rgba(0,0,0,.25);border:1px solid rgba(205,160,90,.18);
-  border-radius:10px;padding:6px 14px;
+  display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
+  font-size:12px;color:var(--ink-soft);
+  background:rgba(0,0,0,.3);border:1px solid rgba(205,160,90,.2);
+  border-radius:10px;padding:5px 12px;width:100%;box-sizing:border-box;
 }
-.lby-score-strip b{font-family:"Fraunces",serif;font-size:16px;color:var(--ink)}
+.lby-score-strip b{font-family:"Fraunces",serif;font-size:15px;color:var(--ink)}
 .lby-score-strip .sep{color:var(--ink-dim)}
+/* config section inside overlay */
+.lby-felt-overlay .lby-cfg{width:100%}
+.lby-felt-overlay .lby-cfg-row{margin-bottom:6px}
+.lby-felt-overlay .lby-cfg-label{font-size:11px;min-width:60px}
+.lby-felt-overlay .lby-count-chip{width:38px;height:38px;font-size:15px}
+.lby-felt-overlay .lby-share-row{width:100%}
+.lby-felt-overlay .lby-link-input{font-size:10px;padding:4px 6px}
+.lby-felt-overlay .lby-mode-note{font-size:11px;color:var(--ink-soft);margin:0;text-align:center}
 
-/* gear button on the felt */
-.lby-felt-inner .lby-gear-btn{
-  position:absolute;top:10px;right:10px;z-index:5;
+/* Deal button pinned near bottom of felt */
+.lby-deal-row{
+  position:absolute;bottom:calc(10% + 12px);left:50%;transform:translateX(-50%);
+  z-index:4;width:min(280px,70vw);
+}
+.lby-deal-row .felt-cta{width:100%}
+.lby-deal-row .lby-waiting{
+  text-align:center;font-size:13px;color:var(--ink-soft);margin:0;
+  padding:10px;background:rgba(0,0,0,.28);border-radius:10px;
+}
+
+/* gear button on felt table */
+.felt-table.lby-table .lby-gear-btn{
+  position:absolute;top:14px;right:14px;z-index:5;
 }
 
 /* Connecting card */
