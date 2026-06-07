@@ -551,84 +551,77 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 
 /* ---------- Lobby: full-table layout (reuses .felt-table from home screen) ---------- */
-.felt-table.lby-table{
-  /* Same as home felt-table but we need seats + overlay absolutely positioned */
+/* ---- Lobby pods (styled like gameplay pods) ---- */
+.lby-pod{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:6px 8px;text-align:center;position:relative;
+  min-width:56px;
 }
-.lby-felt-seats{
-  position:absolute;inset:0;pointer-events:none;
+.lby-pod-av{
+  width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:800;font-family:"Hanken Grotesk",sans-serif;
+  color:rgba(255,255,255,.9);
+  background:rgba(255,255,255,.14);
+  box-shadow:0 2px 6px rgba(0,0,0,.5);
 }
-.lby-felt-seat-slot{
-  position:absolute;pointer-events:all;z-index:2;
+.lby-pod-av.bot{background:rgba(80,80,200,.35);border:1px solid rgba(140,160,255,.3)}
+.lby-pod-av.human{background:rgba(40,140,80,.4);border:1px solid rgba(100,220,140,.3)}
+.lby-pod-av.local{background:rgba(180,140,20,.4);border:1px solid rgba(220,190,60,.3)}
+.lby-pod-av.empty{
+  background:transparent;
+  border:2px dashed rgba(255,255,255,.22);
+  color:rgba(255,255,255,.35);font-size:18px;
 }
-/* "you" seat highlight */
-.lby-felt-seat-slot.you .lby-seat{
-  border-color:rgba(196,184,90,.7);
+.lby-pod-name{
+  font-size:11px;font-weight:700;
+  color:rgba(255,255,255,.85);
+  white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;
 }
-/* compact seat cards on felt */
-.lby-felt-seat-slot .lby-seat{
-  padding:6px 8px;border-radius:10px;margin-bottom:0;
-  background:rgba(0,0,0,.38);border-color:rgba(180,210,255,.15);
-  min-width:80px;max-width:120px;flex-direction:column;align-items:center;
-  gap:4px;text-align:center;
+.lby-pod-role{
+  font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:rgba(255,255,255,.35);
 }
-.lby-felt-seat-slot .lby-seat.me{border-color:rgba(196,184,90,.55);background:rgba(0,0,0,.45)}
-.lby-felt-seat-slot .lby-seat.empty{background:rgba(0,0,0,.22);border-style:dashed}
-.lby-felt-seat-slot .lby-seat-info{flex:none}
-.lby-felt-seat-slot .lby-seat-name{font-size:11px}
-.lby-felt-seat-slot .lby-seat-role{font-size:9px;justify-content:center}
-.lby-felt-seat-slot .lby-av{width:28px;height:28px;font-size:12px}
-.lby-felt-seat-slot .lby-seat-action{position:absolute;top:-6px;right:-6px}
-.lby-felt-seat-slot .lby-act{font-size:10px;padding:2px 6px}
+.lby-pod-empty .lby-pod-name{color:rgba(255,255,255,.35)}
+.lby-pod-remove{
+  position:absolute;top:-6px;right:-6px;
+  width:18px;height:18px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(200,60,60,.85);color:#fff;font-size:10px;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1;padding:0;
+}
 
-/* Center overlay: game title + controls */
-.lby-felt-overlay{
-  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:min(260px,56vw);
-  display:flex;flex-direction:column;align-items:center;gap:10px;
-  text-align:center;z-index:3;pointer-events:all;
-}
-.lby-felt-center-title{
-  font-family:"Fraunces",serif;font-size:clamp(15px,3.5vw,20px);font-weight:700;
+/* Lobby center (game title + status) */
+.lby-center{text-align:center}
+.lby-center-title{
+  font-family:"Fraunces",serif;font-size:clamp(14px,3vw,18px);font-weight:700;
   color:rgba(248,244,232,.35);letter-spacing:.02em;
-  text-shadow:0 1px 4px rgba(0,0,0,.5);pointer-events:none;
+  text-shadow:0 1px 4px rgba(0,0,0,.5);margin-bottom:6px;
 }
-.lby-felt-center-sub{
+.lby-center-score{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  font-size:13px;color:var(--ink-soft);
+}
+.lby-center-score b{font-family:"Fraunces",serif;font-size:16px;color:var(--ink)}
+.lby-center-score-sep{color:var(--ink-dim);font-size:11px}
+.lby-center-score-to{font-size:11px;color:var(--ink-dim)}
+.lby-center-status{
   font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
-  color:rgba(248,244,232,.22);margin-top:-4px;pointer-events:none;
-}
-/* score strip */
-.lby-score-strip{
-  display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
-  font-size:12px;color:var(--ink-soft);
-  background:rgba(0,0,0,.3);border:1px solid rgba(205,160,90,.2);
-  border-radius:10px;padding:5px 12px;width:100%;box-sizing:border-box;
-}
-.lby-score-strip b{font-family:"Fraunces",serif;font-size:15px;color:var(--ink)}
-.lby-score-strip .sep{color:var(--ink-dim)}
-/* config section inside overlay */
-.lby-felt-overlay .lby-cfg{width:100%}
-.lby-felt-overlay .lby-cfg-row{margin-bottom:6px}
-.lby-felt-overlay .lby-cfg-label{font-size:11px;min-width:60px}
-.lby-felt-overlay .lby-count-chip{width:38px;height:38px;font-size:15px}
-.lby-felt-overlay .lby-share-row{width:100%}
-.lby-felt-overlay .lby-link-input{font-size:10px;padding:4px 6px}
-.lby-felt-overlay .lby-mode-note{font-size:11px;color:var(--ink-soft);margin:0;text-align:center}
-
-/* Deal button pinned near bottom of felt */
-.lby-deal-row{
-  position:absolute;bottom:calc(10% + 12px);left:50%;transform:translateX(-50%);
-  z-index:4;width:min(280px,70vw);
-}
-.lby-deal-row .felt-cta{width:100%}
-.lby-deal-row .lby-waiting{
-  text-align:center;font-size:13px;color:var(--ink-soft);margin:0;
-  padding:10px;background:rgba(0,0,0,.28);border-radius:10px;
+  color:rgba(248,244,232,.22);
 }
 
-/* gear button on felt table */
-.felt-table.lby-table .lby-gear-btn{
-  position:absolute;top:14px;right:14px;z-index:5;
+/* Lobby self panel (config + share, sits in selfExtra) */
+.lby-self-panel{
+  padding:6px 0 2px;display:flex;flex-direction:column;gap:6px;
 }
+.lby-self-panel .lby-cfg{width:100%}
+.lby-self-panel .lby-cfg-row{margin-bottom:4px}
+.lby-self-panel .lby-share-row{display:flex;gap:6px}
+.lby-self-panel .lby-link-input{flex:1;font-size:11px;padding:5px 7px}
+.lby-self-panel .lby-mode-note{font-size:11px;color:var(--ink-soft);margin:0;text-align:center}
+
+/* Settings button in selfTurn slot */
+.lby-gear-btn{margin-left:auto}
 
 /* Connecting card */
 .felt-screen{display:flex;align-items:center;justify-content:center;min-height:100dvh}
