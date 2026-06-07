@@ -1512,9 +1512,16 @@ function renderRummy(v) {
       </div>
       <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
     </div>`;
+  // Compute selected cards early so melds can highlight valid layoff targets
+  const orderedForMelds = rummyOrdered(v.yourHand);
+  const selCardsForMelds = orderedForMelds.filter((c) => S.rummySel.has(c.id));
+
   const melds = v.melds.length
     ? `<div class="melds">${v.melds.map((m) => {
           const active = S.rummyLayoff === m.id;
+          // Highlight melds that can accept the current hand selection as a layoff
+          const validLayoff = inPlay && selCardsForMelds.length >= 1
+            && S.rummyLayoff === null && rCanLayoff(m, selCardsForMelds);
           const jokerRes = resolveJokers(m);
           const meldAttrs = `data-action="open-meld" data-meldid="${m.id}"`;
           let inner;
@@ -1546,7 +1553,8 @@ function renderRummy(v) {
             }).join("");
             inner = `<div class="run-dense tappable">${allCards}</div>`;
           }
-          return `<div class="meld tappable ${active ? "target" : ""}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
+          const meldClass = active ? "target" : validLayoff ? "layoff-hint" : "";
+          return `<div class="meld tappable ${meldClass}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         }).join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
   const center = `<div class="piles">${stock}${discard}</div>`;
@@ -2236,7 +2244,18 @@ app.addEventListener("click", (e) => {
       if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
       return render();
     }
-    case "open-meld": S.rummyMeldOpen = +t.dataset.meldid; return render();
+    case "open-meld": {
+      const meldId = +t.dataset.meldid;
+      const selNow = [...S.rummySel].map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
+      const meldTarget = v.melds.find((m) => m.id === meldId);
+      // If cards already selected and this meld accepts them, go straight to layoff mode
+      if (selNow.length >= 1 && S.rummyLayoff === null && meldTarget && rCanLayoff(meldTarget, selNow)) {
+        S.rummyLayoff = meldId;
+      } else {
+        S.rummyMeldOpen = meldId;
+      }
+      return render();
+    }
     case "close-meld": S.rummyMeldOpen = null; return render();
     case "layoff-meld": S.rummyLayoff = +t.dataset.meldid; S.rummyMeldOpen = null; return render();
     case "unlayoff-meld": S.rummyLayoff = null; S.rummyMeldOpen = null; return render();
