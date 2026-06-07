@@ -482,7 +482,16 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
       // so we just stop leading boss near the end).
       const conserve = remaining <= p.endgameCutoff;
 
-      if (topVal === boss && !conserve) return asMove(top);
+      if (topVal === boss && !conserve) {
+        // Never lead the Joker while any opponent still holds trump —
+        // hold it until opponents are void or we're forced.
+        if (!isJoker(top)) return asMove(top);
+        const opponentsHaveTrump = state.hands.some(
+          (hand, i) => teamOf(i) !== myTeam && hand.some((c) => isTrump(c, trump))
+        );
+        if (!opponentsHaveTrump) return asMove(top);
+        // Fall through to find a safer lead.
+      }
 
       if (shouldPullTrumps) {
         // Lead highest non-boss trump to strip opponents.
