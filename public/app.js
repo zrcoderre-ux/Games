@@ -629,6 +629,7 @@ function tableShell(v, parts) {
     ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
     <div class="felt">
       ${feltPods}
+      ${parts.feltTop ? `<div class="felt-top">${parts.feltTop}</div>` : ""}
       ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
       ${parts.cornerSuits ? `<div class="felt-corners" aria-hidden="true">${parts.cornerSuits}</div>` : ""}
       <div class="center${parts.centerFull ? ' full' : ''}">${parts.center}</div>
@@ -758,6 +759,21 @@ function renderStart() {
       </div>
     </div>`;
 }
+// Shared HLJ score bar — two semi-transparent team chips showing current scores.
+// Used in both lobby (feltTop) and gameplay (feltTop).
+function hljScoreBar(scores) {
+  return `<div class="hlj-score-bar">
+    <div class="hlj-score-chip tA">
+      <span class="hlj-sc-lbl">A</span>
+      <span class="hlj-sc-num">${scores[0]}</span>
+    </div>
+    <div class="hlj-score-chip tB">
+      <span class="hlj-sc-lbl">B</span>
+      <span class="hlj-sc-num">${scores[1]}</span>
+    </div>
+  </div>`;
+}
+
 // ---------- lobby ----------
 function renderLobby(v) {
   const isHost = v.you !== null && v.you === v.hostSeat;
@@ -865,21 +881,22 @@ function renderLobby(v) {
       </div>`
     : `<div class="lby-center-status">${seatedCount} of ${n} seated</div>`;
 
-  // HLJ uses a casino-style bordered title box with team score cells
   const center = isHLJ
-    ? `<div class="lby-title-box">
-        <div class="lby-title-box-name">${esc(GAMES[S.party].label)}</div>
-        <div class="lby-title-box-sep"></div>
-        <div class="lby-title-box-scores">
-          <div class="lby-tbs-cell tA">TEAM A <b>${v.scores?.[0] ?? 0}</b></div>
-          <div class="lby-tbs-cell tB">TEAM B <b>${v.scores?.[1] ?? 0}</b></div>
-        </div>
-      </div>`
+    ? ""
     : `<div class="lby-center">
         <div class="lby-center-title">${esc(GAMES[S.party].label)}</div>
         ${centerScore}
         ${isHost ? `<div class="lby-center-cfg">${cfgControls}</div>` : ""}
       </div>`;
+
+  // HLJ: title + score chips sit between top pod and watermark
+  const feltTop = isHLJ
+    ? `<div class="lby-top-box">
+        <div class="lby-top-title">${esc(GAMES[S.party].label)}</div>
+        <div class="lby-top-sep"></div>
+        ${hljScoreBar(v.scores ?? [0, 0])}
+      </div>`
+    : "";
 
   // HLJ chip row sits at the felt bottom so it doesn't overlap the watermark
   const feltChips = isHLJ && isHost
@@ -944,6 +961,7 @@ function renderLobby(v) {
     app.__set = tableShell(v, {
       pods: v.seats.map((s, i) => ({ seat: i, html: lbyPod(s, i) })),
       center,
+      feltTop,
       feltOverlay,
       cornerSuits,
       feltBottom: feltChips,
@@ -959,6 +977,7 @@ function renderLobby(v) {
   app.__set = tableShell(v, {
     pods,
     center,
+    feltTop,
     feltOverlay,
     cornerSuits,
     feltBottom: feltChips,
@@ -1364,7 +1383,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  app.__set = tableShell(v, { pods, center, feltTop: hljScoreBar(v.scores), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
