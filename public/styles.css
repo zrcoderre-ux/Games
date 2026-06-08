@@ -621,11 +621,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-felt-title{
   font-family:"Oswald",sans-serif;font-weight:700;
   font-size:clamp(18px,5.5vw,38px);letter-spacing:0.20em;
-  text-shadow:0 2px 8px rgba(0,0,0,.6);
+  /* debossed/inlaid effect: dark shadow above, faint light below = pressed into felt */
+  text-shadow:0 -1px 2px rgba(0,0,0,.7), 0 1px 1px rgba(255,255,255,.08);
   white-space:nowrap;line-height:1;
 }
-.hlj-t-red{color:rgba(220,80,60,.75)}
-.hlj-t-dark{color:rgba(20,30,15,.65)}
+.hlj-t-red{color:rgba(180,55,40,.7)}
+.hlj-t-dark{color:rgba(10,22,10,.6)}
 
 /* Felt top zone — anchored between top pod (y≈9%) and watermark.
    Width matches 6-player seat bounds (x1=12%, x2=88%) regardless of player count. */
