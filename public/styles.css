@@ -635,7 +635,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   flex-direction:row-reverse;
 }
 .hlj-sr-label{
-  font-family:"Oswald",sans-serif;font-weight:600;font-size:10px;letter-spacing:1.5px;
+  font-family:"Oswald",sans-serif;font-weight:600;font-size:14px;letter-spacing:1px;
   color:rgba(255,255,255,.45);text-transform:uppercase;white-space:nowrap;
 }
 .hlj-sr-label.tA{color:var(--teamA,#e05050);opacity:.7}
