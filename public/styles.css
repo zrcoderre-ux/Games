@@ -657,11 +657,22 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
     repeating-conic-gradient(#1a3a6a 0deg 28deg,#fff 28deg 45deg);
 }
 
-/* Ghost chip — invisible placeholder, exact same size */
-.hlj-score-chip.ghost{
-  background:transparent;
+/* Ghost chip — watermark version of the bid chip design, letter instead of number */
+.hlj-score-chip.tA.ghost{
+  background:
+    radial-gradient(circle at 50% 50%,rgba(180,40,40,.12) 0% 56%,rgba(100,10,10,.14) 56% 60%,transparent 60%),
+    repeating-conic-gradient(rgba(150,30,30,.12) 0deg 28deg,rgba(255,255,255,.06) 28deg 45deg);
   box-shadow:none;
-  visibility:hidden;
+}
+.hlj-score-chip.tB.ghost{
+  background:
+    radial-gradient(circle at 50% 50%,rgba(40,80,180,.12) 0% 56%,rgba(10,30,100,.14) 56% 60%,transparent 60%),
+    repeating-conic-gradient(rgba(30,60,140,.12) 0deg 28deg,rgba(255,255,255,.06) 28deg 45deg);
+  box-shadow:none;
+}
+.hlj-sc-ghost{
+  font-family:"Oswald",sans-serif;font-weight:700;font-size:18px;
+  color:rgba(255,255,255,.18);line-height:1;
 }
 
 .hlj-sc-lbl{font-family:"Oswald",sans-serif;font-weight:700;font-size:7px;letter-spacing:1.5px;color:rgba(255,255,255,.6);line-height:1}

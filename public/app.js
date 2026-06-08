@@ -765,10 +765,10 @@ function renderStart() {
 function hljTitlePanel(scores) {
   const isLobby = scores === null;
   const chipA = isLobby
-    ? `<div class="hlj-score-chip tA ghost"></div>`
+    ? `<div class="hlj-score-chip tA ghost"><span class="hlj-sc-ghost">A</span></div>`
     : `<div class="hlj-score-chip tA"><span class="hlj-sc-lbl">A</span><span class="hlj-sc-num">${scores[0]}</span></div>`;
   const chipB = isLobby
-    ? `<div class="hlj-score-chip tB ghost"></div>`
+    ? `<div class="hlj-score-chip tB ghost"><span class="hlj-sc-ghost">B</span></div>`
     : `<div class="hlj-score-chip tB"><span class="hlj-sc-lbl">B</span><span class="hlj-sc-num">${scores[1]}</span></div>`;
   return `<div class="hlj-panel">
     <div class="hlj-panel-title">HIGH LOW JACK</div>
