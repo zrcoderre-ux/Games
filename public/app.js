@@ -901,17 +901,17 @@ function renderLobby(v) {
         ${isHost ? `<div class="lby-center-cfg">${cfgControls}</div>` : ""}
       </div>`;
 
-  // HLJ: score strip + title header between top pod and watermark
-  const feltTop = isHLJ ? hljScoresStrip(null) : "";
+  // HLJ: title header at top; scores + player chips both sit at the felt bottom
+  const feltTop = "";
   const feltHeader = isHLJ ? HLJ_FELT_HEADER : "";
 
-  // HLJ chip row sits at the felt bottom so it doesn't overlap the watermark
-  const feltChips = isHLJ && isHost
+  const chipRow = isHLJ && isHost
     ? `<div class="lby-felt-chips">
         <span class="lby-fc-label">Players</span>
         ${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}
       </div>`
     : "";
+  const feltChips = isHLJ ? `${hljScoresStrip(null)}${chipRow}` : chipRow;
 
   // Self area: just share link (chips moved onto felt)
   const selfExtra = shareRow
@@ -1392,7 +1392,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: HLJ_FELT_HEADER, feltTop: hljScoresStrip(v.scores), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  app.__set = tableShell(v, { pods, center, feltHeader: HLJ_FELT_HEADER, feltBottom: hljScoresStrip(v.scores), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
