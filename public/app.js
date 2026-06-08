@@ -2128,7 +2128,7 @@ function doConnect() {
   const name = document.getElementById("f-name").value.trim();
   const game = document.getElementById("f-game").value;
   let room = document.getElementById("f-room").value.trim();
-  if (!name) return toast("Enter a name first.");
+  if (!name) name = "Player 1";
   if (!GAMES[game]) return toast("Pick a game.");
   S.name = name;
   S.party = game;
