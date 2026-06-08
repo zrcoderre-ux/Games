@@ -625,11 +625,11 @@ function tableShell(v, parts) {
   }
   return `<div class="table">
     ${appbar(v, { log: true })}
-    <div class="felt-frame">
+    <div class="felt-frame${parts.feltHeader ? ' has-frame-title' : ''}">
+    ${parts.feltHeader ? `<div class="frame-title">${parts.feltHeader}</div>` : ""}
     ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
     <div class="felt">
       ${feltPods}
-      ${parts.feltHeader ? `<div class="felt-header">${parts.feltHeader}</div>` : ""}
       ${parts.feltTop ? `<div class="felt-top">${parts.feltTop}</div>` : ""}
       ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
       ${parts.cornerSuits ? `<div class="felt-corners" aria-hidden="true">${parts.cornerSuits}</div>` : ""}

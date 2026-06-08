@@ -611,17 +611,17 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   line-height:1;padding:0;
 }
 
-/* Felt header — full-width title text pinned to the top edge of the felt */
-.felt-header{
-  position:absolute;top:14px;left:50%;transform:translateX(-50%);
-  width:90%;z-index:2;pointer-events:none;text-align:center;
+/* Frame title zone — sits in the felt-frame padding above the felt surface */
+.frame-title{
+  display:flex;align-items:center;justify-content:center;
+  padding:4px 8px 6px;
+  pointer-events:none;text-align:center;
 }
 
 /* HLJ big title spanning between the two suited watermarks */
 .hlj-felt-title{
   font-family:"Playfair Display",serif;font-weight:900;
-  font-size:clamp(22px,6.5vw,46px);letter-spacing:0.20em;
-  /* debossed/inlaid effect: dark shadow above, faint light below = pressed into felt */
+  font-size:clamp(16px,5vw,36px);letter-spacing:0.18em;
   text-shadow:0 -1px 2px rgba(0,0,0,.7), 0 1px 1px rgba(255,255,255,.08);
   white-space:nowrap;line-height:1;
 }
@@ -988,6 +988,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   margin:0 8px;
   border-radius:26px;
   padding:8px;
+  display:flex;flex-direction:column;
   background:
     repeating-linear-gradient(89deg,rgba(18,9,3,.20) 0 1px,transparent 1px 8px),
     repeating-linear-gradient(89deg,rgba(150,100,55,.10) 0 1px,transparent 1px 4px),
