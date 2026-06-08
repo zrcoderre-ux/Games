@@ -361,13 +361,14 @@ button{font-family:inherit}
   padding:max(10px,env(safe-area-inset-top)) 10px max(14px,env(safe-area-inset-bottom));
   display:flex;flex-direction:column;
 }
-/* When table is present: deep green room */
+/* When table is present: deep green room.
+   .table uses position:absolute;inset:0 so #app must have a fixed height. */
 #app:has(.table){
-  min-height:100dvh;overflow-y:auto;padding:0;
+  height:100dvh;overflow:hidden;padding:0;
   background:radial-gradient(120% 80% at 50% 0%,#143a2a 0%,#0d2419 60%,#08160f 100%);
   background-attachment:fixed;
 }
-/* When lobby is present: deep green room */
+/* Lobby: fill viewport but allow body to scroll if content is taller */
 #app:has(.lby-outer){
   min-height:100dvh;overflow-y:auto;padding:0;
   background:radial-gradient(120% 80% at 50% 0%,#143a2a 0%,#0d2419 60%,#08160f 100%);
@@ -377,9 +378,8 @@ button{font-family:inherit}
 #app:has(.lby-wrap){
   min-height:100dvh;overflow-y:auto;padding:0;
 }
-/* Standalone app: lock to viewport exactly (no scrolling) */
+/* Standalone app: lock lobby to viewport too (no scrolling) */
 @media (display-mode: standalone){
-  #app:has(.table),
   #app:has(.lby-outer),
   #app:has(.lby-wrap){
     height:100dvh;min-height:unset;overflow:hidden;
