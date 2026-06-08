@@ -767,10 +767,10 @@ function hljScoresStrip(scores) {
   const isLobby = scores === null;
   const chipA = isLobby
     ? `<div class="hlj-score-chip tA ghost"><span class="hlj-sc-ghost">A</span></div>`
-    : `<div class="hlj-score-chip tA"><span class="hlj-sc-lbl">A</span><span class="hlj-sc-num">${scores[0]}</span></div>`;
+    : `<div class="hlj-score-chip tA"><span class="hlj-sc-num">${scores[0]}</span></div>`;
   const chipB = isLobby
     ? `<div class="hlj-score-chip tB ghost"><span class="hlj-sc-ghost">B</span></div>`
-    : `<div class="hlj-score-chip tB"><span class="hlj-sc-lbl">B</span><span class="hlj-sc-num">${scores[1]}</span></div>`;
+    : `<div class="hlj-score-chip tB"><span class="hlj-sc-num">${scores[1]}</span></div>`;
   return `<div class="hlj-panel">
     <div class="hlj-panel-scores">
       <div class="hlj-score-half">
@@ -784,7 +784,7 @@ function hljScoresStrip(scores) {
     </div>
   </div>`;
 }
-const HLJ_FELT_HEADER = `<div class="hlj-felt-title">HIGH LOW JACK</div>`;
+const HLJ_FELT_HEADER = `<div class="hlj-felt-title"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>`;
 
 // ---------- lobby ----------
 function renderLobby(v) {
@@ -1272,8 +1272,8 @@ function renderHLJ(v) {
   const seriesB = v.gamesWon?.[oppTeamIdx] ?? 0;
   const seriesSuffix = (v.winsNeeded ?? 1) > 1 ? ` (${seriesA}\u2013${seriesB})` : "";
   const teamScores = `<div class="hlj-scores">
-    <span class="hlj-score-chip t${myTeamLetter} mine"><span class="teamdot t${myTeamLetter}"></span>Team ${myTeamLetter}&nbsp;<b>${v.scores[myTeamIdx]}</b>${seriesSuffix}</span>
-    <span class="hlj-score-chip t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
+    <span class="hlj-score-pill t${myTeamLetter} mine"><span class="teamdot t${myTeamLetter}"></span>Team ${myTeamLetter}&nbsp;<b>${v.scores[myTeamIdx]}</b>${seriesSuffix}</span>
+    <span class="hlj-score-pill t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
   </div>`;
 
   const selfExtra = `${teamScores}${signalControl}${trumpControl}${playHint}`;
