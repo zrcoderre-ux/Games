@@ -905,13 +905,13 @@ function renderLobby(v) {
   const feltTop = "";
   const feltHeader = isHLJ ? HLJ_FELT_HEADER : "";
 
-  const chipRow = isHLJ && isHost
+  const playerChips = isHLJ && isHost
     ? `<div class="lby-felt-chips">
         <span class="lby-fc-label">Players</span>
         ${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}
       </div>`
     : "";
-  const feltChips = isHLJ ? `${hljScoresStrip(null)}${chipRow}` : chipRow;
+  const feltChips = isHLJ ? `${hljScoresStrip(null)}${playerChips}` : playerChips;
 
   // Self area: just share link (chips moved onto felt)
   const selfExtra = shareRow
