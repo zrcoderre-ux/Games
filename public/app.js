@@ -796,6 +796,17 @@ function renderLobby(v) {
       removeBtn = `<button class="lby-pod-remove" data-action="clearseat" data-seat="${i}">✕</button>`;
     }
 
+    // Team games use outlined box-style seats
+    if (isTeamGame) {
+      const boxLabel = isEmpty ? "OPEN" : (isBot && !reserved ? "BOT" : name.toUpperCase().substring(0, 8));
+      const boxIcon = isEmpty ? "+" : initial;
+      return `<div class="lby-seat-box ${tc} ${isEmpty ? "lby-seat-empty" : ""}"${seatClick}>
+        <div class="lby-seat-box-main">${boxIcon}</div>
+        <div class="lby-seat-box-sub">${boxLabel}</div>
+        ${removeBtn}
+      </div>`;
+    }
+
     return `<div class="pod lby-pod ${tc} ${isEmpty ? "lby-pod-empty" : ""}"${seatClick}>
       <div class="lby-pod-av ${avCls}">${initial}</div>
       <div class="lby-pod-name">${name}</div>
@@ -821,7 +832,7 @@ function renderLobby(v) {
       `<div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
          <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
     : isHLJ
-    ? chipRow("setcount", counts, v.players)
+    ? ""
     : chipRow("setcount", counts, v.players) +
       `<div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
          <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>` +
@@ -854,11 +865,29 @@ function renderLobby(v) {
       </div>`
     : `<div class="lby-center-status">${seatedCount} of ${n} seated</div>`;
 
-  const center = `<div class="lby-center">
-    <div class="lby-center-title">${esc(GAMES[S.party].label)}</div>
-    ${centerScore}
-    ${isHost ? `<div class="lby-center-cfg">${cfgControls}</div>` : ""}
-  </div>`;
+  // HLJ uses a casino-style bordered title box with team score cells
+  const center = isHLJ
+    ? `<div class="lby-title-box">
+        <div class="lby-title-box-name">${esc(GAMES[S.party].label)}</div>
+        <div class="lby-title-box-sep"></div>
+        <div class="lby-title-box-scores">
+          <div class="lby-tbs-cell tA">TEAM A <b>${v.scores?.[0] ?? 0}</b></div>
+          <div class="lby-tbs-cell tB">TEAM B <b>${v.scores?.[1] ?? 0}</b></div>
+        </div>
+      </div>`
+    : `<div class="lby-center">
+        <div class="lby-center-title">${esc(GAMES[S.party].label)}</div>
+        ${centerScore}
+        ${isHost ? `<div class="lby-center-cfg">${cfgControls}</div>` : ""}
+      </div>`;
+
+  // HLJ chip row sits at the felt bottom so it doesn't overlap the watermark
+  const feltChips = isHLJ && isHost
+    ? `<div class="lby-felt-chips">
+        <span class="lby-fc-label">Players</span>
+        ${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}
+      </div>`
+    : "";
 
   // Self area: just share link (chips moved onto felt)
   const selfExtra = shareRow
@@ -917,6 +946,7 @@ function renderLobby(v) {
       center,
       feltOverlay,
       cornerSuits,
+      feltBottom: feltChips,
       hand: null,
       selfMeta: "",
       selfTurn: null,
@@ -931,9 +961,10 @@ function renderLobby(v) {
     center,
     feltOverlay,
     cornerSuits,
+    feltBottom: feltChips,
     hand: "",
     selfMeta,
-    selfTurn: settingsBtn,  // reuse selfTurn slot for settings button (right side)
+    selfTurn: settingsBtn,
     selfExtra,
     actions: dealAction,
   }) + settingsModal;
