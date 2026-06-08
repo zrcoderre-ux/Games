@@ -641,37 +641,36 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-sr-label.tA{color:var(--teamA,#e05050);opacity:.7}
 .hlj-sr-label.tB{color:var(--teamB,#5080e0);opacity:.7}
 
-/* Poker chip — bid chip design, Team A = red */
+/* Score chips — exact bid chip design, 40px = same size as .hlj-chip */
 .hlj-score-chip{
-  flex:none;width:44px;height:44px;border-radius:50%;
+  flex:none;width:40px;height:40px;border-radius:50%;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
   background:
-    radial-gradient(circle at 50% 50%,#6a1a1a 0% 56%,#400a0a 56% 60%,transparent 60%),
-    repeating-conic-gradient(#6a1a1a 0deg 28deg,#fff 28deg 45deg);
+    radial-gradient(circle at 50% 50%,#5a1a1a 0% 56%,#3a0808 56% 60%,transparent 60%),
+    repeating-conic-gradient(#5a1a1a 0deg 28deg,#fff 28deg 45deg);
   box-shadow:0 4px 10px rgba(0,0,0,.5);
 }
-/* Team B = blue (matches lby-count-chip) */
 .hlj-score-chip.tB{
   background:
     radial-gradient(circle at 50% 50%,#1a3a6a 0% 56%,#0a1a40 56% 60%,transparent 60%),
     repeating-conic-gradient(#1a3a6a 0deg 28deg,#fff 28deg 45deg);
 }
 
-/* Ghost chip — watermark version of the bid chip design, letter instead of number */
+/* Ghost chips — same design, very transparent, letter watermark */
 .hlj-score-chip.tA.ghost{
   background:
-    radial-gradient(circle at 50% 50%,rgba(180,40,40,.12) 0% 56%,rgba(100,10,10,.14) 56% 60%,transparent 60%),
-    repeating-conic-gradient(rgba(150,30,30,.12) 0deg 28deg,rgba(255,255,255,.06) 28deg 45deg);
+    radial-gradient(circle at 50% 50%,rgba(90,26,26,.15) 0% 56%,rgba(58,8,8,.18) 56% 60%,transparent 60%),
+    repeating-conic-gradient(rgba(90,26,26,.15) 0deg 28deg,rgba(255,255,255,.07) 28deg 45deg);
   box-shadow:none;
 }
 .hlj-score-chip.tB.ghost{
   background:
-    radial-gradient(circle at 50% 50%,rgba(40,80,180,.12) 0% 56%,rgba(10,30,100,.14) 56% 60%,transparent 60%),
-    repeating-conic-gradient(rgba(30,60,140,.12) 0deg 28deg,rgba(255,255,255,.06) 28deg 45deg);
+    radial-gradient(circle at 50% 50%,rgba(26,58,106,.15) 0% 56%,rgba(10,26,64,.18) 56% 60%,transparent 60%),
+    repeating-conic-gradient(rgba(26,58,106,.15) 0deg 28deg,rgba(255,255,255,.07) 28deg 45deg);
   box-shadow:none;
 }
 .hlj-sc-ghost{
-  font-family:"Oswald",sans-serif;font-weight:700;font-size:18px;
+  font-family:"Oswald",sans-serif;font-weight:700;font-size:16px;
   color:rgba(255,255,255,.18);line-height:1;
 }
 
@@ -701,7 +700,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   letter-spacing:2px;color:rgba(243,236,214,.75);text-transform:uppercase;
   text-shadow:0 1px 3px rgba(0,0,0,.6);
 }
-.lby-felt-chips .lby-count-chip{width:50px;height:50px;font-size:18px}
+.lby-felt-chips .lby-count-chip{width:40px;height:40px;font-size:16px}
 
 /* Lobby center (game title + status) */
 .lby-center{text-align:center}
