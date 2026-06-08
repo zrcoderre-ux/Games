@@ -759,17 +759,29 @@ function renderStart() {
       </div>
     </div>`;
 }
-// Shared HLJ score bar — two semi-transparent team chips showing current scores.
-// Used in both lobby (feltTop) and gameplay (feltTop).
-function hljScoreBar(scores) {
-  return `<div class="hlj-score-bar">
-    <div class="hlj-score-chip tA">
-      <span class="hlj-sc-lbl">A</span>
-      <span class="hlj-sc-num">${scores[0]}</span>
-    </div>
-    <div class="hlj-score-chip tB">
-      <span class="hlj-sc-lbl">B</span>
-      <span class="hlj-sc-num">${scores[1]}</span>
+// Renders the HLJ title panel (felt-top zone).
+// scores=null → lobby mode: ghost watermark chip circles, no numbers.
+// scores=[a,b] → gameplay mode: filled chips with score values.
+function hljTitlePanel(scores) {
+  const isLobby = scores === null;
+  const chipA = isLobby
+    ? `<div class="hlj-score-chip tA ghost"></div>`
+    : `<div class="hlj-score-chip tA"><span class="hlj-sc-lbl">A</span><span class="hlj-sc-num">${scores[0]}</span></div>`;
+  const chipB = isLobby
+    ? `<div class="hlj-score-chip tB ghost"></div>`
+    : `<div class="hlj-score-chip tB"><span class="hlj-sc-lbl">B</span><span class="hlj-sc-num">${scores[1]}</span></div>`;
+  return `<div class="hlj-panel">
+    <div class="hlj-panel-title">HIGH LOW JACK</div>
+    <div class="hlj-panel-sep"></div>
+    <div class="hlj-panel-scores">
+      <div class="hlj-score-half">
+        <span class="hlj-sr-label tA">TEAM A</span>
+        ${chipA}
+      </div>
+      <div class="hlj-score-half">
+        <span class="hlj-sr-label tB">TEAM B</span>
+        ${chipB}
+      </div>
     </div>
   </div>`;
 }
@@ -889,14 +901,8 @@ function renderLobby(v) {
         ${isHost ? `<div class="lby-center-cfg">${cfgControls}</div>` : ""}
       </div>`;
 
-  // HLJ: title + score chips sit between top pod and watermark
-  const feltTop = isHLJ
-    ? `<div class="lby-top-box">
-        <div class="lby-top-title">${esc(GAMES[S.party].label)}</div>
-        <div class="lby-top-sep"></div>
-        ${hljScoreBar(v.scores ?? [0, 0])}
-      </div>`
-    : "";
+  // HLJ: title + score placeholders sit between top pod and watermark
+  const feltTop = isHLJ ? hljTitlePanel(null) : "";
 
   // HLJ chip row sits at the felt bottom so it doesn't overlap the watermark
   const feltChips = isHLJ && isHost
@@ -1383,7 +1389,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltTop: hljScoreBar(v.scores), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  app.__set = tableShell(v, { pods, center, feltTop: hljTitlePanel(v.scores), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
