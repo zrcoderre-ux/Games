@@ -361,16 +361,16 @@ button{font-family:inherit}
   padding:max(10px,env(safe-area-inset-top)) 10px max(14px,env(safe-area-inset-bottom));
   display:flex;flex-direction:column;
 }
-/* When table is present: warm wood background */
+/* When table is present: deep green room */
 #app:has(.table){
   height:100dvh;overflow:hidden;padding:0;
-  background:linear-gradient(135deg,#7a5030 0%,#5c3a1e 25%,#3e2510 50%,#5c3a1e 75%,#7a5030 100%);
+  background:radial-gradient(120% 80% at 50% 0%,#143a2a 0%,#0d2419 60%,#08160f 100%);
   background-attachment:fixed;
 }
-/* When lobby is present: wood surround */
+/* When lobby is present: deep green room */
 #app:has(.lby-outer){
   height:100dvh;overflow:hidden;padding:0;
-  background:linear-gradient(135deg,#7a5030 0%,#5c3a1e 25%,#3e2510 50%,#5c3a1e 75%,#7a5030 100%);
+  background:radial-gradient(120% 80% at 50% 0%,#143a2a 0%,#0d2419 60%,#08160f 100%);
   background-attachment:fixed;
 }
 /* legacy lby-wrap still used in connecting/etc */
