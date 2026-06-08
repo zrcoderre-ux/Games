@@ -363,19 +363,27 @@ button{font-family:inherit}
 }
 /* When table is present: deep green room */
 #app:has(.table){
-  height:100dvh;overflow:hidden;padding:0;
+  padding:0;
   background:radial-gradient(120% 80% at 50% 0%,#143a2a 0%,#0d2419 60%,#08160f 100%);
   background-attachment:fixed;
 }
 /* When lobby is present: deep green room */
 #app:has(.lby-outer){
-  height:100dvh;overflow:hidden;padding:0;
+  padding:0;
   background:radial-gradient(120% 80% at 50% 0%,#143a2a 0%,#0d2419 60%,#08160f 100%);
   background-attachment:fixed;
 }
 /* legacy lby-wrap still used in connecting/etc */
 #app:has(.lby-wrap){
-  height:100dvh;overflow:hidden;padding:0;
+  padding:0;
+}
+/* Standalone app: lock to viewport (no browser chrome, no scroll) */
+@media (display-mode: standalone){
+  #app:has(.table),
+  #app:has(.lby-outer),
+  #app:has(.lby-wrap){
+    height:100dvh;overflow:hidden;
+  }
 }
 
 /* ---------- App bar ---------- */
