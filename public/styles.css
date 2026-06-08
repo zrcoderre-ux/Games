@@ -659,14 +659,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* Ghost chips — same design, very transparent, letter watermark */
 .hlj-score-chip.tA.ghost{
   background:
-    radial-gradient(circle at 50% 50%,rgba(90,26,26,.15) 0% 56%,rgba(58,8,8,.18) 56% 60%,transparent 60%),
-    repeating-conic-gradient(rgba(90,26,26,.15) 0deg 28deg,rgba(255,255,255,.07) 28deg 45deg);
+    radial-gradient(circle at 50% 50%,rgba(90,26,26,.22) 0% 56%,rgba(58,8,8,.26) 56% 60%,transparent 60%),
+    repeating-conic-gradient(rgba(90,26,26,.22) 0deg 28deg,rgba(255,255,255,.09) 28deg 45deg);
   box-shadow:none;
 }
 .hlj-score-chip.tB.ghost{
   background:
-    radial-gradient(circle at 50% 50%,rgba(26,58,106,.15) 0% 56%,rgba(10,26,64,.18) 56% 60%,transparent 60%),
-    repeating-conic-gradient(rgba(26,58,106,.15) 0deg 28deg,rgba(255,255,255,.07) 28deg 45deg);
+    radial-gradient(circle at 50% 50%,rgba(26,58,106,.22) 0% 56%,rgba(10,26,64,.26) 56% 60%,transparent 60%),
+    repeating-conic-gradient(rgba(26,58,106,.22) 0deg 28deg,rgba(255,255,255,.09) 28deg 45deg);
   box-shadow:none;
 }
 .hlj-sc-ghost{
@@ -679,7 +679,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* Lobby seat box (team games: HLJ, PJ) */
 .lby-seat-box{
-  width:72px;height:56px;
+  width:36px;height:56px;
   border:2px solid rgba(207,64,56,.65);border-radius:10px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:3px;cursor:pointer;background:rgba(0,0,0,.15);position:relative;
