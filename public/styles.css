@@ -679,17 +679,22 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
     repeating-conic-gradient(#1a3a6a 0deg 28deg,#fff 28deg 45deg);
 }
 
-/* Ghost chips — same poker chip design, low opacity watermark */
+/* Ghost chips — solid base + team color overlay so the chip design reads correctly */
 .hlj-score-chip.tA.ghost{
   background:
-    radial-gradient(circle at 50% 50%,rgba(90,26,26,.28) 0% 56%,rgba(58,8,8,.32) 56% 60%,rgba(90,26,26,.18) 60%),
-    repeating-conic-gradient(rgba(90,26,26,.28) 0deg 28deg,rgba(255,255,255,.10) 28deg 45deg);
+    /* team color center + rim on top */
+    radial-gradient(circle at 50% 50%,rgba(160,50,50,.45) 0% 56%,rgba(100,20,20,.5) 56% 60%,rgba(130,40,40,.3) 60%),
+    /* notched conic in team color */
+    repeating-conic-gradient(rgba(140,45,45,.35) 0deg 28deg,rgba(255,255,255,.12) 28deg 45deg),
+    /* solid dark base so design is visible against felt */
+    radial-gradient(circle at 50% 50%,rgba(20,8,8,.35) 0% 100%);
   box-shadow:none;
 }
 .hlj-score-chip.tB.ghost{
   background:
-    radial-gradient(circle at 50% 50%,rgba(26,58,106,.28) 0% 56%,rgba(10,26,64,.32) 56% 60%,rgba(26,58,106,.18) 60%),
-    repeating-conic-gradient(rgba(26,58,106,.28) 0deg 28deg,rgba(255,255,255,.10) 28deg 45deg);
+    radial-gradient(circle at 50% 50%,rgba(40,80,180,.45) 0% 56%,rgba(15,35,100,.5) 56% 60%,rgba(30,60,150,.3) 60%),
+    repeating-conic-gradient(rgba(35,70,160,.35) 0deg 28deg,rgba(255,255,255,.12) 28deg 45deg),
+    radial-gradient(circle at 50% 50%,rgba(8,12,30,.35) 0% 100%);
   box-shadow:none;
 }
 .hlj-sc-ghost{
@@ -1642,10 +1647,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   color:rgba(255,255,255,.14);
 }
 .felt-corner-suit.red{color:rgba(255,255,255,.14)}
-.felt-corner-suit.tl{top:14px;left:16px}
-.felt-corner-suit.tr{top:14px;right:16px}
-.felt-corner-suit.br{bottom:14px;right:16px}
-.felt-corner-suit.bl{bottom:14px;left:16px}
+.felt-corner-suit.tl{top:22px;left:26px}
+.felt-corner-suit.tr{top:22px;right:26px}
+.felt-corner-suit.br{bottom:22px;right:26px}
+.felt-corner-suit.bl{bottom:22px;left:26px}
 
 /* self-extra strip between selfbar and actions */
 .above-self{
