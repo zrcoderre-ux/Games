@@ -596,6 +596,52 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   line-height:1;padding:0;
 }
 
+/* Lobby seat box (team games: HLJ, PJ) */
+.lby-seat-box{
+  width:72px;height:56px;
+  border:2px solid rgba(207,64,56,.65);border-radius:10px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;cursor:pointer;background:rgba(0,0,0,.15);position:relative;
+  transition:background .15s,border-color .15s;
+}
+.lby-seat-box:hover{background:rgba(0,0,0,.28);border-color:rgba(207,64,56,.9)}
+.lby-seat-box.tB{border-color:rgba(100,150,230,.65)}
+.lby-seat-box.tB:hover{background:rgba(0,0,0,.28);border-color:rgba(100,150,230,.9)}
+.lby-seat-box-main{font-size:16px;font-weight:300;line-height:1;color:rgba(207,100,80,.9)}
+.lby-seat-box.tB .lby-seat-box-main{color:rgba(100,160,240,.9)}
+.lby-seat-box-sub{font-family:"Oswald",sans-serif;font-weight:600;font-size:9px;letter-spacing:2px;color:rgba(207,100,80,.9)}
+.lby-seat-box.tB .lby-seat-box-sub{color:rgba(100,160,240,.9)}
+
+/* HLJ casino-style bordered title + score box */
+.lby-title-box{
+  border:2px solid #e3c259;border-radius:9px;overflow:hidden;
+  background:rgba(0,0,0,.2);box-shadow:0 2px 8px rgba(0,0,0,.35);min-width:170px;
+}
+.lby-title-box-name{
+  padding:7px 18px 6px;font-family:"Oswald",sans-serif;font-weight:700;
+  font-size:clamp(12px,3vw,15px);letter-spacing:3px;color:#cf4038;
+  text-align:center;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,.5);
+}
+.lby-title-box-sep{border-top:1.5px solid #e3c259}
+.lby-title-box-scores{display:flex}
+.lby-tbs-cell{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:5px;
+  padding:5px 8px;font-family:"Oswald",sans-serif;font-weight:600;font-size:10px;letter-spacing:.5px;
+}
+.lby-tbs-cell+.lby-tbs-cell{border-left:1.5px solid #e3c259}
+.lby-tbs-cell.tA{color:var(--teamA,#e05050)}
+.lby-tbs-cell.tB{color:var(--teamB,#5080e0)}
+.lby-tbs-cell b{font-size:13px;color:#e3c259}
+
+/* Chip row anchored to felt bottom for HLJ lobby */
+.lby-felt-chips{display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:auto}
+.lby-fc-label{
+  font-family:"Oswald",sans-serif;font-weight:600;font-size:11px;
+  letter-spacing:2px;color:rgba(243,236,214,.75);text-transform:uppercase;
+  text-shadow:0 1px 3px rgba(0,0,0,.6);
+}
+.lby-felt-chips .lby-count-chip{width:50px;height:50px;font-size:18px}
+
 /* Lobby center (game title + status) */
 .lby-center{text-align:center}
 .lby-center-title{
