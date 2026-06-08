@@ -599,7 +599,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* Felt top zone — anchored between top pod (y≈9%) and watermark.
    Width matches 6-player seat bounds (x1=12%, x2=88%) regardless of player count. */
 .felt-top{
-  position:absolute;top:14%;left:12%;right:12%;z-index:2;
+  position:absolute;top:14%;left:50%;transform:translateX(-50%);width:76%;z-index:2;
   pointer-events:none;
 }
 .felt-top>*{pointer-events:auto}
