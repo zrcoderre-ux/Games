@@ -67,7 +67,6 @@ const S = {
   rummyRoundVisible: false, // true once the pause after going-out has elapsed
   hljHandAcked: null, // JSON key of the lastHand already dismissed
   hljHandTimer: null, // auto-dismiss setTimeout handle
-  hljShowDealtHands: false,
   hljTrickHold: null, // {trick, winSeat} held briefly after last card played
   hljTrickHoldTimer: null,
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
@@ -761,43 +760,32 @@ function renderStart() {
       </div>
     </div>`;
 }
-// Renders the HLJ scores strip (felt-top zone). Title is rendered separately as felt-header.
-// scores=null → lobby mode: ghost watermark chip circles, no numbers.
-// scores=[a,b] → gameplay mode: filled chips with score values.
-function hljScoresStrip(scores) {
+// Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
+// scores=null → lobby (ghost rings). scores=[a,b] → gameplay (filled numbers).
+// highBid={seat,amount} → shows winning bid in that team's BID cell.
+function hljScoresStrip(scores, highBid) {
   const isLobby = scores === null;
-  const chipA = isLobby
+
+  const scoreChipA = isLobby
     ? `<div class="hlj-score-chip tA ghost"><span class="hlj-sc-ghost">A</span></div>`
     : `<div class="hlj-score-chip tA"><span class="hlj-sc-num">${scores[0]}</span></div>`;
-  const chipB = isLobby
+  const scoreChipB = isLobby
     ? `<div class="hlj-score-chip tB ghost"><span class="hlj-sc-ghost">B</span></div>`
     : `<div class="hlj-score-chip tB"><span class="hlj-sc-num">${scores[1]}</span></div>`;
 
-  if (isLobby) {
-    return `<div class="hlj-panel">
-      <div class="hlj-panel-scores">
-        <div class="hlj-score-half hlj-bid-half">
-          <span class="hlj-row2-bid">BID</span>
-        </div>
-        <div class="hlj-score-half hlj-score-right">
-          <div class="hlj-score-right-chips">${chipA}${chipB}</div>
-          <span class="hlj-row2-bid">SCORE</span>
-        </div>
-      </div>
-    </div>`;
-  }
+  const bidTeam = highBid != null ? highBid.seat % 2 : null;
+  const bidChipA = (bidTeam === 0 && highBid)
+    ? `<div class="hlj-score-chip tA"><span class="hlj-sc-num">${highBid.amount}</span></div>`
+    : `<div class="hlj-score-chip tA ghost"><span class="hlj-sc-ghost">A</span></div>`;
+  const bidChipB = (bidTeam === 1 && highBid)
+    ? `<div class="hlj-score-chip tB"><span class="hlj-sc-num">${highBid.amount}</span></div>`
+    : `<div class="hlj-score-chip tB ghost"><span class="hlj-sc-ghost">B</span></div>`;
 
-  return `<div class="hlj-panel">
-    <div class="hlj-panel-scores">
-      <div class="hlj-score-half">
-        <span class="hlj-sr-label tA">TEAM A</span>
-        ${chipA}
-      </div>
-      <div class="hlj-score-half">
-        <span class="hlj-sr-label tB">TEAM B</span>
-        ${chipB}
-      </div>
-    </div>
+  return `<div class="hlj-panel hlj-panel-grid">
+    <div class="hlj-cell hlj-cell-label"><span class="hlj-row2-bid">BID</span></div>
+    <div class="hlj-cell hlj-cell-chips">${bidChipA}${bidChipB}</div>
+    <div class="hlj-cell hlj-cell-label hlj-cell-row2"><span class="hlj-row2-bid">SCORE</span></div>
+    <div class="hlj-cell hlj-cell-chips hlj-cell-row2">${scoreChipA}${scoreChipB}</div>
   </div>`;
 }
 const HLJ_FELT_HEADER = `<div class="hlj-felt-title"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>`;
@@ -928,7 +916,7 @@ function renderLobby(v) {
       </div>`
     : "";
   const feltChips = playerChips;
-  const lobbyScores = isHLJ ? hljScoresStrip(null) : "";
+  const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
   // Self area: just share link (chips moved onto felt)
   const selfExtra = shareRow
@@ -1376,30 +1364,7 @@ function renderHLJ(v) {
       ? `<div class="hlj-rr-section"><div class="hlj-rr-seclabel">Kitty</div><div class="hlj-rr-kitty">${kittyCards}</div></div>`
       : "";
 
-    const dealtHands = v.lastDealtHands;
-    const dealtHandsModal = dealtHands && S.hljShowDealtHands
-      ? `<div class="modal-back" data-action="hlj-close-dealt-hands">
-          <div class="modal" data-stop="1" style="max-width:360px">
-            <div class="modalhead"><span>Dealt hands</span><button class="btn sm ghost" data-action="hlj-close-dealt-hands">Close</button></div>
-            <div class="modalbody" style="padding:10px 14px 14px;display:flex;flex-direction:column;gap:12px">
-              ${dealtHands.map((hand, seat) => {
-                const sorted = [...hand].sort((a, b) => {
-                  if (a.joker) return 1; if (b.joker) return -1;
-                  const so = { S: 0, H: 1, D: 2, C: 3 };
-                  return (so[a.suit] - so[b.suit]) || (a.rank - b.rank);
-                });
-                return `<div class="hlj-dh-row"><span class="hlj-dh-name">${esc(seatName(v, seat))}</span><div class="hlj-dh-cards">${sorted.map(c => cardHTML(c, { mini: true })).join("")}</div></div>`;
-              }).join("")}
-            </div>
-          </div>
-        </div>`
-      : "";
-    const dealtPile = dealtHands
-      ? `<button class="hlj-dealt-pile-btn" data-action="hlj-show-dealt-hands"><span class="hlj-dealt-pile-stack">${dealtHands.flat().slice(0,4).map(c => cardHTML(c, { mini: true })).join("")}</span><span class="hlj-dealt-pile-label">Show dealt hands</span></button>`
-      : "";
-
     return `<div class="hlj-result-page">
-      ${dealtHandsModal}
       <div class="hlj-result-felt">
         <div class="hlj-result-scroll">
           <div class="hlj-result-headline">
@@ -1416,7 +1381,6 @@ function renderHLJ(v) {
             <div class="hlj-rr-seclabel">Score</div>
             ${scoreRows}
           </div>
-          ${dealtPile}
           <button class="hlj-result-next-btn" data-action="hlj-ack-hand">Next hand →</button>
         </div>
       </div>
@@ -1433,7 +1397,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: HLJ_FELT_HEADER, feltBottom: hljScoresStrip(v.scores), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  app.__set = tableShell(v, { pods, center, feltHeader: HLJ_FELT_HEADER, feltBottom: hljScoresStrip(v.scores, v.phase === "playing" ? v.highBid : null), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
@@ -2367,11 +2331,8 @@ app.addEventListener("click", (e) => {
       const lh = S.view && S.view.lastHand;
       if (lh) S.hljHandAcked = JSON.stringify(lh);
       if (S.hljHandTimer) { clearTimeout(S.hljHandTimer); S.hljHandTimer = null; }
-      S.hljShowDealtHands = false;
       return render();
     }
-    case "hlj-show-dealt-hands": S.hljShowDealtHands = true; return render();
-    case "hlj-close-dealt-hands": S.hljShowDealtHands = false; return render();
     case "ack-round": {
       const lr = S.view && S.view.lastRound;
       if (lr) S.rummyRoundAcked = JSON.stringify(S.view.scores);
