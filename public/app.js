@@ -1187,9 +1187,10 @@ function renderHLJ(v) {
   const center = centerExtra;
 
   // Joker watermark until trump is revealed (explicit selectTrump or first card played).
-  const feltOverlay = v.trump && v.trumpRevealed
+  const trumpMark = v.trump && v.trumpRevealed
     ? `<span class="trump-watermark ${RED.has(v.trump) ? "red" : ""}">${SUIT[v.trump]}</span>`
     : `<span class="trump-watermark joker-placeholder" role="img" aria-label="No trump chosen yet"></span>`;
+  const feltOverlay = trumpMark + `<div class="lby-scores-overlay">${hljScoresStrip(v.scores, v.phase === "playing" ? v.highBid : null)}</div>`;
 
   // hand (fanned), sorted by suit then rank, dim non-legal cards while it's your turn to play
   const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
@@ -1234,9 +1235,6 @@ function renderHLJ(v) {
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
       return dealerTok + histToks;
-    }
-    if (v.phase === "playing" && v.highBid) {
-      return `<div class="hlj-bid-token chip steal" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
     }
     return "";
   })();
@@ -1433,7 +1431,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: HLJ_FELT_HEADER, feltBottom: hljScoresStrip(v.scores), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  app.__set = tableShell(v, { pods, center, feltHeader: HLJ_FELT_HEADER, trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
