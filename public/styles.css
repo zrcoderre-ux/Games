@@ -765,7 +765,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* Lobby watermark (hat mask, same as home screen) */
 .lby-felt-watermark{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:clamp(320px,84vw,520px);aspect-ratio:1/1;
+  width:clamp(440px,116vw,720px);aspect-ratio:1/1;
   background-color:rgba(45,122,74,.38);
   -webkit-mask:url('/joker-hat.png') center/contain no-repeat;
           mask:url('/joker-hat.png') center/contain no-repeat;
@@ -1617,7 +1617,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   display:flex;align-items:center;justify-content:center;
 }
 .trump-watermark{
-  font-size:clamp(240px,76vw,440px);line-height:1;
+  font-size:clamp(360px,110vw,680px);line-height:1;
   color:rgba(255,255,255,.13);
   text-shadow:0 4px 30px rgba(0,0,0,.25);
   user-select:none;pointer-events:none;
@@ -1626,7 +1626,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .trump-watermark.red{color:rgba(255,255,255,.13)}
 .trump-watermark.joker-placeholder{
-  width:clamp(320px,84vw,520px);aspect-ratio:1/1;height:auto;
+  width:clamp(440px,116vw,720px);aspect-ratio:1/1;height:auto;
   background-color:rgba(45,122,74,.7);
   -webkit-mask:url(/joker-hat.png) center / contain no-repeat;
           mask:url(/joker-hat.png) center / contain no-repeat;
