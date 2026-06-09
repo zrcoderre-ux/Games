@@ -647,12 +647,17 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 /* 2×2 grid panel: rows=BID/SCORE, cols=label/chips */
 .hlj-panel-grid{display:grid;grid-template-columns:auto 1fr}
-.hlj-cell{display:flex;align-items:center;padding:7px 10px}
-.hlj-cell-label{justify-content:flex-start;min-width:52px}
-.hlj-cell-chips{display:flex;gap:8px;justify-content:center}
+.hlj-cell{display:flex;align-items:center;padding:4px 8px}
+.hlj-cell-label{justify-content:flex-start;min-width:0}
+.hlj-cell-chips{display:flex;gap:8px;justify-content:flex-start;padding-right:8px}
 .hlj-cell-row2{border-top:1px solid rgba(227,194,89,.18)}
-/* Lobby panel: left=BID, right=SCORE+chips */
-.hlj-row2-bid{font-family:"Oswald",sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;color:rgba(0,0,0,.75);text-transform:uppercase}
+/* BID/SCORE row labels — styled like HIGH LOW JACK felt title */
+.hlj-row2-bid{
+  font-family:"Playfair Display",serif;font-weight:900;
+  font-size:clamp(13px,3.5vw,18px);letter-spacing:0.18em;
+  color:rgba(10,22,10,.65);text-shadow:0 -1px 2px rgba(0,0,0,.5),0 1px 1px rgba(255,255,255,.08);
+  white-space:nowrap;line-height:1;padding-right:8px;
+}
 .hlj-bid-half{justify-content:center}
 .hlj-score-right{justify-content:center;gap:10px;flex-direction:row}
 .hlj-score-right-chips{display:flex;gap:6px;align-items:center}
