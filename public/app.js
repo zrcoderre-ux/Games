@@ -911,7 +911,8 @@ function renderLobby(v) {
         ${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}
       </div>`
     : "";
-  const feltChips = isHLJ ? `${hljScoresStrip(null)}${playerChips}` : playerChips;
+  const feltChips = playerChips;
+  const lobbyScores = isHLJ ? hljScoresStrip(null) : "";
 
   // Self area: just share link (chips moved onto felt)
   const selfExtra = shareRow
@@ -919,7 +920,7 @@ function renderLobby(v) {
     : "";
 
   // Joker watermark + corner suits for the felt
-  const feltOverlay = `<div class="lby-felt-watermark"></div>`;
+  const feltOverlay = `<div class="lby-felt-watermark"></div>${lobbyScores ? `<div class="lby-scores-overlay">${lobbyScores}</div>` : ""}`;
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");

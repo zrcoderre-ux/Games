@@ -679,28 +679,23 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
     repeating-conic-gradient(#1a3a6a 0deg 28deg,#fff 28deg 45deg);
 }
 
-/* Ghost chips — solid base + team color overlay so the chip design reads correctly */
+/* Ghost chips — felt rings: transparent center shows green felt, colored border + letter */
 .hlj-score-chip.tA.ghost{
-  background:
-    /* team color center + rim on top */
-    radial-gradient(circle at 50% 50%,rgba(160,50,50,.45) 0% 56%,rgba(100,20,20,.5) 56% 60%,rgba(130,40,40,.3) 60%),
-    /* notched conic in team color */
-    repeating-conic-gradient(rgba(140,45,45,.35) 0deg 28deg,rgba(255,255,255,.12) 28deg 45deg),
-    /* solid dark base so design is visible against felt */
-    radial-gradient(circle at 50% 50%,rgba(20,8,8,.35) 0% 100%);
-  box-shadow:none;
+  background:transparent;
+  border:4px solid rgba(180,55,40,.7);
+  box-shadow:0 0 10px rgba(180,55,40,.3);
 }
 .hlj-score-chip.tB.ghost{
-  background:
-    radial-gradient(circle at 50% 50%,rgba(40,80,180,.45) 0% 56%,rgba(15,35,100,.5) 56% 60%,rgba(30,60,150,.3) 60%),
-    repeating-conic-gradient(rgba(35,70,160,.35) 0deg 28deg,rgba(255,255,255,.12) 28deg 45deg),
-    radial-gradient(circle at 50% 50%,rgba(8,12,30,.35) 0% 100%);
-  box-shadow:none;
+  background:transparent;
+  border:4px solid rgba(60,100,210,.7);
+  box-shadow:0 0 10px rgba(60,100,210,.3);
 }
 .hlj-sc-ghost{
-  font-family:"Oswald",sans-serif;font-weight:700;font-size:16px;
-  color:rgba(255,255,255,.18);line-height:1;
+  font-family:"Fraunces",serif;font-weight:700;font-size:18px;
+  line-height:1;
 }
+.tA.ghost .hlj-sc-ghost{color:rgba(180,55,40,.85)}
+.tB.ghost .hlj-sc-ghost{color:rgba(60,100,210,.85)}
 
 .hlj-sc-lbl{font-family:"Oswald",sans-serif;font-weight:700;font-size:7px;letter-spacing:1.5px;color:rgba(255,255,255,.6);line-height:1}
 .hlj-sc-num{font-family:"Fraunces",serif;font-weight:700;font-size:16px;color:rgba(255,255,255,.92);line-height:1}
@@ -770,6 +765,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   -webkit-mask:url('/joker-hat.png') center/contain no-repeat;
           mask:url('/joker-hat.png') center/contain no-repeat;
   pointer-events:none;
+}
+
+/* Team A/B score strip in lobby — positioned in the lower-center of the felt */
+.lby-scores-overlay{
+  position:absolute;top:62%;left:50%;transform:translate(-50%,-50%);
+  width:min(88%,340px);pointer-events:none;
 }
 
 /* On-felt config (chips + labels) */
