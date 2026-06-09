@@ -645,6 +645,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-panel-scores{
   display:flex;align-items:stretch;
 }
+/* Lobby panel: left=BID, right=SCORE+chips */
+.hlj-row2-bid{font-family:"Oswald",sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;color:rgba(0,0,0,.75);text-transform:uppercase}
+.hlj-bid-half{justify-content:center}
+.hlj-score-right{justify-content:center;gap:10px;flex-direction:row}
+.hlj-score-right-chips{display:flex;gap:6px;align-items:center}
 /* Both halves: chip always adjacent to center divider, label pushed outward */
 .hlj-score-half{
   flex:1;display:flex;align-items:center;gap:8px;
@@ -1862,6 +1867,20 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   margin-top:4px;
 }
 .hlj-result-next-btn:active{transform:scale(.97)}
+
+/* Dealt hands pile button */
+.hlj-dealt-pile-btn{
+  width:100%;display:flex;align-items:center;gap:12px;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);
+  border-radius:12px;padding:10px 14px;cursor:pointer;color:inherit;
+  margin-bottom:10px;
+}
+.hlj-dealt-pile-stack{display:flex}
+.hlj-dealt-pile-stack .card.mini{margin-right:-10px;box-shadow:1px 1px 4px rgba(0,0,0,.4)}
+.hlj-dealt-pile-label{font-family:"Fraunces",serif;font-size:14px;color:rgba(255,255,255,.75)}
+.hlj-dh-row{display:flex;flex-direction:column;gap:4px}
+.hlj-dh-name{font-family:"Oswald",sans-serif;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.5)}
+.hlj-dh-cards{display:flex;flex-wrap:wrap;gap:4px}
 
 /* HLJ end-of-hand popup (legacy, kept for any remaining refs) */
 .hlj-made{color:#7dce7d;font-weight:700}
