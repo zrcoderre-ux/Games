@@ -1708,13 +1708,16 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
     repeating-conic-gradient(#5a1a1a 0deg 28deg, #fff 28deg 45deg);
   color:#ff9090;
 }
-.hlj-bid-token.dealer{
-  width:40px;height:40px;border-radius:50%;
-  font-family:"Fraunces",serif;font-size:22px;font-weight:900;
+.hlj-bid-token.dealer{display:none} /* replaced by pod-dealer-badge */
+.pod-dealer-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:50%;
+  font-family:"Fraunces",serif;font-size:14px;font-weight:900;
   color:#2a1f0e;
   background:radial-gradient(circle at 38% 32%,#fff 0%,#f0ead8 55%,#d8ceb4 100%);
-  border:2px solid rgba(180,160,100,.5);
-  box-shadow:0 3px 10px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.95);
+  border:1.5px solid rgba(180,160,100,.5);
+  box-shadow:0 2px 6px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.9);
+  margin-top:3px;
 }
 .hlj-bid-token.pass{
   width:40px;height:40px;border-radius:50%;

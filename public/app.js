@@ -252,6 +252,7 @@ function podHTML(v, i, o = {}) {
       ${mb}
       <span class="back-name">${esc(name)}${disconnectedBadge}</span>
     </div>
+    ${o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
     ${o.pts != null || o.count != null ? `<div class="pod-info">
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
       ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
@@ -1222,10 +1223,6 @@ function renderHLJ(v) {
   };
   const bidTokens = (() => {
     if (v.phase === "bidding") {
-      const dealerActed = bidHistory.some(b => b.seat === v.dealerSeat);
-      const dealerTok = !dealerActed && v.dealerSeat !== you
-        ? `<div class="hlj-bid-token dealer" style="${bidPosStyle(v.dealerSeat)}">D</div>`
-        : "";
       const highBidSeat = v.highBid?.seat ?? null;
       const histToks = bidHistory.map(b => {
         const style = bidPosStyle(b.seat);
@@ -1234,7 +1231,7 @@ function renderHLJ(v) {
         const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
-      return dealerTok + histToks;
+      return histToks;
     }
     return "";
   })();
@@ -1295,8 +1292,9 @@ function renderHLJ(v) {
 
   const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
   const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
+  const isYouDealer = you != null && you === v.dealerSeat;
   const selfMeta = you != null
-    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>`
+    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>${isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
     : `play to ${v.target}`;
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
