@@ -760,31 +760,32 @@ function renderStart() {
       </div>
     </div>`;
 }
-// Renders the HLJ scores strip (felt-top zone). Title is rendered separately as felt-header.
-// scores=null → lobby mode: ghost watermark chip circles, no numbers.
-// scores=[a,b] → gameplay mode: filled chips with score values.
-function hljScoresStrip(scores) {
+// Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
+// scores=null → lobby (ghost rings). scores=[a,b] → gameplay (filled numbers).
+// highBid={seat,amount} → shows winning bid in that team's BID cell.
+function hljScoresStrip(scores, highBid) {
   const isLobby = scores === null;
-  const chipA = isLobby
+
+  const scoreChipA = isLobby
     ? `<div class="hlj-score-chip tA ghost"><span class="hlj-sc-ghost">A</span></div>`
     : `<div class="hlj-score-chip tA"><span class="hlj-sc-num">${scores[0]}</span></div>`;
-  const chipB = isLobby
+  const scoreChipB = isLobby
     ? `<div class="hlj-score-chip tB ghost"><span class="hlj-sc-ghost">B</span></div>`
     : `<div class="hlj-score-chip tB"><span class="hlj-sc-num">${scores[1]}</span></div>`;
-  return `<div class="hlj-panel">
-    <div class="hlj-panel-scores">
-      <div class="hlj-score-half">
-        <span class="hlj-sr-label tA">TEAM A</span>
-        ${chipA}
-      </div>
-      <div class="hlj-score-half">
-        <span class="hlj-sr-label tB">TEAM B</span>
-        ${chipB}
-      </div>
-    </div>
-    <div class="hlj-panel-row2">
-      <span class="hlj-row2-bid">BID</span>
-    </div>
+
+  const bidTeam = highBid != null ? highBid.seat % 2 : null;
+  const bidChipA = (bidTeam === 0 && highBid)
+    ? `<div class="hlj-score-chip tA"><span class="hlj-sc-num">${highBid.amount}</span></div>`
+    : `<div class="hlj-score-chip tA ghost"><span class="hlj-sc-ghost">A</span></div>`;
+  const bidChipB = (bidTeam === 1 && highBid)
+    ? `<div class="hlj-score-chip tB"><span class="hlj-sc-num">${highBid.amount}</span></div>`
+    : `<div class="hlj-score-chip tB ghost"><span class="hlj-sc-ghost">B</span></div>`;
+
+  return `<div class="hlj-panel hlj-panel-grid">
+    <div class="hlj-cell hlj-cell-label"><span class="hlj-row2-bid">BID</span></div>
+    <div class="hlj-cell hlj-cell-chips">${bidChipA}${bidChipB}</div>
+    <div class="hlj-cell hlj-cell-label hlj-cell-row2"><span class="hlj-row2-bid">SCORE</span></div>
+    <div class="hlj-cell hlj-cell-chips hlj-cell-row2">${scoreChipA}${scoreChipB}</div>
   </div>`;
 }
 const HLJ_FELT_HEADER = `<div class="hlj-felt-title"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>`;
@@ -915,7 +916,7 @@ function renderLobby(v) {
       </div>`
     : "";
   const feltChips = playerChips;
-  const lobbyScores = isHLJ ? hljScoresStrip(null) : "";
+  const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
   // Self area: just share link (chips moved onto felt)
   const selfExtra = shareRow
@@ -1396,7 +1397,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: HLJ_FELT_HEADER, feltBottom: hljScoresStrip(v.scores), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  app.__set = tableShell(v, { pods, center, feltHeader: HLJ_FELT_HEADER, feltBottom: hljScoresStrip(v.scores, v.phase === "playing" ? v.highBid : null), trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------

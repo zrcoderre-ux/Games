@@ -642,18 +642,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   border:1.5px solid rgba(227,194,89,.28);border-radius:10px;overflow:hidden;
   box-shadow:0 2px 12px rgba(0,0,0,.15);
 }
-.hlj-panel-scores{
-  display:flex;align-items:stretch;
-}
-.hlj-panel-row2{
-  border-top:1px solid rgba(227,194,89,.18);
-  padding:5px 10px;
-  display:flex;align-items:center;
-}
-.hlj-row2-bid{
-  font-family:"Oswald",sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;
-  color:rgba(0,0,0,.75);text-transform:uppercase;
-}
+.hlj-panel-scores{display:flex;align-items:stretch}
+/* 2×2 grid panel: left col = row labels, right col = team chip pairs */
+.hlj-panel-grid{display:grid;grid-template-columns:auto 1fr}
+.hlj-row2-bid{font-family:"Oswald",sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;color:rgba(0,0,0,.75);text-transform:uppercase}
+.hlj-cell{display:flex;align-items:center;padding:7px 10px}
+.hlj-cell-label{justify-content:flex-start;min-width:52px}
+.hlj-cell-chips{display:flex;gap:8px;justify-content:center}
+.hlj-cell-row2{border-top:1px solid rgba(227,194,89,.18)}
 /* Both halves: chip always adjacent to center divider, label pushed outward */
 .hlj-score-half{
   flex:1;display:flex;align-items:center;gap:8px;
