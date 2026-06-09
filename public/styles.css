@@ -765,7 +765,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* Lobby watermark (hat mask, same as home screen) */
 .lby-felt-watermark{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:clamp(160px,42vw,260px);aspect-ratio:1/1;
+  width:clamp(320px,84vw,520px);aspect-ratio:1/1;
   background-color:rgba(45,122,74,.38);
   -webkit-mask:url('/joker-hat.png') center/contain no-repeat;
           mask:url('/joker-hat.png') center/contain no-repeat;
@@ -1617,7 +1617,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   display:flex;align-items:center;justify-content:center;
 }
 .trump-watermark{
-  font-size:clamp(120px,38vw,220px);line-height:1;
+  font-size:clamp(240px,76vw,440px);line-height:1;
   color:rgba(255,255,255,.13);
   text-shadow:0 4px 30px rgba(0,0,0,.25);
   user-select:none;pointer-events:none;
@@ -1626,7 +1626,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .trump-watermark.red{color:rgba(255,255,255,.13)}
 .trump-watermark.joker-placeholder{
-  width:clamp(160px,42vw,260px);aspect-ratio:1/1;height:auto;
+  width:clamp(320px,84vw,520px);aspect-ratio:1/1;height:auto;
   background-color:rgba(45,122,74,.7);
   -webkit-mask:url(/joker-hat.png) center / contain no-repeat;
           mask:url(/joker-hat.png) center / contain no-repeat;
@@ -1634,7 +1634,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* Hearts center decoration: big ♥ with ♠♦♣ around it */
 .hearts-center-decor{position:relative;display:inline-flex;align-items:center;justify-content:center;pointer-events:none;user-select:none}
-.hcd-main{font-size:clamp(120px,38vw,220px);line-height:1;color:rgba(255,255,255,.13);filter:blur(1px)}
+.hcd-main{font-size:clamp(240px,76vw,440px);line-height:1;color:rgba(255,255,255,.13);filter:blur(1px)}
 .hcd-suit{position:absolute;font-size:clamp(36px,9vw,62px);color:rgba(255,255,255,.15);line-height:1}
 .hcd-suit.red{color:rgba(255,255,255,.15)}
 .hcd-suit.sp{top:-28%;left:50%;transform:translateX(-50%)}
