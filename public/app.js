@@ -782,6 +782,9 @@ function hljScoresStrip(scores) {
         ${chipB}
       </div>
     </div>
+    <div class="hlj-panel-row2">
+      <span class="hlj-row2-bid">BID</span>
+    </div>
   </div>`;
 }
 const HLJ_FELT_HEADER = `<div class="hlj-felt-title"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>`;
