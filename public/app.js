@@ -921,7 +921,7 @@ function renderLobby(v) {
   const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
   // Self area: name editor + share link
-  const nameEditor = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
+  const nameEditor = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
   const selfExtra = `<div class="lby-self-panel">${nameEditor}${shareRow}</div>`;
 
   // Joker watermark + corner suits for the felt
