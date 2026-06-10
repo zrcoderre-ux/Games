@@ -1043,18 +1043,17 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .table{
   position:relative;
   display:flex;flex-direction:column;
-  height:100dvh;          /* fill visible viewport so felt can flex to fill */
   animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
 }
 /* Standalone: original absolute fill */
 @media (display-mode: standalone){
-  .table{position:absolute;inset:0;height:auto;}
+  .table{position:absolute;inset:0;}
 }
 
 /* Wooden frame around the felt — warm real-wood look */
 .felt-frame{
-  flex:1;
-  min-height:0;
+  flex:none;
+  height:calc(100lvh - 43px - 277px); /* viewport minus appbar and bottom panel */
   margin:0 5px 12px;
   border-radius:22px;
   padding:5px;
@@ -1301,9 +1300,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 
 /* ---------- Self rail (you) — anchored to screen bottom ---------- */
-.selfwrap-spacer{flex:none;height:215px;pointer-events:none;}
+.selfwrap-spacer{flex:none;height:240px;pointer-events:none;}
 .selfwrap{
-  position:sticky;bottom:0;left:0;right:0;
+  position:absolute;bottom:0;left:0;right:0;
   z-index:3;
   display:flex;flex-direction:column;align-items:center;
   padding:4px 8px max(8px,env(safe-area-inset-bottom));
