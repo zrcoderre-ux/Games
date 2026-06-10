@@ -368,7 +368,7 @@ function onFrame(e) {
         S.hljTrickHoldTimer = null;
         S.hljTrickWinReady = false;
         render();
-      }, 2500);
+      }, 3200);
     }
     // If the round result changed (new round ended), reset the ack so the popup shows again.
     const prevKey = prev?.lastRound ? JSON.stringify(prev.scores) : null;
@@ -1084,23 +1084,38 @@ function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
 function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, collecting = false } = {}) {
   const circleStyle = (seat) => {
-    if (collecting) return "top:50%;left:50%;transform:translate(-50%,-50%)";
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
     const bounds = mini ? { x1: 18, x2: 82, y1: 10, y2: 88 } : { x1: 20, x2: 80, y1: 16, y2: 74 };
     const { x, y } = perimPos(off / n, bounds);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
-  const cardRotation = (seat, idx) => {
-    if (collecting) return (idx - (plays.length - 1) / 2) * 8; // slight fan in pile
+  const cardRotation = (seat) => {
     if (you == null) return 0;
     const off = (seat - you + n) % n;
     return Math.round(off / n * 360);
   };
   const halfH = mini ? 31 : 44;
-  const inner = plays.map((p, idx) =>
-    `<div class="play${idx === 0 ? " lead" : ""}${collecting ? " collecting" : ""}" style="${circleStyle(p.seat)};--card-half-h:${halfH}px;z-index:${p.seat === winSeat && collecting ? plays.length + 1 : idx}"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat, idx)}deg)">${cardHTML(p.card, { mini, win: p.seat === winSeat && collecting })}</div>${collecting ? "" : `<span class="who">${esc(p.name ?? "")}</span>`}</div>`
-  ).join("");
+  let collectOrder = null;
+  if (collecting) {
+    // non-winners first (index 0..n-2), winner last (index n-1)
+    let nonWin = 0, winPos = plays.length - 1;
+    collectOrder = plays.map(p => p.seat === winSeat ? winPos : nonWin++);
+  }
+  const inner = plays.map((p, idx) => {
+    const co = collectOrder ? collectOrder[idx] : idx;
+    // For collecting: compute from-position using same formula as non-collecting
+    let fromStyle = "";
+    if (collecting) {
+      const off = you != null ? (p.seat - you + n) % n : 0;
+      const bounds = { x1: 20, x2: 80, y1: 16, y2: 74 };
+      const { x, y } = you != null ? perimPos(off / n, bounds) : { x: 50, y: 20 };
+      fromStyle = `;--from-top:${y}%;--from-left:${x}%`;
+    }
+    const style = `${collecting ? `top:50%;left:50%;transform:translate(-50%,-50%)` : circleStyle(p.seat)};--card-half-h:${halfH}px;z-index:${co + 1}${fromStyle}`
+      + (collecting ? `;animation:collectCard .35s cubic-bezier(.4,0,.2,1) ${co * 180}ms both` : "");
+    return `<div class="play${idx === 0 && !collecting ? " lead" : ""}" style="${style}"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat)}deg)">${cardHTML(p.card, { mini, win: p.seat === winSeat && collecting })}</div>${collecting ? "" : `<span class="who">${esc(p.name ?? "")}</span>`}</div>`;
+  }).join("");
   return `<div class="trick positioned${faded ? " faded" : ""}${collecting ? " collecting" : ""}">${inner}</div>`;
 }
 
