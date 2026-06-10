@@ -353,7 +353,7 @@ function onFrame(e) {
         S.hljTrickHold = null;
         S.hljTrickHoldTimer = null;
         render();
-      }, 1200);
+      }, 2500);
     }
     // If the round result changed (new round ended), reset the ack so the popup shows again.
     const prevKey = prev?.lastRound ? JSON.stringify(prev.scores) : null;
