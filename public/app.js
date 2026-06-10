@@ -70,6 +70,8 @@ const S = {
   hljShowDealtHands: false,
   hljTrickHold: null, // {trick, winSeat} held briefly after last card played
   hljTrickHoldTimer: null,
+  hljTrickWinReady: false, // delayed win-card highlight within the hold
+  hljTrickWinTimer: null,
   hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
@@ -353,10 +355,18 @@ function onFrame(e) {
         name: prev.seats[prev.currentTrick[i]?.seat ?? i]?.name ?? `Player ${(prev.currentTrick[i]?.seat ?? i) + 1}`,
       }));
       S.hljLastTrickOpen = false;
+      S.hljTrickWinReady = false;
+      if (S.hljTrickWinTimer) clearTimeout(S.hljTrickWinTimer);
       S.hljTrickHold = { trick, winSeat: lt.winner, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`) };
+      S.hljTrickWinTimer = setTimeout(() => {
+        S.hljTrickWinReady = true;
+        S.hljTrickWinTimer = null;
+        render();
+      }, 800);
       S.hljTrickHoldTimer = setTimeout(() => {
         S.hljTrickHold = null;
         S.hljTrickHoldTimer = null;
+        S.hljTrickWinReady = false;
         render();
       }, 2500);
     }
@@ -1154,7 +1164,7 @@ function renderHLJ(v) {
   } else if (S.hljTrickHold) {
     const h = S.hljTrickHold;
     const trickPlays = h.trick.map((p) => ({ ...p, name: h.names[p.seat] ?? seatName(v, p.seat) }));
-    hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.winSeat });
+    hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: S.hljTrickWinReady ? h.winSeat : null });
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     const ltCards = [...v.lastTrick.cards].sort((a, b) => {
