@@ -1221,7 +1221,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   display:flex;flex-direction:column;align-items:center;
   width:max-content;
   animation:dropinC .5s cubic-bezier(.2,.8,.2,1) both;
+  transition:top .45s cubic-bezier(.4,0,.2,1),left .45s cubic-bezier(.4,0,.2,1),transform .45s cubic-bezier(.4,0,.2,1);
 }
+.trick.positioned.collecting .play{animation:none}
 .card-rotator{display:flex;align-items:center;justify-content:center;}
 .trick.positioned .play .card{
   position:relative;

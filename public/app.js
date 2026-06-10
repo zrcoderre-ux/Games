@@ -362,7 +362,7 @@ function onFrame(e) {
         S.hljTrickWinReady = true;
         S.hljTrickWinTimer = null;
         render();
-      }, 800);
+      }, 900);
       S.hljTrickHoldTimer = setTimeout(() => {
         S.hljTrickHold = null;
         S.hljTrickHoldTimer = null;
@@ -1078,24 +1078,26 @@ function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
 // `you`    – viewer's seat index (null = spectator → top centre)
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
-function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true } = {}) {
+function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, collecting = false } = {}) {
   const circleStyle = (seat) => {
+    if (collecting) return "top:50%;left:50%;transform:translate(-50%,-50%)";
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
     const bounds = mini ? { x1: 18, x2: 82, y1: 10, y2: 88 } : { x1: 20, x2: 80, y1: 16, y2: 74 };
     const { x, y } = perimPos(off / n, bounds);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
-  const cardRotation = (seat) => {
+  const cardRotation = (seat, idx) => {
+    if (collecting) return (idx - (plays.length - 1) / 2) * 8; // slight fan in pile
     if (you == null) return 0;
     const off = (seat - you + n) % n;
     return Math.round(off / n * 360);
   };
   const halfH = mini ? 31 : 44;
   const inner = plays.map((p, idx) =>
-    `<div class="play${idx === 0 ? " lead" : ""}" style="${circleStyle(p.seat)};--card-half-h:${halfH}px"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat)}deg)">${cardHTML(p.card, { mini, win: p.seat === winSeat })}</div><span class="who">${esc(p.name ?? "")}</span></div>`
+    `<div class="play${idx === 0 ? " lead" : ""}${collecting ? " collecting" : ""}" style="${circleStyle(p.seat)};--card-half-h:${halfH}px;z-index:${p.seat === winSeat && collecting ? plays.length + 1 : idx}"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat, idx)}deg)">${cardHTML(p.card, { mini, win: p.seat === winSeat && collecting })}</div>${collecting ? "" : `<span class="who">${esc(p.name ?? "")}</span>`}</div>`
   ).join("");
-  return `<div class="trick positioned${faded ? " faded" : ""}">${inner}</div>`;
+  return `<div class="trick positioned${faded ? " faded" : ""}${collecting ? " collecting" : ""}">${inner}</div>`;
 }
 
 function hljWinIdx(cards, trump) {
@@ -1164,7 +1166,13 @@ function renderHLJ(v) {
   } else if (S.hljTrickHold) {
     const h = S.hljTrickHold;
     const trickPlays = h.trick.map((p) => ({ ...p, name: h.names[p.seat] ?? seatName(v, p.seat) }));
-    hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: S.hljTrickWinReady ? h.winSeat : null });
+    if (S.hljTrickWinReady) {
+      // Phase 2: animate cards collecting to center pile with winner on top
+      hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.winSeat, collecting: true });
+    } else {
+      // Phase 1: cards in scattered position, no winner highlighted
+      hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: null });
+    }
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     const ltCards = [...v.lastTrick.cards].sort((a, b) => {
