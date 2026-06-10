@@ -1204,7 +1204,12 @@ function renderHLJ(v) {
   } else if (S.hljTrickHold) {
     const h = S.hljTrickHold;
     const trickPlays = h.trick.map((p) => ({ ...p, name: h.names[p.seat] ?? seatName(v, p.seat) }));
-    hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.collecting ? h.winSeat : null, collecting: h.collecting });
+    if (h.collecting) {
+      // Fan goes into center (same slot as .lasttrick) so positions match — no flash on transition
+      centerExtra = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.winSeat, collecting: true });
+    } else {
+      hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: null, collecting: false });
+    }
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     const ltCards = [...v.lastTrick.cards].sort((a, b) => {
