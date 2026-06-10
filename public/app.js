@@ -1174,10 +1174,10 @@ function renderHLJ(v) {
       return `<div class="lt-fan-card" style="--fan-angle:${angle}deg;--fan-i:${i};z-index:${isWin ? total + 1 : i}">${cardHTML(c, { win: isWin })}</div>`;
     }).join("");
     if (S.hljLastTrickOpen) {
-      const expanded = `<div class="fan-inner lt-expanded-fan">${fanHand(ltCards, () => ({ action: "toggle-last-trick" }))}</div>`;
-      centerExtra = `<div class="lasttrick open"><div class="lt-label" data-action="toggle-last-trick">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))} \u25b2</div>${expanded}</div>`;
+      const expanded = `<div class="fan-inner lt-expanded-fan">${fanHand(ltCards, () => ({}))}</div>`;
+      centerExtra = `<div class="lasttrick open" data-action="toggle-last-trick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))} \u25b2</div>${expanded}</div>`;
     } else {
-      centerExtra = `<div class="lasttrick"><div class="lt-label" data-action="toggle-last-trick">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))} \u25bc</div><div class="lt-fan">${fanCards}</div></div>`;
+      centerExtra = `<div class="lasttrick" data-action="toggle-last-trick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))} \u25bc</div><div class="lt-fan">${fanCards}</div></div>`;
     }
   } else if (v.phase === "bidding") {
     centerExtra = "";
