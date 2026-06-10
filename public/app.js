@@ -914,7 +914,7 @@ function renderLobby(v) {
   const feltHeader = "";
 
   const feltChips = isHLJ && isHost
-    ? `<div class="lby-felt-chips"><span class="lby-fc-players">PLAYERS</span>${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>`
+    ? `<div class="lby-felt-chips"><span class="lby-fc-players">PLAYERS</span><div class="lby-fc-row">${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>`
     : "";
   const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
