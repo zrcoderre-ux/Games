@@ -907,9 +907,9 @@ function renderLobby(v) {
         ${isHost ? `<div class="lby-center-cfg">${cfgControls}</div>` : ""}
       </div>`;
 
-  // HLJ: title header at top; scores + player chips both sit at the felt bottom
+  // HLJ: title now lives on the felt overlay (not the wood frame)
   const feltTop = "";
-  const feltHeader = isHLJ ? HLJ_FELT_HEADER : "";
+  const feltHeader = "";
 
   const playerChips = isHLJ && isHost
     ? `<div class="lby-felt-chips">
@@ -926,7 +926,7 @@ function renderLobby(v) {
     : "";
 
   // Joker watermark + corner suits for the felt
-  const feltOverlay = `<div class="lby-felt-watermark"></div>${lobbyScores ? `<div class="lby-scores-overlay">${lobbyScores}</div>` : ""}`;
+  const feltOverlay = `<div class="lby-felt-watermark"></div>${isHLJ ? `<div class="hlj-felt-title-overlay"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>` : ""}`;
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
@@ -1180,7 +1180,7 @@ function renderHLJ(v) {
   const trumpMark = v.trump && v.trumpRevealed
     ? `<span class="trump-watermark ${RED.has(v.trump) ? "red" : ""}">${SUIT[v.trump]}</span>`
     : `<span class="trump-watermark joker-placeholder" role="img" aria-label="No trump chosen yet"></span>`;
-  const feltOverlay = trumpMark + `<div class="lby-scores-overlay">${hljScoresStrip(v.scores, v.phase === "playing" ? v.highBid : null)}</div>`;
+  const feltOverlay = trumpMark + `<div class="hlj-felt-title-overlay"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>`;
 
   // hand (fanned), sorted by suit then rank, dim non-legal cards while it's your turn to play
   const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
@@ -1418,7 +1418,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: HLJ_FELT_HEADER, trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
