@@ -349,27 +349,26 @@ function onFrame(e) {
       const lt = msg.view.lastTrick;
       const n = prev.seats.length;
       // Build trick plays from lastTrick.cards in play order using prev.currentTrick seats
-      const trick = lt.cards.map((card, i) => ({
-        card,
-        seat: prev.currentTrick[i]?.seat ?? i,
-        name: prev.seats[prev.currentTrick[i]?.seat ?? i]?.name ?? `Player ${(prev.currentTrick[i]?.seat ?? i) + 1}`,
-      }));
+      const trick = lt.cards.map((card, i) => {
+        // prev.currentTrick has n-1 cards; the last card's seat comes from prev.toAct
+        const seat = i < prev.currentTrick.length
+          ? prev.currentTrick[i].seat
+          : (prev.toAct ?? i);
+        return { card, seat, name: prev.seats[seat]?.name ?? `Player ${seat + 1}` };
+      });
       S.hljLastTrickOpen = false;
+      if (S.hljTrickWinTimer) { clearTimeout(S.hljTrickWinTimer); S.hljTrickWinTimer = null; }
       S.hljTrickWinReady = false;
-      if (S.hljTrickWinTimer) clearTimeout(S.hljTrickWinTimer);
-      S.hljTrickHold = { trick, winSeat: lt.winner, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`) };
-      // 1200ms phantom turn (as if an extra player still needs to play),
-      // then 700ms collecting animation, then winner highlighted until hold ends.
+      S.hljTrickHold = { trick, winSeat: lt.winner, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`), collecting: false };
       const PHANTOM = 1200;
+      // After phantom pause, switch to collecting (fan animation)
       S.hljTrickWinTimer = setTimeout(() => {
-        S.hljTrickWinReady = true;
+        if (S.hljTrickHold) { S.hljTrickHold = { ...S.hljTrickHold, collecting: true }; render(); }
         S.hljTrickWinTimer = null;
-        render();
-      }, PHANTOM + 700);
+      }, PHANTOM);
       S.hljTrickHoldTimer = setTimeout(() => {
         S.hljTrickHold = null;
         S.hljTrickHoldTimer = null;
-        S.hljTrickWinReady = false;
         render();
       }, PHANTOM + 2400);
     }
@@ -1099,27 +1098,44 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     return Math.round(off / n * 360);
   };
   const halfH = mini ? 31 : 44;
-  let collectOrder = null;
   if (collecting) {
-    // non-winners first (index 0..n-2), winner last (index n-1)
-    let nonWin = 0, winPos = plays.length - 1;
-    collectOrder = plays.map(p => p.seat === winSeat ? winPos : nonWin++);
+    // Render as final fan layout, each card animating in from its scattered direction.
+    // Sort same as the lastTrick fan: by suit then rank (joker last).
+    const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
+    const sorted = [...plays].sort((a, b) =>
+      (a.card.joker ? 1 : 0) - (b.card.joker ? 1 : 0) ||
+      (HLJ_SUIT_ORDER[a.card.suit] ?? 4) - (HLJ_SUIT_ORDER[b.card.suit] ?? 4) ||
+      a.card.rank - b.card.rank
+    );
+    const total = sorted.length;
+    const spread = Math.min(70, (total - 1) * 12);
+    // non-winners arrive before winner (winner arrives last)
+    let nonWin = 0;
+    const winPos = total - 1;
+    const arrivalOrder = sorted.map(p => p.seat === winSeat ? winPos : nonWin++);
+    const fanInner = sorted.map((p, i) => {
+      const angle = total > 1 ? -spread / 2 + (spread / (total - 1)) * i : 0;
+      const isWin = p.seat === winSeat;
+      const ao = arrivalOrder[i];
+      // direction offset: where this player sits around the table
+      const off = you != null ? (p.seat - you + n) % n : 0;
+      const { x: px, y: py } = perimPos(off / n, { x1: 20, x2: 80, y1: 16, y2: 74 });
+      // translate from center of felt stage (50%,45%) to player position
+      const dx = Math.round((px - 50) * 2.2);
+      const dy = Math.round((py - 45) * 2.2);
+      const winDelay = isWin ? `--win-anim-delay:${ao * 180 + 380}ms;` : "";
+      const anim = isWin ? `fanArriveWin` : `fanArrive`;
+      const style = `--fan-angle:${angle}deg;--fan-i:${i};--from-dx:${dx}px;--from-dy:${dy}px;${winDelay}z-index:${isWin ? total + 1 : ao};animation:${anim} .38s cubic-bezier(.4,0,.2,1) ${ao * 180}ms both`;
+      return `<div class="lt-fan-card collecting-card" style="${style}">${cardHTML(p.card, { win: isWin })}</div>`;
+    }).join("");
+    return `<div class="trick-fan-collect">${fanInner}</div>`;
   }
   const inner = plays.map((p, idx) => {
-    const co = collectOrder ? collectOrder[idx] : idx;
-    // For collecting: compute from-position using same formula as non-collecting
-    let fromStyle = "";
-    if (collecting) {
-      const off = you != null ? (p.seat - you + n) % n : 0;
-      const bounds = { x1: 20, x2: 80, y1: 16, y2: 74 };
-      const { x, y } = you != null ? perimPos(off / n, bounds) : { x: 50, y: 20 };
-      fromStyle = `;--from-top:${y}%;--from-left:${x}%`;
-    }
-    const style = `${collecting ? `top:50%;left:50%;transform:translate(-50%,-50%)` : circleStyle(p.seat)};--card-half-h:${halfH}px;z-index:${co + 1}${fromStyle}`
-      + (collecting ? `;animation:collectCard .35s cubic-bezier(.4,0,.2,1) ${co * 180}ms both` : "");
-    return `<div class="play${idx === 0 && !collecting ? " lead" : ""}" style="${style}"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat)}deg)">${cardHTML(p.card, { mini, win: p.seat === winSeat && collecting })}</div>${collecting ? "" : `<span class="who">${esc(p.name ?? "")}</span>`}</div>`;
+    const isWin = p.seat === winSeat;
+    const style = `${circleStyle(p.seat)};--card-half-h:${halfH}px;z-index:${idx + 1}`;
+    return `<div class="play${idx === 0 ? " lead" : ""}" style="${style}"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat)}deg)">${cardHTML(p.card, { mini, win: isWin })}</div><span class="who">${esc(p.name ?? "")}</span></div>`;
   }).join("");
-  return `<div class="trick positioned${faded ? " faded" : ""}${collecting ? " collecting" : ""}">${inner}</div>`;
+  return `<div class="trick positioned${faded ? " faded" : ""}">${inner}</div>`;
 }
 
 function hljWinIdx(cards, trump) {
@@ -1188,13 +1204,7 @@ function renderHLJ(v) {
   } else if (S.hljTrickHold) {
     const h = S.hljTrickHold;
     const trickPlays = h.trick.map((p) => ({ ...p, name: h.names[p.seat] ?? seatName(v, p.seat) }));
-    if (S.hljTrickWinReady) {
-      // Phase 2: animate cards collecting to center pile with winner on top
-      hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.winSeat, collecting: true });
-    } else {
-      // Phase 1: cards in scattered position, no winner highlighted
-      hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: null });
-    }
+    hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.collecting ? h.winSeat : null, collecting: h.collecting });
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     const ltCards = [...v.lastTrick.cards].sort((a, b) => {
