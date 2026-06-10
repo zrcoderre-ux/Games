@@ -1331,10 +1331,13 @@ function renderHLJ(v) {
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
             if (claimedAmounts.has(n)) {
+              // Dealer can steal the current high bid
               if (isDealer && n === curHighAmt)
                 return `<button class="hlj-chip steal" data-action="move-bid" data-amount="${n}" ${!v.yourTurn ? "disabled" : ""}>STEAL</button>`;
               return "";
             }
+            // Hide amounts that can't outbid the current high (non-dealer can't match, only beat)
+            if (curHighAmt != null && n <= curHighAmt) return "";
             const legal = n >= minBid;
             return `<button class="hlj-chip${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${(!legal || !v.yourTurn) ? "disabled" : ""}>${n}</button>`;
           }).join("")}
