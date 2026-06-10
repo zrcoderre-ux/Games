@@ -1238,12 +1238,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 /* collecting: each card flies in from its scattered direction into the fan */
 @keyframes fanArrive{
-  from{transform:rotate(var(--fan-angle)) translate(var(--from-dx,0px),var(--from-dy,0px)) scale(.7);opacity:0}
-  to{transform:rotate(var(--fan-angle));opacity:1}
+  from{transform:rotate(var(--fan-angle)) translate(var(--from-dx,0px),var(--from-dy,0px))}
+  to{transform:rotate(var(--fan-angle))}
 }
 @keyframes fanArriveWin{
-  from{transform:rotate(var(--fan-angle)) translate(var(--from-dx,0px),var(--from-dy,0px)) scale(.7);opacity:0}
-  to{transform:rotate(var(--fan-angle)) translateY(-10px);opacity:1}
+  from{transform:rotate(var(--fan-angle)) translate(var(--from-dx,0px),var(--from-dy,0px))}
+  to{transform:rotate(var(--fan-angle)) translateY(-10px)}
 }
 .trick-fan-collect{
   position:absolute;
