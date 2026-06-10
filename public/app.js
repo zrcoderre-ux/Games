@@ -1305,7 +1305,10 @@ function renderHLJ(v) {
     const n = v.seats.length;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const { x, y } = perimPos(off / n, { x1: 20, x2: 80, y1: 16, y2: 74 });
+    // User's own seat: fixed lower-center to match the chip panel position
+    if (off === 0) return "top:88%;left:50%;transform:translate(-50%,-50%)";
+    // Other seats: tighter bounds so chips appear inward from card backs
+    const { x, y } = perimPos(off / n, { x1: 26, x2: 74, y1: 22, y2: 66 });
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = (() => {
@@ -1342,7 +1345,8 @@ function renderHLJ(v) {
     bidHistory.filter(b => b.type === "bid").map(b => b.amount)
   );
   const isDealer = v.you != null && v.dealerSeat === v.you;
-  const feltBidPanel = v.phase === "bidding" && v.you != null
+  const userHasActed = v.you != null && bidHistory.some(b => b.seat === v.you);
+  const feltBidPanel = v.phase === "bidding" && v.you != null && !userHasActed
     ? `<div class="hlj-felt-bid${v.yourTurn ? "" : " waiting"}">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
