@@ -159,6 +159,7 @@ export type HandResult = {
   };
   dealtHands: Card[][]; // each player's starting hand, revealed post-hand
   kitty: Card[];        // kitty for this hand, revealed post-hand
+  lastTrick: { winner: number; cards: Card[] }; // final trick of the hand, for animation
 };
 
 // Per-seat statistics accumulated across hands, observable by the AI.
@@ -590,6 +591,7 @@ export function scoreHand(state: GameState): GameState {
     state.scores[1] + deltaByTeam[1],
   ];
 
+  const finalTrickRaw = state.tricksWon[state.tricksWon.length - 1];
   const result: HandResult = {
     bidderSeat,
     bidderTeam,
@@ -600,6 +602,7 @@ export function scoreHand(state: GameState): GameState {
     detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam, gameCount },
     dealtHands: state.dealtHands ?? [],
     kitty: state.kitty,
+    lastTrick: { winner: finalTrickRaw.seat, cards: finalTrickRaw.plays.map((p) => p.card) },
   };
 
   // Win conditions.
