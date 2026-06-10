@@ -339,7 +339,16 @@ function onFrame(e) {
     const prev = S.view;
     S.view = msg.view;
     // HLJ: when the trick just resolved (currentTrick went from non-empty → empty OR
-    // directly to the next trick when the bot both wins and leads immediately).
+    // directly to the next trick when the bot both wins and leads immediately, OR
+    // the last trick of the hand ended — in that case msg.view.lastTrick is null
+    // because the server already dealt the next hand, so fall back to prev.lastTrick).
+    const handJustEnded = S.party === "high-low-jack"
+        && (prev?.currentTrick?.length ?? 0) > 0
+        && prev?.phase === "playing"
+        && !msg.view?.lastTrick
+        && prev?.lastTrick
+        && msg.view?.lastHand
+        && JSON.stringify(msg.view.lastHand) !== JSON.stringify(prev?.lastHand);
     const trickJustResolved = S.party === "high-low-jack"
         && (prev?.currentTrick?.length ?? 0) > 0
         && prev?.phase === "playing"
@@ -348,9 +357,10 @@ function onFrame(e) {
             // Bot wins and immediately leads: lastTrick changed even though currentTrick > 0
             || (msg.view.currentTrick?.length > 0
                 && JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick)));
-    if (trickJustResolved) {
+    if (trickJustResolved || handJustEnded) {
       if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
-      const lt = msg.view.lastTrick;
+      // For end-of-hand, lastTrick is already in prev (server reset tricksWon for new deal)
+      const lt = msg.view.lastTrick ?? prev.lastTrick;
       const n = prev.seats.length;
       // Build trick plays from lastTrick.cards in play order using prev.currentTrick seats
       const trick = lt.cards.map((card, i) => {
