@@ -1323,7 +1323,6 @@ function renderHLJ(v) {
       { label: "Low",      team: pts.low },
       { label: "Jack",     team: pts.jack },
       { label: "Bonhomme", team: pts.bonhomme },
-      { label: "Game",     team: pts.game },
     ];
 
     // Two-column layout: Team A column | Team B column
@@ -1332,25 +1331,32 @@ function renderHLJ(v) {
     const totalA = lh.pointsByTeam[0];
     const totalB = lh.pointsByTeam[1];
 
-    const honorList = (items, team) => items.length
-      ? items.map(h => {
-          const sub = h.label === "Game" && pts.gameCount
-            ? `<span class="hlj-rr-pip">(${pts.gameCount[team]} pips)</span>`
-            : "";
-          return `<div class="hlj-rr-honor">${h.label}${sub}</div>`;
-        }).join("")
+    const honorList = (items) => items.length
+      ? items.map(h => `<div class="hlj-rr-honor">${h.label}</div>`).join("")
       : `<div class="hlj-rr-honor none">—</div>`;
+
+    // Game point row: always show both teams' pip counts
+    const gcA = pts.gameCount?.[0] ?? 0;
+    const gcB = pts.gameCount?.[1] ?? 0;
+    const gameRow = pts.game != null
+      ? `<div class="hlj-rr-game-row">
+          <span class="hlj-rr-game-label">Game</span>
+          <span class="hlj-rr-game-pips${pts.game === 0 ? " win" : ""}">Team A: ${gcA}</span>
+          <span class="hlj-rr-game-sep">·</span>
+          <span class="hlj-rr-game-pips${pts.game === 1 ? " win" : ""}">Team B: ${gcB}</span>
+        </div>`
+      : "";
 
     const ptRows = `<div class="hlj-rr-twocol">
       <div class="hlj-rr-col tA">
         <div class="hlj-rr-colhdr tA">Team A · ${totalA} pt${totalA !== 1 ? "s" : ""}</div>
-        ${honorList(colA, 0)}
+        ${honorList(colA)}
       </div>
       <div class="hlj-rr-col tB">
         <div class="hlj-rr-colhdr tB">Team B · ${totalB} pt${totalB !== 1 ? "s" : ""}</div>
-        ${honorList(colB, 1)}
+        ${honorList(colB)}
       </div>
-    </div>`;
+    </div>${gameRow}`;
 
     const made = lh.made;
     const scoreRows = [0, 1].map(t => {
