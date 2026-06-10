@@ -358,17 +358,20 @@ function onFrame(e) {
       S.hljTrickWinReady = false;
       if (S.hljTrickWinTimer) clearTimeout(S.hljTrickWinTimer);
       S.hljTrickHold = { trick, winSeat: lt.winner, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`) };
+      // 1200ms phantom turn (as if an extra player still needs to play),
+      // then 700ms collecting animation, then winner highlighted until hold ends.
+      const PHANTOM = 1200;
       S.hljTrickWinTimer = setTimeout(() => {
         S.hljTrickWinReady = true;
         S.hljTrickWinTimer = null;
         render();
-      }, 900);
+      }, PHANTOM + 700);
       S.hljTrickHoldTimer = setTimeout(() => {
         S.hljTrickHold = null;
         S.hljTrickHoldTimer = null;
         S.hljTrickWinReady = false;
         render();
-      }, 3200);
+      }, PHANTOM + 2400);
     }
     // If the round result changed (new round ended), reset the ack so the popup shows again.
     const prevKey = prev?.lastRound ? JSON.stringify(prev.scores) : null;
