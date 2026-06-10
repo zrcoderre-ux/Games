@@ -1103,6 +1103,8 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     // Sort same as the lastTrick fan: by suit then rank (joker last).
     const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
     const sorted = [...plays].sort((a, b) =>
+      // winner always rightmost regardless of suit/rank
+      (a.seat === winSeat ? 1 : 0) - (b.seat === winSeat ? 1 : 0) ||
       (a.card.joker ? 1 : 0) - (b.card.joker ? 1 : 0) ||
       (HLJ_SUIT_ORDER[a.card.suit] ?? 4) - (HLJ_SUIT_ORDER[b.card.suit] ?? 4) ||
       a.card.rank - b.card.rank
@@ -1212,7 +1214,11 @@ function renderHLJ(v) {
     }
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
+    const winCard = v.lastTrick.cards[winIdx];
     const ltCards = [...v.lastTrick.cards].sort((a, b) => {
+      // winner always rightmost
+      if (a === winCard) return 1;
+      if (b === winCard) return -1;
       if (a.joker && b.joker) return 0;
       if (a.joker) return -1;
       if (b.joker) return 1;
