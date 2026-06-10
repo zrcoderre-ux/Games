@@ -913,14 +913,13 @@ function renderLobby(v) {
   const feltTop = "";
   const feltHeader = "";
 
-  const feltChips = "";
+  const feltChips = isHLJ && isHost
+    ? `<div class="lby-felt-chips"><span class="lby-fc-players">PLAYERS</span>${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>`
+    : "";
   const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
   // Self area: name editor (+ player count chips inline for HLJ host) + share link
-  const inlineChips = isHLJ && isHost
-    ? counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")
-    : "";
-  const nameEditor = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button>${inlineChips}</div>`;
+  const nameEditor = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
   const selfExtra = `<div class="lby-self-panel">${nameEditor}${shareRow}</div>`;
 
   // Joker watermark + corner suits for the felt
