@@ -344,7 +344,9 @@ function onFrame(e) {
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
       if (S.hljBidHoldTimer) clearTimeout(S.hljBidHoldTimer);
-      S.hljBidHold = { bidHistory: prev.bidHistory, highBid: prev.highBid, dealerSeat: prev.dealerSeat, you: prev.you, seats: prev.seats };
+      // Use the NEW view's bidHistory — the dealer's final action may only exist there
+      // (server batches the dealer-bot move in the same frame as the phase transition)
+      S.hljBidHold = { bidHistory: msg.view.bidHistory, highBid: msg.view.highBid, dealerSeat: prev.dealerSeat, you: prev.you, seats: prev.seats };
       S.hljBidHoldTimer = setTimeout(() => {
         S.hljBidHold = null;
         S.hljBidHoldTimer = null;
