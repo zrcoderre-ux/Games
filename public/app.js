@@ -1318,26 +1318,24 @@ function renderHLJ(v) {
     ? `<div class="hlj-bid-overlay">${bidTokens}</div>`
     : "";
 
-  // Your chip buttons, rendered on the felt when it's your bidding turn
-  // Amounts already claimed by a non-dealer bidder (hidden from buttons)
+  // Your chip buttons — shown for the whole bidding phase, dimmed until your turn
   const claimedAmounts = new Set(
     bidHistory.filter(b => b.type === "bid").map(b => b.amount)
   );
   const isDealer = v.you != null && v.dealerSeat === v.you;
-  const feltBidPanel = v.phase === "bidding" && v.yourTurn && (bids.length || canPass)
-    ? `<div class="hlj-felt-bid">
+  const feltBidPanel = v.phase === "bidding" && v.you != null
+    ? `<div class="hlj-felt-bid${v.yourTurn ? "" : " waiting"}">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
             if (claimedAmounts.has(n)) {
-              // Dealer can steal the current high bid — show red number + STEAL pair
               if (isDealer && n === curHighAmt)
-                return `<button class="hlj-chip steal" data-action="move-bid" data-amount="${n}">STEAL</button>`;
-              return ""; // already claimed, hide for everyone else
+                return `<button class="hlj-chip steal" data-action="move-bid" data-amount="${n}" ${!v.yourTurn ? "disabled" : ""}>STEAL</button>`;
+              return "";
             }
             const legal = n >= minBid;
-            return `<button class="hlj-chip${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${!legal ? "disabled" : ""}>${n}</button>`;
+            return `<button class="hlj-chip${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${(!legal || !v.yourTurn) ? "disabled" : ""}>${n}</button>`;
           }).join("")}
-          ${canPass ? `<button class="hlj-pass-btn" data-action="move-pass">Pass</button>` : ""}
+          <button class="hlj-pass-btn" data-action="move-pass" ${!v.yourTurn ? "disabled" : ""}>Pass</button>
         </div>
       </div>`
     : "";
