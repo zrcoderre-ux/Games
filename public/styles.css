@@ -179,8 +179,8 @@ body:has(.felt-table)::before{
 /* Joker hat watermark — centered on home/lobby felt */
 .felt-table::before{
   content:"";position:absolute;
-  top:50%;left:50%;transform:translate(-34%,-52%);
-  width:min(950px,145vw);height:min(950px,145vw);
+  top:50%;left:50%;transform:translate(-50%,-52%);
+  width:min(720px,110vw);height:min(720px,110vw);
   background-color:rgba(45,122,74,.55);
   -webkit-mask:url('/joker-hat.png') center/contain no-repeat;
           mask:url('/joker-hat.png') center/contain no-repeat;
