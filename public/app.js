@@ -1114,11 +1114,9 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
   };
   const halfH = mini ? 31 : 44;
   if (collecting) {
-    // Render as final fan layout, each card animating in from its scattered direction.
-    // Sort same as the lastTrick fan: by suit then rank (joker last).
+    // Sort for fan: winner rightmost, rest by suit/rank
     const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
     const sorted = [...plays].sort((a, b) =>
-      // winner always rightmost regardless of suit/rank
       (a.seat === winSeat ? 1 : 0) - (b.seat === winSeat ? 1 : 0) ||
       (a.card.joker ? 1 : 0) - (b.card.joker ? 1 : 0) ||
       (HLJ_SUIT_ORDER[a.card.suit] ?? 4) - (HLJ_SUIT_ORDER[b.card.suit] ?? 4) ||
@@ -1126,21 +1124,32 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     );
     const total = sorted.length;
     const spread = Math.min(70, (total - 1) * 12);
-    // non-winners arrive before winner (winner arrives last)
     let nonWin = 0;
     const winPos = total - 1;
     const arrivalOrder = sorted.map(p => p.seat === winSeat ? winPos : nonWin++);
+    // Build a seat→arrival-delay map so scattered cards can time their fade-out
+    const seatArrivalDelay = {};
+    sorted.forEach((p, i) => { seatArrivalDelay[p.seat] = arrivalOrder[i] * 200; });
+
+    // Fan cards: drop in one by one
     const fanInner = sorted.map((p, i) => {
       const angle = total > 1 ? -spread / 2 + (spread / (total - 1)) * i : 0;
       const isWin = p.seat === winSeat;
       const ao = arrivalOrder[i];
-      // direction offset: where this player sits around the table
-      const winDelay = isWin ? `--win-anim-delay:${ao * 180 + 380}ms;` : "";
+      const winDelay = isWin ? `--win-anim-delay:${ao * 200 + 380}ms;` : "";
       const anim = isWin ? `fanArriveWin` : `fanArrive`;
-      const style = `--fan-angle:${angle}deg;--fan-i:${i};${winDelay}z-index:${isWin ? total + 1 : ao};animation:${anim} .42s cubic-bezier(.2,.85,.25,1) ${ao * 200}ms both`;
+      const style = `--fan-angle:${angle}deg;${winDelay}z-index:${isWin ? total + 1 : ao};animation:${anim} .42s cubic-bezier(.2,.85,.25,1) ${ao * 200}ms both`;
       return `<div class="lt-fan-card collecting-card" style="${style}">${cardHTML(p.card, { win: isWin })}</div>`;
     }).join("");
-    return `<div class="trick-fan-collect">${fanInner}</div>`;
+
+    // Scattered cards: each fades out exactly when its fan counterpart drops in
+    const scatterInner = plays.map((p, idx) => {
+      const delay = seatArrivalDelay[p.seat] ?? 0;
+      const style = `${circleStyle(p.seat)};--card-half-h:${halfH}px;z-index:${idx + 1};animation:scatterFade .25s ease-in ${delay}ms both`;
+      return `<div class="play" style="${style}"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat)}deg)">${cardHTML(p.card, { mini: false })}</div></div>`;
+    }).join("");
+
+    return `<div class="trick positioned collecting-scatter">${scatterInner}</div><div class="trick-fan-collect">${fanInner}</div>`;
   }
   const inner = plays.map((p, idx) => {
     const isWin = p.seat === winSeat;
