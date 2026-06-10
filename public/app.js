@@ -70,6 +70,7 @@ const S = {
   hljShowDealtHands: false,
   hljTrickHold: null, // {trick, winSeat} held briefly after last card played
   hljTrickHoldTimer: null,
+  hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
@@ -346,6 +347,7 @@ function onFrame(e) {
         const idx = hljWinIdx(cards, prev.trump ?? msg.view.trump);
         return idx >= 0 ? prev.currentTrick[idx].seat : null;
       })();
+      S.hljLastTrickOpen = false;
       S.hljTrickHold = { trick: prev.currentTrick, winSeat, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`) };
       S.hljTrickHoldTimer = setTimeout(() => {
         S.hljTrickHold = null;
@@ -1166,7 +1168,12 @@ function renderHLJ(v) {
       const isWin = origIdx === winIdx;
       return `<div class="lt-fan-card" style="--fan-angle:${angle}deg;--fan-i:${i};z-index:${isWin ? total + 1 : i}">${cardHTML(c, { win: isWin })}</div>`;
     }).join("");
-    centerExtra = `<div class="lasttrick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))}</div><div class="lt-fan">${fanCards}</div></div>`;
+    if (S.hljLastTrickOpen) {
+      const expanded = `<div class="fan-inner lt-expanded-fan">${fanHand(ltCards, () => ({ action: "toggle-last-trick" }))}</div>`;
+      centerExtra = `<div class="lasttrick open"><div class="lt-label" data-action="toggle-last-trick">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))} \u25b2</div>${expanded}</div>`;
+    } else {
+      centerExtra = `<div class="lasttrick"><div class="lt-label" data-action="toggle-last-trick">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))} \u25bc</div><div class="lt-fan">${fanCards}</div></div>`;
+    }
   } else if (v.phase === "bidding") {
     centerExtra = "";
   } else {
@@ -2314,6 +2321,7 @@ app.addEventListener("click", (e) => {
     }
     case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
+    case "toggle-last-trick": S.hljLastTrickOpen = !S.hljLastTrickOpen; return render();
     case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
     case "setcount": {
       const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
