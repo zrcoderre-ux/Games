@@ -2027,7 +2027,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     radial-gradient(circle at 50% 50%, #c02020 0% 56%, #800000 56% 60%, transparent 60%),
     repeating-conic-gradient(#c02020 0deg 28deg, #ffb0b0 28deg 45deg);
   color:#fff;
-  box-shadow:0 0 0 3px rgba(255,140,140,.7),0 4px 12px rgba(0,0,0,.5);
+  box-shadow:0 4px 12px rgba(0,0,0,.5);
 }
 /* Rummy score poker chip */
 .score-chip{
