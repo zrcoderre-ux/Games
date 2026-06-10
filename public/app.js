@@ -336,19 +336,24 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
-    // HLJ: when the trick just resolved (currentTrick went from full → empty),
-    // hold the completed trick display for one "extra player" turn worth of time.
-    if (S.party === "high-low-jack" && prev?.currentTrick?.length === prev?.seats?.length
-        && msg.view?.currentTrick?.length === 0 && prev?.phase === "playing") {
+    // HLJ: when the trick just resolved (currentTrick went from non-empty → empty),
+    // hold the completed trick (using msg.view.lastTrick which includes the last card).
+    if (S.party === "high-low-jack"
+        && (prev?.currentTrick?.length ?? 0) > 0
+        && msg.view?.currentTrick?.length === 0
+        && prev?.phase === "playing"
+        && msg.view?.lastTrick) {
       if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
+      const lt = msg.view.lastTrick;
       const n = prev.seats.length;
-      const winSeat = (() => {
-        const cards = prev.currentTrick.map(p => p.card);
-        const idx = hljWinIdx(cards, prev.trump ?? msg.view.trump);
-        return idx >= 0 ? prev.currentTrick[idx].seat : null;
-      })();
+      // Build trick plays from lastTrick.cards in play order using prev.currentTrick seats
+      const trick = lt.cards.map((card, i) => ({
+        card,
+        seat: prev.currentTrick[i]?.seat ?? i,
+        name: prev.seats[prev.currentTrick[i]?.seat ?? i]?.name ?? `Player ${(prev.currentTrick[i]?.seat ?? i) + 1}`,
+      }));
       S.hljLastTrickOpen = false;
-      S.hljTrickHold = { trick: prev.currentTrick, winSeat, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`) };
+      S.hljTrickHold = { trick, winSeat: lt.winner, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`) };
       S.hljTrickHoldTimer = setTimeout(() => {
         S.hljTrickHold = null;
         S.hljTrickHoldTimer = null;
