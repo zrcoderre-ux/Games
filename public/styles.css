@@ -389,7 +389,7 @@ button{font-family:inherit}
     height:100dvh;min-height:unset;overflow:hidden;
   }
   .felt-frame{
-    flex:none;height:80dvh;
+    flex:1;height:auto;margin-bottom:12px;
   }
 }
 
