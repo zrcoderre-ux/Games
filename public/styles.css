@@ -397,14 +397,15 @@ button{font-family:inherit}
   .table .selfwrap-spacer{height:215px;}
 }
 
-/* Browser (non-standalone): use flexbox so felt fills available space
-   and selfwrap sits immediately below it with no gap. */
+/* Browser (non-standalone): mirror the standalone layout — selfwrap fixed at viewport
+   bottom, felt fills remaining space via spacer. The card fan touches the felt bottom;
+   the selfbar sits below the cards and never overlaps the table. */
 @media not (display-mode: standalone){
-  #app:has(.table){height:100dvh;overflow-y:auto;}
-  .table{flex:1;display:flex;flex-direction:column;}
-  .table .felt-frame{flex:1;height:auto;min-height:calc(100dvh - 43px - 200px);margin-bottom:0;}
-  .table .selfwrap{position:relative;bottom:auto;left:auto;right:auto;}
-  .table .selfwrap-spacer{height:0;}
+  #app:has(.table){overflow-y:auto;}
+  .table{display:flex;flex-direction:column;min-height:100dvh;}
+  .table .felt-frame{flex:1;height:auto;min-height:0;margin:0 5px 12px;}
+  .table .selfwrap{position:fixed;bottom:0;left:0;right:0;}
+  /* selfwrap-spacer uses the base height:240px — reserves room above fixed selfwrap */
 }
 
 /* ---------- App bar ---------- */
