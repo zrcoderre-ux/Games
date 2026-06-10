@@ -76,7 +76,7 @@ export type PlayerView = {
   handCounts: number[]; // cards remaining per seat (public)
 
   highBid: { seat: number; amount: number } | null;
-  bidHistory: { seat: number; type: "bid" | "pass"; amount?: number }[];
+  bidHistory: { seat: number; type: "bid" | "pass"; amount?: number; implicit?: true }[];
   signals: (HandSignal | null)[]; // public confidence signal per seat
   currentTrick: TrickPlay[]; // cards on the table (public)
   lastTrick: { winner: number; cards: Card[] } | null; // for animating the previous trick

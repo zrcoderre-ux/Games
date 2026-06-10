@@ -69,6 +69,8 @@ const S = {
   hljHandTimer: null, // auto-dismiss setTimeout handle
   hljHandVisible: false, // delayed until trick hold animation completes
   hljShowDealtHands: false,
+  hljBidHold: null,   // frozen bid overlay shown briefly after bidding ends
+  hljBidHoldTimer: null,
   hljTrickHold: null, // {trick, winSeat} held briefly after last card played
   hljTrickHoldTimer: null,
   hljTrickWinReady: false, // delayed win-card highlight within the hold
@@ -339,6 +341,16 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
+    // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
+    if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
+      if (S.hljBidHoldTimer) clearTimeout(S.hljBidHoldTimer);
+      S.hljBidHold = { bidHistory: prev.bidHistory, highBid: prev.highBid, dealerSeat: prev.dealerSeat, you: prev.you, seats: prev.seats };
+      S.hljBidHoldTimer = setTimeout(() => {
+        S.hljBidHold = null;
+        S.hljBidHoldTimer = null;
+        render();
+      }, 900);
+    }
     // HLJ: when the trick just resolved (currentTrick went from non-empty → empty OR
     // directly to the next trick when the bot both wins and leads immediately).
     // msg.view.lastTrick is now always set even on end-of-hand (server preserves it
@@ -1312,9 +1324,33 @@ function renderHLJ(v) {
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = (() => {
+    // While the bid-end hold is active, freeze the full bid overlay
+    if (S.hljBidHold && v.phase === "playing") {
+      const bh = S.hljBidHold;
+      const holdPos = (seat) => {
+        const n = bh.seats.length;
+        if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
+        const off = (seat - bh.you + n) % n;
+        if (off === 0) return "top:88%;left:50%;transform:translate(-50%,-50%)";
+        const { x, y } = perimPos(off / n, { x1: 26, x2: 74, y1: 22, y2: 66 });
+        return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
+      };
+      const highBidSeat = bh.highBid?.seat ?? null;
+      const histToks = (bh.bidHistory ?? []).filter(b => !b.implicit).map(b => {
+        const style = holdPos(b.seat);
+        const label = b.type === "pass" ? "Pass" : String(b.amount);
+        const isHigh = b.type === "bid" && b.seat === highBidSeat;
+        const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
+        return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
+      }).join("");
+      const dealerTok = bh.you === bh.dealerSeat
+        ? `<div class="hlj-bid-token dealer-felt" style="${holdPos(bh.dealerSeat)}"><div class="pod-dealer-badge">D</div></div>`
+        : "";
+      return histToks + dealerTok;
+    }
     if (v.phase === "bidding") {
       const highBidSeat = v.highBid?.seat ?? null;
-      const histToks = bidHistory.map(b => {
+      const histToks = bidHistory.filter(b => !b.implicit).map(b => {
         const style = bidPosStyle(b.seat);
         const label = b.type === "pass" ? "Pass" : String(b.amount);
         const isHigh = b.type === "bid" && b.seat === highBidSeat;
