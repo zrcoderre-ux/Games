@@ -342,16 +342,24 @@ function onFrame(e) {
     // directly to the next trick when the bot both wins and leads immediately).
     // msg.view.lastTrick is now always set even on end-of-hand (server preserves it
     // via lastHand.lastTrick when tricksWon resets on new deal).
+    const prevTrickLen = prev?.currentTrick?.length ?? 0;
+    const newTrickLen = msg.view?.currentTrick?.length ?? 0;
+    const n = msg.view?.seats?.length ?? 4;
+    // A trick just resolved when: the previous trick was full (or nearly full) AND
+    // the new view shows 0 cards in the trick (human won/led) OR 1 card (bot won and led).
+    // Also fires for end-of-hand where msg.view.lastTrick comes from lastHand.lastTrick.
     const trickJustResolved = S.party === "high-low-jack"
-        && (prev?.currentTrick?.length ?? 0) > 0
+        && prevTrickLen > 0
         && prev?.phase === "playing"
         && msg.view?.lastTrick
-        && (msg.view.currentTrick?.length === 0
-            || JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick));
+        && (newTrickLen === 0
+            // Bot won and immediately led — detect by trick having been "full" before
+            || (newTrickLen > 0 && prevTrickLen >= n - 1
+                && JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick)));
     if (trickJustResolved) {
       if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
       const lt = msg.view.lastTrick;
-      const n = prev.seats.length;
+      const n = prev.seats.length; // use prev seats (new hand may differ in phase)
       // Build trick plays from lastTrick.cards in play order using prev.currentTrick seats
       const trick = lt.cards.map((card, i) => {
         // prev.currentTrick has n-1 cards; the last card's seat comes from prev.toAct
@@ -1211,8 +1219,7 @@ function renderHLJ(v) {
     const h = S.hljTrickHold;
     const trickPlays = h.trick.map((p) => ({ ...p, name: h.names[p.seat] ?? seatName(v, p.seat) }));
     if (h.collecting) {
-      // Fan goes into center (same slot as .lasttrick) so positions match — no flash on transition
-      centerExtra = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.winSeat, collecting: true });
+      hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.winSeat, collecting: true });
     } else {
       hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: null, collecting: false });
     }
