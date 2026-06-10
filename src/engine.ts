@@ -213,7 +213,7 @@ export type GameState = {
 
   lastHand: HandResult | null;
   dealtHands: Card[][] | null; // starting hands this round, revealed at end of hand
-  bidHistory: { seat: number; type: "bid" | "pass"; amount?: number }[];
+  bidHistory: { seat: number; type: "bid" | "pass"; amount?: number; implicit?: true }[];
 
   // Cross-hand player profiles, updated after each hand scores.
   profiles: PlayerProfile[];
@@ -436,9 +436,9 @@ function applyBid(state: GameState, move: Move): GameState {
     const jumpToDealer = move.type === "bid" && move.amount === 6 && state.bidTurn !== state.dealerSeat;
     if (jumpToDealer) {
       // Insert implicit passes for every seat between nextTurn and dealerSeat.
-      const skips: { seat: number; type: "pass" }[] = [];
+      const skips: { seat: number; type: "pass"; implicit: true }[] = [];
       for (let seat = nextTurn; seat !== state.dealerSeat; seat = (seat + 1) % state.players) {
-        skips.push({ seat, type: "pass" });
+        skips.push({ seat, type: "pass", implicit: true });
       }
       return {
         ...state,
