@@ -1299,10 +1299,11 @@ function renderHLJ(v) {
     (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
     a.rank - b.rank
   );
+  const holdActive = !!S.hljTrickHold;
   const hand = `<div class="fan-inner">${fanHand(sortedHand, (c) => ({
-    playable: plays.has(cardKey(c)),
-    dim: plays.size > 0 && !plays.has(cardKey(c)),
-    action: plays.has(cardKey(c)) ? "play-card" : "",
+    playable: !holdActive && plays.has(cardKey(c)),
+    dim: !holdActive && plays.size > 0 && !plays.has(cardKey(c)),
+    action: !holdActive && plays.has(cardKey(c)) ? "play-card" : "",
     key: cardKey(c),
   }))}</div>`;
 
@@ -1412,7 +1413,7 @@ function renderHLJ(v) {
   const signalControl = "";
   const trumpControl = "";
 
-  const playHint = v.yourTurn && plays.size ? `<span class="hint">Tap a glowing card to play.</span>` : "";
+  const playHint = v.yourTurn && plays.size && !holdActive ? `<span class="hint">Tap a glowing card to play.</span>` : "";
 
   // Team score strip below hand
   const myTeamIdx = you != null ? you % 2 : 0; // 0=A, 1=B
