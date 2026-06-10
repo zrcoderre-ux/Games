@@ -1794,7 +1794,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
     repeating-conic-gradient(#5a1a1a 0deg 28deg, #fff 28deg 45deg);
   color:#ff9090;
 }
-.hlj-bid-token.dealer{display:none} /* replaced by pod-dealer-badge */
+.hlj-bid-token.dealer{display:none}
+.hlj-bid-token.dealer-felt{background:none;border:none;box-shadow:none;padding:0;width:auto;height:auto}
 .pod-dealer-badge{
   display:inline-flex;align-items:center;justify-content:center;
   width:26px;height:26px;border-radius:50%;
