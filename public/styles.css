@@ -745,10 +745,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   text-shadow:0 1px 3px rgba(0,0,0,.6);
 }
 .lby-felt-chips .lby-count-chip{width:40px;height:40px;font-size:16px}
+/* lobby chips: no scroll clipping (selected chip glow/scale must show) */
+.felt-bottom:has(.lby-felt-chips){overflow:visible;max-height:none;padding:6px 0}
 /* PLAYERS label — black, same font treatment as the HIGH LOW JACK title */
 .lby-fc-players{
   font-family:"Montserrat",sans-serif;font-weight:900;
-  font-size:18px;letter-spacing:0.12em;line-height:1;
+  font-size:26px;letter-spacing:0.12em;line-height:1;
   color:#10100e;
   text-shadow:0 -1px 2px rgba(0,0,0,.7),0 1px 1px rgba(255,255,255,.08);
   margin-right:4px;
