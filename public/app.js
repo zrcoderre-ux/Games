@@ -617,7 +617,7 @@ function tableShell(v, parts) {
     self = `<div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
       <div class="selfbar">
         ${avatarHTML(myName, { host: v.you === v.hostSeat })}
-        <div><div class="name">${esc(myName)}</div><div class="me-pts">${parts.selfMeta || ""}</div></div>
+        <div class="selfbar-name-block">${parts.selfName ? parts.selfName : `<div class="name">${esc(myName)}</div>`}<div class="me-pts">${parts.selfMeta || ""}</div></div>
         ${parts.selfTurn || ""}
       </div>
       ${parts.selfExtra ? `<div class="self-extra">${parts.selfExtra}</div>` : ""}
@@ -918,9 +918,9 @@ function renderLobby(v) {
     : "";
   const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
-  // Self area: name editor (+ player count chips inline for HLJ host) + share link
-  const nameEditor = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
-  const selfExtra = `<div class="lby-self-panel">${nameEditor}${shareRow}</div>`;
+  // Inline editable name in the selfbar
+  const nameInput = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
+  const selfExtra = shareRow ? `<div class="lby-self-panel">${shareRow}</div>` : "";
 
   // Joker watermark + corner suits for the felt
   const feltOverlay = `<div class="lby-felt-watermark"></div>${isHLJ ? `<div class="hlj-felt-title-overlay"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>` : ""}`;
@@ -995,6 +995,7 @@ function renderLobby(v) {
     cornerSuits,
     feltBottom: feltChips,
     hand: "",
+    selfName: nameInput,
     selfMeta,
     selfTurn: settingsBtn,
     selfExtra,
