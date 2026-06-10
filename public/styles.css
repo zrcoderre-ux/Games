@@ -1578,21 +1578,28 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .trick .who.tB{color:var(--teamB)}
 
 /* last trick fan (shown when current trick is empty) */
-.lasttrick{display:flex;flex-direction:column;align-items:center;gap:10px}
-.lt-label{font-family:"Fraunces",serif;font-style:italic;font-size:12.5px;color:var(--ink-soft)}
+/* last trick — positioned in the trick slot as absolute, matching trick-fan-collect */
+.lasttrick{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  cursor:pointer;user-select:none;
+}
+.lt-label{
+  font-family:"Fraunces",serif;font-style:italic;font-size:12.5px;
+  color:var(--ink-soft);pointer-events:none;
+}
 .lt-fan{position:relative;height:130px;width:300px;display:flex;align-items:flex-end;justify-content:center;overflow:visible}
 .lt-fan-card{
   position:absolute;bottom:0;
   transform-origin:bottom center;
   transform:rotate(var(--fan-angle));
-  opacity:.82;
+  opacity:1;
 }
 .lt-fan-card:has(.card.win){opacity:1;transform:rotate(var(--fan-angle)) translateY(-10px)}
 .trick.faded{opacity:.6}
 .trick.faded .play{animation:none}
 /* expanded last trick */
-.lasttrick{cursor:pointer;user-select:none}
-.lt-label{pointer-events:none}
 .lt-expanded-fan{width:100%;padding-bottom:8px}
 .lt-expanded-fan .card{pointer-events:none}
 
