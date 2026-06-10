@@ -2304,7 +2304,7 @@ app.addEventListener("click", (e) => {
     case "lby-rename": {
       const inp = document.getElementById("lby-name-input");
       const newName = inp ? inp.value.trim() : "";
-      if (newName) { S.name = newName; localStorage.setItem("cg_name", newName); send({ t: "rename", name: newName }); render(); }
+      if (newName) { S.name = newName; localStorage.setItem("cg_name", newName); render(); }
       return;
     }
     case "open-lby-settings": S.lbySettingsOpen = true; return render();
