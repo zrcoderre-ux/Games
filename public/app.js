@@ -399,6 +399,22 @@ function onFrame(e) {
         render();
       }, PHANTOM + 2400);
     }
+    // HLJ: if a new hand result arrived but trickJustResolved didn't fire (server batched the
+    // last bot trick), hljHandVisible may already be true — enforce a short hold so the modal
+    // doesn't flash in immediately.
+    if (S.party === "high-low-jack" && !trickJustResolved) {
+      const prevHandKey = prev?.lastHand ? JSON.stringify(prev.lastHand) : null;
+      const newHandKey  = msg.view?.lastHand ? JSON.stringify(msg.view.lastHand) : null;
+      if (newHandKey && newHandKey !== prevHandKey && newHandKey !== S.hljHandAcked) {
+        S.hljHandVisible = false;
+        if (S.hljTrickHoldTimer) { clearTimeout(S.hljTrickHoldTimer); S.hljTrickHoldTimer = null; }
+        S.hljTrickHoldTimer = setTimeout(() => {
+          S.hljHandVisible = true;
+          S.hljTrickHoldTimer = null;
+          render();
+        }, 1200);
+      }
+    }
     // If the round result changed (new round ended), reset the ack so the popup shows again.
     const prevKey = prev?.lastRound ? JSON.stringify(prev.scores) : null;
     const newKey  = msg.view?.lastRound ? JSON.stringify(msg.view.scores) : null;
