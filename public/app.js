@@ -1212,10 +1212,9 @@ function renderHLJ(v) {
   const myTeam = you != null ? you % 2 : null;
   let hljTrick;
   let centerExtra = "";
-  if (v.currentTrick.length) {
-    const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-    hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
-  } else if (S.hljTrickHold) {
+  // Hold state takes priority over live currentTrick — prevents bot's new lead
+  // card from interrupting the phantom pause / collecting animation.
+  if (S.hljTrickHold) {
     const h = S.hljTrickHold;
     const trickPlays = h.trick.map((p) => ({ ...p, name: h.names[p.seat] ?? seatName(v, p.seat) }));
     if (h.collecting) {
@@ -1223,6 +1222,9 @@ function renderHLJ(v) {
     } else {
       hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: null, collecting: false });
     }
+  } else if (v.currentTrick.length) {
+    const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+    hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
   } else if (v.phase !== "bidding" && v.lastTrick) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     const winCard = v.lastTrick.cards[winIdx];
