@@ -738,7 +738,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .lby-seat-box.tB .lby-seat-box-sub{color:rgba(100,160,240,.9)}
 
 /* Chip row anchored to felt bottom for HLJ lobby */
-.lby-felt-chips{display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:auto}
+.lby-felt-chips{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:auto;width:100%}
+.lby-fc-row{display:flex;align-items:center;justify-content:center;gap:10px}
 .lby-fc-label{
   font-family:"Oswald",sans-serif;font-weight:600;font-size:11px;
   letter-spacing:2px;color:rgba(243,236,214,.75);text-transform:uppercase;
@@ -753,7 +754,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   font-size:26px;letter-spacing:0.12em;line-height:1;
   color:#10100e;
   text-shadow:0 -1px 2px rgba(0,0,0,.7),0 1px 1px rgba(255,255,255,.08);
-  margin-right:4px;
 }
 
 /* Lobby center (game title + status) */
