@@ -920,10 +920,9 @@ function renderLobby(v) {
   const feltChips = playerChips;
   const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
-  // Self area: just share link (chips moved onto felt)
-  const selfExtra = shareRow
-    ? `<div class="lby-self-panel">${shareRow}</div>`
-    : "";
+  // Self area: name editor + share link
+  const nameEditor = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
+  const selfExtra = `<div class="lby-self-panel">${nameEditor}${shareRow}</div>`;
 
   // Joker watermark + corner suits for the felt
   const feltOverlay = `<div class="lby-felt-watermark"></div>${isHLJ ? `<div class="hlj-felt-title-overlay"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>` : ""}`;
@@ -2154,10 +2153,9 @@ function renderPJ(v) {
 }
 
 function doConnect() {
-  const name = document.getElementById("f-name").value.trim();
+  const name = document.getElementById("f-name").value.trim() || "Player 1";
   const game = document.getElementById("f-game").value;
   let room = document.getElementById("f-room").value.trim();
-  if (!name) name = "Player 1";
   if (!GAMES[game]) return toast("Pick a game.");
   S.name = name;
   S.party = game;
@@ -2302,6 +2300,12 @@ app.addEventListener("click", (e) => {
     case "clear-hotseat": {
       delete S.hotseats[+t.dataset.seat];
       return render();
+    }
+    case "lby-rename": {
+      const inp = document.getElementById("lby-name-input");
+      const newName = inp ? inp.value.trim() : "";
+      if (newName) { S.name = newName; localStorage.setItem("cg_name", newName); send({ t: "rename", name: newName }); render(); }
+      return;
     }
     case "open-lby-settings": S.lbySettingsOpen = true; return render();
     case "close-lby-settings": S.lbySettingsOpen = false; return render();
@@ -2463,6 +2467,10 @@ app.addEventListener("change", (e) => {
       send({ t: "setConfig", config: cfg });
     }
   }
+});
+
+app.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.id === "lby-name-input") dispatch("lby-rename");
 });
 
 // ---------- init ----------
