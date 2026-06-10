@@ -1236,12 +1236,23 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   width:max-content;
   animation:dropinC .5s cubic-bezier(.2,.8,.2,1) both;
 }
-/* collecting: each card flies from its scattered position to center one-by-one */
-@keyframes collectCard{
-  from{top:var(--from-top,50%);left:var(--from-left,50%);transform:translate(-50%,-50%)}
-  to{top:50%;left:50%;transform:translate(-50%,-50%)}
+/* collecting: each card flies in from its scattered direction into the fan */
+@keyframes fanArrive{
+  from{transform:rotate(var(--fan-angle)) translate(var(--from-dx,0px),var(--from-dy,0px)) scale(.7);opacity:0}
+  to{transform:rotate(var(--fan-angle));opacity:1}
 }
-.trick.positioned.collecting .play{animation-fill-mode:both}
+@keyframes fanArriveWin{
+  from{transform:rotate(var(--fan-angle)) translate(var(--from-dx,0px),var(--from-dy,0px)) scale(.7);opacity:0}
+  to{transform:rotate(var(--fan-angle)) translateY(-10px);opacity:1}
+}
+.trick-fan-collect{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-30%);
+  width:300px;height:130px;
+  pointer-events:all;
+}
+.trick-fan-collect .lt-fan-card{animation-fill-mode:both}
+.trick-fan-collect .card.win{animation-delay:var(--win-anim-delay,0ms)}
 .card-rotator{display:flex;align-items:center;justify-content:center;}
 .trick.positioned .play .card{
   position:relative;
