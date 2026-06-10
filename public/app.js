@@ -1132,14 +1132,9 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
       const isWin = p.seat === winSeat;
       const ao = arrivalOrder[i];
       // direction offset: where this player sits around the table
-      const off = you != null ? (p.seat - you + n) % n : 0;
-      const { x: px, y: py } = perimPos(off / n, { x1: 20, x2: 80, y1: 16, y2: 74 });
-      // translate from center of felt stage (50%,45%) to player position
-      const dx = Math.round((px - 50) * 2.2);
-      const dy = Math.round((py - 45) * 2.2);
       const winDelay = isWin ? `--win-anim-delay:${ao * 180 + 380}ms;` : "";
       const anim = isWin ? `fanArriveWin` : `fanArrive`;
-      const style = `--fan-angle:${angle}deg;--fan-i:${i};--from-dx:${dx}px;--from-dy:${dy}px;${winDelay}z-index:${isWin ? total + 1 : ao};animation:${anim} .38s cubic-bezier(.4,0,.2,1) ${ao * 180}ms both`;
+      const style = `--fan-angle:${angle}deg;--fan-i:${i};${winDelay}z-index:${isWin ? total + 1 : ao};animation:${anim} .42s cubic-bezier(.2,.85,.25,1) ${ao * 200}ms both`;
       return `<div class="lt-fan-card collecting-card" style="${style}">${cardHTML(p.card, { win: isWin })}</div>`;
     }).join("");
     return `<div class="trick-fan-collect">${fanInner}</div>`;

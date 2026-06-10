@@ -1236,14 +1236,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   width:max-content;
   animation:dropinC .5s cubic-bezier(.2,.8,.2,1) both;
 }
-/* collecting: each card flies in from its scattered direction into the fan */
+/* collecting: each card falls into its fan position one by one */
 @keyframes fanArrive{
-  from{transform:rotate(var(--fan-angle)) translate(var(--from-dx,0px),var(--from-dy,0px))}
-  to{transform:rotate(var(--fan-angle))}
+  from{transform:rotate(var(--fan-angle)) translateY(-50px);opacity:0}
+  to{transform:rotate(var(--fan-angle));opacity:1}
 }
 @keyframes fanArriveWin{
-  from{transform:rotate(var(--fan-angle)) translate(var(--from-dx,0px),var(--from-dy,0px))}
-  to{transform:rotate(var(--fan-angle)) translateY(-10px)}
+  from{transform:rotate(var(--fan-angle)) translateY(-50px);opacity:0}
+  to{transform:rotate(var(--fan-angle)) translateY(-10px);opacity:1}
 }
 .trick-fan-collect{
   position:absolute;
