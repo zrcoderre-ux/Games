@@ -631,14 +631,16 @@ function tableShell(v, parts) {
     ${parts.feltHeader ? `<div class="frame-title">${parts.feltHeader}</div>` : ""}
     ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
     <div class="felt">
-      ${feltPods}
-      ${parts.feltTop ? `<div class="felt-top">${parts.feltTop}</div>` : ""}
-      ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
-      ${parts.cornerSuits ? `<div class="felt-corners" aria-hidden="true">${parts.cornerSuits}</div>` : ""}
-      <div class="center${parts.centerFull ? ' full' : ''}">${parts.center}</div>
-      ${parts.trick || ""}
-      ${parts.feltBid || ""}
-      ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
+      <div class="felt-stage">
+        ${feltPods}
+        ${parts.feltTop ? `<div class="felt-top">${parts.feltTop}</div>` : ""}
+        ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
+        ${parts.cornerSuits ? `<div class="felt-corners" aria-hidden="true">${parts.cornerSuits}</div>` : ""}
+        <div class="center${parts.centerFull ? ' full' : ''}">${parts.center}</div>
+        ${parts.trick || ""}
+        ${parts.feltBid || ""}
+        ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
+      </div>
     </div>
     </div>
     <div class="selfwrap-spacer"></div>
