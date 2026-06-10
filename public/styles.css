@@ -1017,7 +1017,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* Wooden frame around the felt — warm real-wood look */
 .felt-frame{
   flex:none;
-  height:calc(100lvh - 48px); /* 48px ≈ appbar */
+  height:calc(90lvh - 43px); /* 90% of available height, leaves room at bottom */
   margin:0 5px;
   border-radius:22px;
   padding:5px;
