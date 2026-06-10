@@ -761,6 +761,20 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   color:rgba(248,244,232,.22);
 }
 
+/* Lobby name editor */
+.lby-name-row{display:flex;gap:6px;align-items:center}
+.lby-name-input{
+  flex:1;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.18);border-radius:8px;
+  color:rgba(255,255,255,.9);font-family:"Hanken Grotesk",sans-serif;font-size:13px;
+  padding:5px 8px;outline:none;
+}
+.lby-name-input:focus{border-color:rgba(227,194,89,.5)}
+.lby-name-btn{
+  flex:none;background:rgba(227,194,89,.25);border:1px solid rgba(227,194,89,.4);border-radius:8px;
+  color:rgba(255,255,255,.85);font-size:14px;padding:5px 10px;cursor:pointer;
+}
+.lby-name-btn:active{background:rgba(227,194,89,.45)}
+
 /* Lobby self panel (config + share, sits in selfExtra) */
 .lby-self-panel{
   padding:6px 0 2px;display:flex;flex-direction:column;gap:6px;
