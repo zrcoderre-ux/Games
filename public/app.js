@@ -937,7 +937,7 @@ function renderLobby(v) {
 
   // Inline editable name in the selfbar
   const nameInput = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
-  const selfExtra = shareRow ? `<div class="lby-self-panel">${shareRow}</div>` : "";
+  const selfExtra = "";
 
   // Joker watermark + corner suits for the felt
   const feltOverlay = `<div class="lby-felt-watermark"></div>${isHLJ ? `<div class="hlj-felt-title-overlay"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>` : ""}`;
@@ -945,9 +945,13 @@ function renderLobby(v) {
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
 
+  // Share + Deal on the same row
+  const shareBtn = !S.offline
+    ? `<button class="btn lby-share-btn" data-action="share-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Invite Players</button>`
+    : "";
   const dealAction = isHost
-    ? `<button class="felt-cta" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button>`
-    : `<span class="hint">Waiting for the host to deal…</span>`;
+    ? `<div class="lby-action-row">${shareBtn}<button class="btn lby-deal-btn" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button></div>`
+    : `<div class="lby-action-row">${shareBtn}${shareBtn ? "" : ""}<span class="hint">Waiting for the host to deal…</span></div>`;
 
   // My team badge for selfMeta
   const myTc = you != null && isTeamGame ? (you % 2 === 0 ? "A" : "B") : null;
