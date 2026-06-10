@@ -1245,6 +1245,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   from{transform:rotate(var(--fan-angle)) translateY(-50px);opacity:0}
   to{transform:rotate(var(--fan-angle)) translateY(-10px);opacity:1}
 }
+@keyframes scatterFade{
+  from{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  to{opacity:0;transform:translate(-50%,-50%) scale(.7)}
+}
+.trick.collecting-scatter .play{pointer-events:none}
 .trick-fan-collect{
   position:absolute;
   top:50%;left:50%;
