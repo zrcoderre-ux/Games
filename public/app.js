@@ -338,13 +338,17 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
-    // HLJ: when the trick just resolved (currentTrick went from non-empty → empty),
-    // hold the completed trick (using msg.view.lastTrick which includes the last card).
-    if (S.party === "high-low-jack"
+    // HLJ: when the trick just resolved (currentTrick went from non-empty → empty OR
+    // directly to the next trick when the bot both wins and leads immediately).
+    const trickJustResolved = S.party === "high-low-jack"
         && (prev?.currentTrick?.length ?? 0) > 0
-        && msg.view?.currentTrick?.length === 0
         && prev?.phase === "playing"
-        && msg.view?.lastTrick) {
+        && msg.view?.lastTrick
+        && (msg.view.currentTrick?.length === 0
+            // Bot wins and immediately leads: lastTrick changed even though currentTrick > 0
+            || (msg.view.currentTrick?.length > 0
+                && JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick)));
+    if (trickJustResolved) {
       if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
       const lt = msg.view.lastTrick;
       const n = prev.seats.length;
