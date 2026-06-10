@@ -1124,9 +1124,16 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     );
     const total = sorted.length;
     const spread = Math.min(70, (total - 1) * 12);
-    let nonWin = 0;
     const winPos = total - 1;
-    const arrivalOrder = sorted.map(p => p.seat === winSeat ? winPos : nonWin++);
+    const nonWinners = sorted.filter(p => p.seat !== winSeat);
+    nonWinners.sort((a, b) => {
+      const ccwA = you != null ? (you - a.seat + n) % n : a.seat;
+      const ccwB = you != null ? (you - b.seat + n) % n : b.seat;
+      return ccwA - ccwB;
+    });
+    const ccwOrder = {};
+    nonWinners.forEach((p, i) => { ccwOrder[p.seat] = i; });
+    const arrivalOrder = sorted.map(p => p.seat === winSeat ? winPos : ccwOrder[p.seat]);
     // Build a seat→arrival-delay map so scattered cards can time their fade-out
     const seatArrivalDelay = {};
     sorted.forEach((p, i) => { seatArrivalDelay[p.seat] = arrivalOrder[i] * 200; });
