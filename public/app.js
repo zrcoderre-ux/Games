@@ -67,6 +67,7 @@ const S = {
   rummyRoundVisible: false, // true once the pause after going-out has elapsed
   hljHandAcked: null, // JSON key of the lastHand already dismissed
   hljHandTimer: null, // auto-dismiss setTimeout handle
+  hljHandVisible: false, // delayed until trick hold animation completes
   hljShowDealtHands: false,
   hljTrickHold: null, // {trick, winSeat} held briefly after last card played
   hljTrickHoldTimer: null,
@@ -378,9 +379,11 @@ function onFrame(e) {
         if (S.hljTrickHold) { S.hljTrickHold = { ...S.hljTrickHold, collecting: true }; render(); }
         S.hljTrickWinTimer = null;
       }, PHANTOM);
+      S.hljHandVisible = false;
       S.hljTrickHoldTimer = setTimeout(() => {
         S.hljTrickHold = null;
         S.hljTrickHoldTimer = null;
+        S.hljHandVisible = true;
         render();
       }, PHANTOM + 2400);
     }
@@ -1383,6 +1386,8 @@ function renderHLJ(v) {
     if (!lh || v.phase === "gameOver") return "";
     const handKey = JSON.stringify(lh);
     if (S.hljHandAcked === handKey) return "";
+    // Wait for the trick-hold animation to finish before showing the result screen
+    if (!S.hljHandVisible) return "";
 
     if (S.hljHandTimer == null) {
       S.hljHandTimer = setTimeout(() => {
@@ -2453,6 +2458,7 @@ app.addEventListener("click", (e) => {
       if (lh) S.hljHandAcked = JSON.stringify(lh);
       if (S.hljHandTimer) { clearTimeout(S.hljHandTimer); S.hljHandTimer = null; }
       S.hljShowDealtHands = false;
+      S.hljHandVisible = false;
       return render();
     }
     case "hlj-show-dealt-hands": S.hljShowDealtHands = true; return render();
