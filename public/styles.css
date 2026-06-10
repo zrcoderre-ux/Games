@@ -388,12 +388,13 @@ button{font-family:inherit}
   #app:has(.lby-wrap){
     height:100dvh;min-height:unset;overflow:hidden;
   }
-  .felt-frame{
-    flex:1;height:auto;margin-bottom:12px;
+  /* .table prefix needed: these must out-rank the later base rules */
+  .table .felt-frame{
+    flex:1;height:auto;margin:0 5px 12px;
   }
   /* Reserve enough room below the felt for the full bottom panel,
      so the table edge sits above the player bar */
-  .selfwrap-spacer{height:290px;}
+  .table .selfwrap-spacer{height:290px;}
 }
 
 /* ---------- App bar ---------- */
