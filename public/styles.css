@@ -401,8 +401,8 @@ button{font-family:inherit}
    felt-frame fills the visible viewport; selfwrap sits below it and is
    reachable by scrolling (player bar is never on top of the table). */
 @media not (display-mode: standalone){
-  .table .felt-frame{height:calc(100dvh - 43px);}
-  .table .selfwrap{position:relative;bottom:auto;left:auto;right:auto;}
+  .table .felt-frame{height:calc(100dvh - 43px - 170px);margin-bottom:0;}
+  .table .selfwrap{position:relative;bottom:auto;left:auto;right:auto;margin-top:0;}
   .table .selfwrap-spacer{height:0;}
 }
 
