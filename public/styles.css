@@ -397,6 +397,13 @@ button{font-family:inherit}
   .table .selfwrap-spacer{height:215px;}
 }
 
+/* Browser (non-standalone): selfwrap sticks to the viewport bottom so it stays
+   flush with the felt-frame regardless of lvh/dvh differences */
+@media not (display-mode: standalone){
+  .table .selfwrap{position:fixed;bottom:0;left:0;right:0;}
+  .table .selfwrap-spacer{height:215px;}
+}
+
 /* ---------- App bar ---------- */
 .appbar{
   display:flex;align-items:center;gap:10px;
