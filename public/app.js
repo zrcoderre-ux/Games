@@ -600,7 +600,7 @@ function tableShell(v, parts) {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
-      const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 14, y2: 88 });
+      const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 16, y2: 74 });
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     };
     const slots = podItems.length
