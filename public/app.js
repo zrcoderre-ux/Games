@@ -1302,7 +1302,18 @@ function renderHLJ(v) {
         const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
-      return histToks;
+      // Dealer chip on the felt
+      const dealerStyle = bidPosStyle(v.dealerSeat);
+      const dealerTok = `<div class="hlj-bid-token dealer-felt" style="${dealerStyle}"><div class="pod-dealer-badge">D</div></div>`;
+      return histToks + dealerTok;
+    }
+    if (v.phase === "playing" && v.highBid) {
+      // Keep the winning bid chip visible on the felt during play
+      const style = bidPosStyle(v.highBid.seat);
+      const dealerStyle = bidPosStyle(v.dealerSeat);
+      const bidTok = `<div class="hlj-bid-token chip steal" style="${style}">${v.highBid.amount}</div>`;
+      const dealerTok = `<div class="hlj-bid-token dealer-felt" style="${dealerStyle}"><div class="pod-dealer-badge">D</div></div>`;
+      return bidTok + dealerTok;
     }
     return "";
   })();
