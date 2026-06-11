@@ -397,21 +397,23 @@ button{font-family:inherit}
   .table .selfwrap-spacer{height:215px;}
 }
 
-/* Browser (non-standalone): two sub-cases — lobby vs active game.
-   Lobby: selfwrap in flow, no spacer gap (perfect with flex layout).
-   Game: selfwrap fixed at viewport bottom, spacer reserves room above it. */
+/* Browser (non-standalone): two sub-cases — lobby vs active game. */
 @media not (display-mode: standalone){
-  #app:has(.table){overflow-y:auto;}
-  .table{display:flex;flex-direction:column;min-height:100dvh;}
+  .table{display:flex;flex-direction:column;}
   .table .felt-frame{flex:1;height:auto;min-height:0;margin:0 5px 12px;}
 
-  /* LOBBY: selfwrap flows in the document */
+  /* LOBBY: #app is exactly 100dvh, selfwrap flows in document, no spacer */
+  #app:has(.lby-outer){height:100dvh;overflow:hidden;}
+  #app:has(.lby-outer) .table{flex:1;}
   #app:has(.lby-outer) .table .selfwrap{position:relative;bottom:auto;left:auto;right:auto;}
   #app:has(.lby-outer) .table .selfwrap-spacer{height:0;}
 
-  /* GAME: selfwrap fixed at viewport bottom, hand touches felt edge */
+  /* GAME: selfwrap fixed at viewport bottom; spacer sizes the felt so the
+     felt bottom aligns with the top of the fixed hand. */
+  #app:not(:has(.lby-outer)):has(.table){overflow-y:auto;}
+  #app:not(:has(.lby-outer)) .table{min-height:100dvh;}
   #app:not(:has(.lby-outer)) .table .selfwrap{position:fixed;bottom:0;left:0;right:0;}
-  /* selfwrap-spacer keeps base height:240px to reserve room above fixed selfwrap */
+  #app:not(:has(.lby-outer)) .table .selfwrap-spacer{height:190px;}
 }
 
 /* ---------- App bar ---------- */
