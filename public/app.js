@@ -992,8 +992,8 @@ function renderLobby(v) {
       removeBtn = `<button class="lby-pod-remove" data-action="clearseat" data-seat="${i}">✕</button>`;
     }
 
-    // Team games use outlined box-style seats
-    if (isTeamGame) {
+    // Team games and Rummy use outlined box-style seats
+    if (isTeamGame || isRummyLobby) {
       const boxLabel = isEmpty ? "OPEN" : (isBot && !reserved ? "BOT" : name.toUpperCase().substring(0, 8));
       const boxIcon = isEmpty ? "+" : initial;
       return `<div class="lby-seat-box ${tc} ${isEmpty ? "lby-seat-empty" : ""}"${seatClick}>
@@ -1061,7 +1061,7 @@ function renderLobby(v) {
       </div>`
     : `<div class="lby-center-status">${seatedCount} of ${n} seated</div>`;
 
-  const center = isHLJ
+  const center = (isHLJ || isRummyLobby)
     ? ""
     : `<div class="lby-center">
         <div class="lby-center-title">${esc(GAMES[S.party].label)}</div>
@@ -1075,6 +1075,13 @@ function renderLobby(v) {
 
   const feltChips = isHLJ && isHost
     ? `<div class="lby-felt-chips"><span class="lby-fc-players">PLAYERS</span><div class="lby-fc-row">${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>`
+    : isRummyLobby && isHost
+    ? `<div class="lby-felt-chips">
+        <span class="lby-fc-players">PLAYERS</span>
+        <div class="lby-fc-row">${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>
+        <div class="lby-fc-row"><span class="lby-fc-label">Play to</span><input class="lby-pts lby-pts-felt" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>
+        <div class="lby-fc-row"><span class="lby-fc-label">Must discard</span><button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard">${v.requireDiscard ? "On" : "Off"}</button></div>
+      </div>`
     : "";
   const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
