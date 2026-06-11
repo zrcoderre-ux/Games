@@ -1431,7 +1431,7 @@ function renderHLJ(v) {
   const signalControl = "";
   const trumpControl = "";
 
-  const playHint = v.yourTurn && plays.size && !holdActive ? `<span class="hint">Tap a glowing card to play.</span>` : "";
+  const playHint = "";
 
   // Team score strip below hand
   const myTeamIdx = you != null ? you % 2 : 0; // 0=A, 1=B
@@ -2123,8 +2123,6 @@ function renderHearts(v) {
     acts.push(`<span class="hint">${n === 3 ? "Tap a selected card to swap it out." : v.yourTurn ? `Select ${3 - n} more card${3 - n === 1 ? "" : "s"} to pass.` : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
   } else if (passing) {
     acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
-  } else if (v.yourTurn && plays.size) {
-    acts.push(`<span class="hint">Tap a glowing card to play.</span>`);
   }
 
   const you = v.you;
