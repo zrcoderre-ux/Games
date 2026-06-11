@@ -346,10 +346,25 @@ function onFrame(e) {
     const prev = S.view;
     S.view = msg.view;
     // HLJ: if drip mode is active, queue any newly arrived trick cards.
+    // If the user just played their own card, flush everything immediately so it
+    // never disappears from hand without appearing in the trick.
     if (S.hljDripTrick !== null && S.party === "high-low-jack" && msg.view?.phase === "playing") {
       const shown = S.hljDripTrick.length + S.hljDripPending.length;
       const incoming = msg.view.currentTrick ?? [];
-      if (incoming.length > shown) S.hljDripPending.push(...incoming.slice(shown));
+      if (incoming.length > shown) {
+        const newCards = incoming.slice(shown);
+        const userSeat = msg.view.you;
+        if (userSeat != null && newCards.some(c => c.seat === userSeat)) {
+          // User's card arrived — flush all pending + new cards at once
+          if (S.hljDripTimer) { clearTimeout(S.hljDripTimer); S.hljDripTimer = null; }
+          S.hljDripTrick = [...S.hljDripTrick, ...S.hljDripPending, ...newCards];
+          S.hljDripPending = [];
+          // Don't set to null yet — let the next render pick it up, then clear
+          setTimeout(() => { S.hljDripTrick = null; }, 0);
+        } else {
+          S.hljDripPending.push(...newCards);
+        }
+      }
     }
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
@@ -475,11 +490,21 @@ function startTrickDrip() {
   if (S.hljDripTimer) clearTimeout(S.hljDripTimer);
   S.hljDripTimer = setTimeout(() => {
     S.hljDripTimer = null;
-    if (!S.hljDripPending.length) { S.hljDripTrick = null; return; }
+    if (!S.hljDripPending.length) {
+      S.hljDripTrick = null;
+      render();
+      maybeAutoPlay(S.view);
+      return;
+    }
     S.hljDripTrick = [...S.hljDripTrick, S.hljDripPending.shift()];
     render();
-    if (S.hljDripPending.length > 0) startTrickDrip();
-    else S.hljDripTrick = null;
+    if (S.hljDripPending.length > 0) {
+      startTrickDrip();
+    } else {
+      S.hljDripTrick = null;
+      render();
+      maybeAutoPlay(S.view);
+    }
   }, 800);
 }
 
@@ -489,6 +514,7 @@ let _autoPlayTimer = null;
 function maybeAutoPlay(v) {
   if (_autoPlayTimer) { clearTimeout(_autoPlayTimer); _autoPlayTimer = null; }
   if (!v || !v.yourTurn) return;
+  if (S.hljDripTrick !== null) return; // block during drip — re-triggered when drip finishes
   const legal = v.legalMoves || [];
   if (legal.length !== 1) return;
   const move = legal[0];
@@ -703,7 +729,9 @@ function tableShell(v, parts) {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
-      const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 21, y2: 79 });
+      // Tighten y2 for larger tables so bottom-side pods don't crowd the user's hand
+      const podY2 = n >= 6 ? 50 : n >= 5 ? 65 : 79;
+      const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 21, y2: podY2 });
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     };
     const slots = podItems.length
@@ -1172,7 +1200,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const bounds = mini ? { x1: 18, x2: 82, y1: 10, y2: 88 } : { x1: 20, x2: 80, y1: 16, y2: 74 };
+    const bounds = mini ? { x1: 18, x2: 82, y1: 10, y2: 88 } : { x1: 22, x2: 78, y1: 16, y2: 74 };
     const { x, y } = perimPos(off / n, bounds);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
