@@ -725,20 +725,31 @@ function tableShell(v, parts) {
     // Square perimeter layout: each player sits on an edge of the felt.
     const n = v.seats.length;
     const you = v.you;
-    const podInfo = (seat) => {
+    // Walk the perimeter once, classify each pod onto a wall by its computed x
+    // (corner offsets like 8-player t=1/8 multiples land exactly on x1/x2, so
+    // edge-range tests misfile them), then re-space each side wall evenly.
+    const X1 = 12, X2 = 88, Y1 = 21;
+    const podY2 = n >= 6 ? 50 : n >= 5 ? 65 : 79;
+    const infos = podItems.map(({ seat, html }) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
-      // Tighten y2 for larger tables so bottom-side pods don't crowd the user's hand
-      const podY2 = n >= 6 ? 50 : n >= 5 ? 65 : 79;
-      const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 21, y2: podY2 });
-      const t = off / n;
-      const side = (t >= 1/8 && t < 3/8) ? "pos-left" : (t >= 5/8 && t < 7/8) ? "pos-right" : "pos-top";
-      return { x, y, side };
-    };
-    const slots = podItems.length
-      ? podItems.map(({ seat, html }) => {
-          const { x, y, side } = podInfo(seat);
+      const { x, y } = perimPos(off / n, { x1: X1, x2: X2, y1: Y1, y2: podY2 });
+      const side = x <= X1 ? "pos-left" : x >= X2 ? "pos-right" : "pos-top";
+      return { html, x, y, side, off };
+    });
+    // Evenly space side-wall pods between Y1 and podY2, ordered along the walk
+    // (left wall runs bottom→top with off, right wall top→bottom).
+    for (const side of ["pos-left", "pos-right"]) {
+      const wall = infos.filter(p => p.side === side).sort((a, b) => a.off - b.off);
+      wall.forEach((p, i) => {
+        const f = wall.length === 1 ? 0.5 : i / (wall.length - 1);
+        const fy = side === "pos-left" ? 1 - f : f; // left walks up, right walks down
+        p.y = Y1 + (podY2 - Y1) * fy;
+      });
+    }
+    const slots = infos.length
+      ? infos.map(({ html, x, y, side }) => {
           // Side pods anchor flush to the felt edge so the card backs always sit
           // against the wall; only the vertical position comes from the perimeter.
           const pos = side === "pos-left"
