@@ -727,7 +727,7 @@ function tableShell(v, parts) {
     // Wall-aware layout shared with trick cards and bid chips (wallPerimPos):
     // classify by computed x, evenly re-space side walls, widen for 3+ pods.
     const podY2 = n >= 6 ? 50 : n >= 5 ? 65 : 79;
-    const podBounds = { x1: 12, x2: 88, y1: 21, y2: podY2, wideY1: 16, wideY2: Math.max(podY2, 68) };
+    const podBounds = { x1: 12, x2: 88, y1: 5, y2: podY2, wideY1: 5, wideY2: Math.max(podY2, 68) };
     const infos = podItems.map(({ seat, html }) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
@@ -1062,7 +1062,7 @@ function renderLobby(v) {
   const selfExtra = "";
 
   // Joker watermark + corner suits for the felt
-  const feltOverlay = `<div class="lby-felt-watermark"></div>${isHLJ ? `<div class="hlj-felt-title-overlay"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>` : ""}`;
+  const feltOverlay = `<div class="lby-felt-watermark"></div>`;
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
@@ -1413,7 +1413,7 @@ function renderHLJ(v) {
   const trumpMark = v.trump && v.trumpRevealed
     ? `<span class="trump-watermark ${RED.has(v.trump) ? "red" : ""}">${SUIT[v.trump]}</span>`
     : `<span class="trump-watermark joker-placeholder" role="img" aria-label="No trump chosen yet"></span>`;
-  const feltOverlay = trumpMark + `<div class="hlj-felt-title-overlay"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>`;
+  const feltOverlay = trumpMark;
 
   // hand (fanned), sorted by suit then rank, dim non-legal cards while it's your turn to play
   const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
