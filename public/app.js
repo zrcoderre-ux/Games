@@ -1218,9 +1218,10 @@ function wallPerimPos(off, n, b) {
   if (wall.length < 3) {
     y = yTop + (yBot - yTop) * fy;
   } else {
-    // Non-uniform: top two pods match the 6-player positions (y1, y2); bottom pod pushed to wideY2
-    if (fy <= 0.5) y = y1 + (y2 - y1) * (fy / 0.5);
-    else y = y2 + (yBot - y2) * ((fy - 0.5) / 0.5);
+    // Equal spacing: same gap as 6-player (y2-y1), so bottom = y2 + (y2-y1)
+    const step = y2 - y1;
+    if (fy <= 0.5) y = y1 + step * (fy / 0.5);
+    else y = y2 + step * ((fy - 0.5) / 0.5);
   }
   return { x: pos.x, y, side };
 }
