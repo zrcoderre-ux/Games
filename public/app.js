@@ -757,7 +757,7 @@ function tableShell(v, parts) {
     self = `<div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
       <div class="selfbar">
         ${avatarHTML(myName, { host: v.you === v.hostSeat })}
-        <div class="selfbar-name-block">${parts.selfName ? parts.selfName : `<div class="name">${esc(myName)}</div>`}<div class="me-pts">${parts.selfMeta || ""}</div></div>
+        <div class="selfbar-name-block">${parts.selfName ? parts.selfName : `<span class="name">${esc(myName)}</span>`}<span class="me-pts">${parts.selfMeta || ""}</span></div>
         ${parts.selfTurn || ""}
       </div>
       ${parts.selfExtra ? `<div class="self-extra">${parts.selfExtra}</div>` : ""}
