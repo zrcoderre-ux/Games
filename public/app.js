@@ -738,14 +738,17 @@ function tableShell(v, parts) {
       const side = x <= X1 ? "pos-left" : x >= X2 ? "pos-right" : "pos-top";
       return { html, x, y, side, off };
     });
-    // Evenly space side-wall pods between Y1 and podY2, ordered along the walk
-    // (left wall runs bottom→top with off, right wall top→bottom).
+    // Evenly space side-wall pods, ordered along the walk (left wall runs
+    // bottom→top with off, right wall top→bottom). Walls holding 3+ pods get
+    // a wider vertical range so neighbours don't crowd each other.
     for (const side of ["pos-left", "pos-right"]) {
       const wall = infos.filter(p => p.side === side).sort((a, b) => a.off - b.off);
+      const yTop = wall.length >= 3 ? 16 : Y1;
+      const yBot = wall.length >= 3 ? Math.max(podY2, 64) : podY2;
       wall.forEach((p, i) => {
         const f = wall.length === 1 ? 0.5 : i / (wall.length - 1);
         const fy = side === "pos-left" ? 1 - f : f; // left walks up, right walks down
-        p.y = Y1 + (podY2 - Y1) * fy;
+        p.y = yTop + (yBot - yTop) * fy;
       });
     }
     const slots = infos.length
