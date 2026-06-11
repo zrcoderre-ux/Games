@@ -728,7 +728,7 @@ function tableShell(v, parts) {
     // Wall-aware layout shared with trick cards and bid chips (wallPerimPos):
     // classify by computed x, evenly re-space side walls, widen for 3+ pods.
     const podY2 = n >= 6 ? 50 : n >= 5 ? 65 : 79;
-    const podBounds = { x1: 12, x2: 88, y1: 21, y2: podY2, wideY1: 16, wideY2: Math.max(podY2, 64) };
+    const podBounds = { x1: 12, x2: 88, y1: 21, y2: podY2, wideY1: 16, wideY2: Math.max(podY2, 68) };
     const infos = podItems.map(({ seat, html }) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
@@ -1214,7 +1214,16 @@ function wallPerimPos(off, n, b) {
   const yBot = wall.length >= 3 ? wideY2 : y2;
   const f = wall.length === 1 ? 0.5 : i / (wall.length - 1);
   const fy = side === "left" ? 1 - f : f; // left wall walks bottom→top, right top→bottom
-  return { x: pos.x, y: yTop + (yBot - yTop) * fy, side };
+  let y;
+  if (wall.length < 3) {
+    y = yTop + (yBot - yTop) * fy;
+  } else {
+    // Non-uniform: middle pod matches 6-player single-pod position (y1+y2)/2
+    const midY = (y1 + y2) / 2;
+    if (fy <= 0.5) y = yTop + (midY - yTop) * (fy / 0.5);
+    else y = midY + (yBot - midY) * ((fy - 0.5) / 0.5);
+  }
+  return { x: pos.x, y, side };
 }
 
 // Which card in a completed High Low Jack trick won it (port of engine
