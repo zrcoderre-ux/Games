@@ -1194,34 +1194,19 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     const total = sorted.length;
     const spread = Math.min(70, (total - 1) * 12);
     const winPos = total - 1;
-    const nonWinners = sorted.filter(p => p.seat !== winSeat);
-    nonWinners.sort((a, b) => {
-      const cwA = (a.seat - winSeat + n) % n;
-      const cwB = (b.seat - winSeat + n) % n;
-      return cwA - cwB;
-    });
-    const ccwOrder = {};
-    nonWinners.forEach((p, i) => { ccwOrder[p.seat] = i; });
-    const arrivalOrder = sorted.map(p => p.seat === winSeat ? winPos : ccwOrder[p.seat]);
-    // Build a seat→arrival-delay map so scattered cards can time their fade-out
-    const seatArrivalDelay = {};
-    sorted.forEach((p, i) => { seatArrivalDelay[p.seat] = arrivalOrder[i] * 200; });
-
-    // Fan cards: drop in one by one
+    // Fan cards: all arrive together
     const fanInner = sorted.map((p, i) => {
       const angle = total > 1 ? -spread / 2 + (spread / (total - 1)) * i : 0;
       const isWin = p.seat === winSeat;
-      const ao = arrivalOrder[i];
-      const winDelay = isWin ? `--win-anim-delay:${ao * 200 + 380}ms;` : "";
+      const winDelay = isWin ? `--win-anim-delay:380ms;` : "";
       const anim = isWin ? `fanArriveWin` : `fanArrive`;
-      const style = `--fan-angle:${angle}deg;${winDelay}z-index:${isWin ? total + 1 : ao};animation:${anim} .42s cubic-bezier(.2,.85,.25,1) ${ao * 200}ms both`;
+      const style = `--fan-angle:${angle}deg;${winDelay}z-index:${isWin ? total + 1 : i};animation:${anim} .42s cubic-bezier(.2,.85,.25,1) both`;
       return `<div class="lt-fan-card collecting-card" style="${style}">${cardHTML(p.card, { win: isWin })}</div>`;
     }).join("");
 
-    // Scattered cards: each fades out exactly when its fan counterpart drops in
+    // Scattered cards: all fade out together
     const scatterInner = plays.map((p, idx) => {
-      const delay = seatArrivalDelay[p.seat] ?? 0;
-      const style = `${circleStyle(p.seat)};--card-half-h:${halfH}px;z-index:${idx + 1};animation:scatterFade .25s ease-in ${delay}ms both`;
+      const style = `${circleStyle(p.seat)};--card-half-h:${halfH}px;z-index:${idx + 1};animation:scatterFade .25s ease-in both`;
       return `<div class="play" style="${style}"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat)}deg)">${cardHTML(p.card, { mini: false })}</div></div>`;
     }).join("");
 
