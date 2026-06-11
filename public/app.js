@@ -1362,7 +1362,7 @@ function renderHLJ(v) {
         const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
-      const dealerTok = bh.you === bh.dealerSeat
+      const dealerTok = bh.you !== bh.dealerSeat
         ? `<div class="hlj-bid-token dealer-felt" style="${holdPos(bh.dealerSeat)}"><div class="pod-dealer-badge">D</div></div>`
         : "";
       return histToks + dealerTok;
@@ -1376,15 +1376,15 @@ function renderHLJ(v) {
         const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
-      // Dealer chip on the felt only for the user's own seat (bots show it in their pod)
-      const dealerTok = v.you === v.dealerSeat
+      // Dealer chip on the felt for everyone except the dealer (they see it in their selfbar)
+      const dealerTok = v.you !== v.dealerSeat
         ? `<div class="hlj-bid-token dealer-felt" style="${bidPosStyle(v.dealerSeat)}"><div class="pod-dealer-badge">D</div></div>`
         : "";
       return histToks + dealerTok;
     }
     if (v.phase === "playing" && v.highBid) {
       const bidTok = `<div class="hlj-bid-token chip steal" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
-      const dealerTok = v.you === v.dealerSeat
+      const dealerTok = v.you !== v.dealerSeat
         ? `<div class="hlj-bid-token dealer-felt" style="${bidPosStyle(v.dealerSeat)}"><div class="pod-dealer-badge">D</div></div>`
         : "";
       return bidTok + dealerTok;
