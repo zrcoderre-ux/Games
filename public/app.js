@@ -77,6 +77,9 @@ const S = {
   hljTrickWinReady: false, // delayed win-card highlight within the hold
   hljTrickWinTimer: null,
   hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
+  hljDripTrick: null,    // array of plays being dripped in one-at-a-time after hold expires
+  hljDripPending: [],    // queued plays not yet shown
+  hljDripTimer: null,
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
@@ -342,6 +345,12 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
+    // HLJ: if drip mode is active, queue any newly arrived trick cards.
+    if (S.hljDripTrick !== null && S.party === "high-low-jack" && msg.view?.phase === "playing") {
+      const shown = S.hljDripTrick.length + S.hljDripPending.length;
+      const incoming = msg.view.currentTrick ?? [];
+      if (incoming.length > shown) S.hljDripPending.push(...incoming.slice(shown));
+    }
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
       S.hljHandTrickCount = 0; // new hand — suppress stale lastTrick from previous hand
@@ -374,6 +383,10 @@ function onFrame(e) {
             || (newTrickLen > 0 && prevTrickLen >= n - 1
                 && JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick)));
     if (trickJustResolved) {
+      // Cancel any in-progress drip — trick just ended.
+      if (S.hljDripTimer) { clearTimeout(S.hljDripTimer); S.hljDripTimer = null; }
+      S.hljDripTrick = null;
+      S.hljDripPending = [];
       S.hljHandTrickCount++;
       if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
       const lt = msg.view.lastTrick;
@@ -401,7 +414,17 @@ function onFrame(e) {
         S.hljTrickHold = null;
         S.hljTrickHoldTimer = null;
         S.hljHandVisible = true;
-        render();
+        const snapshot = [...(S.view?.currentTrick ?? [])];
+        if (snapshot.length > 1) {
+          // Cards accumulated while hold was active — drip them in one by one.
+          S.hljDripTrick = snapshot.slice(0, 1);
+          S.hljDripPending = snapshot.slice(1);
+          render();
+          startTrickDrip();
+        } else {
+          S.hljDripTrick = null;
+          render();
+        }
       }, PHANTOM + 2400);
     }
     // HLJ: if a new hand result arrived but trickJustResolved didn't fire (server batched the
@@ -445,6 +468,19 @@ function onFrame(e) {
     maybeAutoPlay(msg.view);
   }
   else if (msg.t === "error") { toast(msg.message); }
+}
+
+// Drip accumulated trick cards in one at a time after the trick hold expires.
+function startTrickDrip() {
+  if (S.hljDripTimer) clearTimeout(S.hljDripTimer);
+  S.hljDripTimer = setTimeout(() => {
+    S.hljDripTimer = null;
+    if (!S.hljDripPending.length) { S.hljDripTrick = null; return; }
+    S.hljDripTrick = [...S.hljDripTrick, S.hljDripPending.shift()];
+    render();
+    if (S.hljDripPending.length > 0) startTrickDrip();
+    else S.hljDripTrick = null;
+  }, 800);
 }
 
 // Auto-play: when it's your turn in HLJ playing phase and only one card is legal,
@@ -1270,8 +1306,9 @@ function renderHLJ(v) {
     } else {
       hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: null, collecting: false });
     }
-  } else if (v.currentTrick.length) {
-    const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+  } else if ((S.hljDripTrick ?? v.currentTrick).length) {
+    const displayTrick = S.hljDripTrick ?? v.currentTrick;
+    const trickPlays = displayTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
     hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
   } else if (v.phase !== "bidding" && v.lastTrick && S.hljHandTrickCount > 0) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
