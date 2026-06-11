@@ -739,7 +739,14 @@ function tableShell(v, parts) {
     const slots = podItems.length
       ? podItems.map(({ seat, html }) => {
           const { x, y, side } = podInfo(seat);
-          return `<div class="pod-slot ${side}" style="position:absolute;top:${y}%;left:${x}%;transform:translate(-50%,-50%);z-index:2">${html}</div>`;
+          // Side pods anchor flush to the felt edge so the card backs always sit
+          // against the wall; only the vertical position comes from the perimeter.
+          const pos = side === "pos-left"
+            ? `top:${y}%;left:0;transform:translateY(-50%)`
+            : side === "pos-right"
+              ? `top:${y}%;right:0;transform:translateY(-50%)`
+              : `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
+          return `<div class="pod-slot ${side}" style="position:absolute;${pos};z-index:2">${html}</div>`;
         }).join("")
       : `<div class="pod-slot" style="position:absolute;top:14%;left:50%;transform:translate(-50%,-50%);z-index:2"><div class="callout">Waiting for players to arrive…</div></div>`;
     feltPods = slots;
