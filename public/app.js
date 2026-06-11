@@ -727,7 +727,7 @@ function tableShell(v, parts) {
     // Wall-aware layout shared with trick cards and bid chips (wallPerimPos):
     // classify by computed x, evenly re-space side walls, widen for 3+ pods.
     const podY1 = n === 6 ? 35 : 21;
-    const podY2 = n >= 8 ? 50 : n >= 6 ? 62 : n >= 5 ? 65 : 79;
+    const podY2 = n >= 8 ? 50 : n >= 6 ? 65 : n >= 5 ? 65 : 79;
     const podBounds = { x1: 12, x2: 88, y1: podY1, y2: podY2, wideY1: 16, wideY2: Math.max(podY2, 68), topY: 9 };
     const infos = podItems.map(({ seat, html }) => {
       const off = you == null
