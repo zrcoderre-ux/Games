@@ -1425,7 +1425,7 @@ function renderHLJ(v) {
     (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
     a.rank - b.rank
   );
-  const holdActive = !!S.hljTrickHold;
+  const holdActive = !!S.hljTrickHold || S.hljDripTrick !== null;
   const hand = `<div class="fan-inner">${fanHand(sortedHand, (c) => ({
     playable: !holdActive && plays.has(cardKey(c)),
     dim: !holdActive && plays.size > 0 && !plays.has(cardKey(c)),
