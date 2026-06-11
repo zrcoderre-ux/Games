@@ -725,32 +725,17 @@ function tableShell(v, parts) {
     // Square perimeter layout: each player sits on an edge of the felt.
     const n = v.seats.length;
     const you = v.you;
-    // Walk the perimeter once, classify each pod onto a wall by its computed x
-    // (corner offsets like 8-player t=1/8 multiples land exactly on x1/x2, so
-    // edge-range tests misfile them), then re-space each side wall evenly.
-    const X1 = 12, X2 = 88, Y1 = 21;
+    // Wall-aware layout shared with trick cards and bid chips (wallPerimPos):
+    // classify by computed x, evenly re-space side walls, widen for 3+ pods.
     const podY2 = n >= 6 ? 50 : n >= 5 ? 65 : 79;
+    const podBounds = { x1: 12, x2: 88, y1: 21, y2: podY2, wideY1: 16, wideY2: Math.max(podY2, 64) };
     const infos = podItems.map(({ seat, html }) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
-      const { x, y } = perimPos(off / n, { x1: X1, x2: X2, y1: Y1, y2: podY2 });
-      const side = x <= X1 ? "pos-left" : x >= X2 ? "pos-right" : "pos-top";
-      return { html, x, y, side, off };
+      const { x, y, side } = wallPerimPos(off, n, podBounds);
+      return { html, x, y, side: `pos-${side}` };
     });
-    // Evenly space side-wall pods, ordered along the walk (left wall runs
-    // bottom→top with off, right wall top→bottom). Walls holding 3+ pods get
-    // a wider vertical range so neighbours don't crowd each other.
-    for (const side of ["pos-left", "pos-right"]) {
-      const wall = infos.filter(p => p.side === side).sort((a, b) => a.off - b.off);
-      const yTop = wall.length >= 3 ? 16 : Y1;
-      const yBot = wall.length >= 3 ? Math.max(podY2, 64) : podY2;
-      wall.forEach((p, i) => {
-        const f = wall.length === 1 ? 0.5 : i / (wall.length - 1);
-        const fy = side === "pos-left" ? 1 - f : f; // left walks up, right walks down
-        p.y = yTop + (yBot - yTop) * fy;
-      });
-    }
     const slots = infos.length
       ? infos.map(({ html, x, y, side }) => {
           // Side pods anchor flush to the felt edge so the card backs always sit
@@ -1211,6 +1196,27 @@ function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
   }
 }
 
+// Wall-aware perimeter position: classifies a seat onto a wall by its computed
+// x (corner offsets land exactly on x1/x2), then evenly re-spaces side-wall
+// seats so trick cards and bid chips track the pods. wideY1/wideY2 (optional)
+// widen the side range when a wall holds 3+ seats (8-player tables).
+function wallPerimPos(off, n, b) {
+  const { x1, x2, y1, y2, wideY1 = y1, wideY2 = y2 } = b;
+  const at = (o) => perimPos(o / n, { x1, x2, y1, y2 });
+  const sideOf = (p) => (p.x <= x1 ? "left" : p.x >= x2 ? "right" : "top");
+  const pos = at(off);
+  const side = sideOf(pos);
+  if (side === "top" || off === 0) return { ...pos, side };
+  const wall = [];
+  for (let o = 1; o < n; o++) if (sideOf(at(o)) === side) wall.push(o);
+  const i = wall.indexOf(off);
+  const yTop = wall.length >= 3 ? wideY1 : y1;
+  const yBot = wall.length >= 3 ? wideY2 : y2;
+  const f = wall.length === 1 ? 0.5 : i / (wall.length - 1);
+  const fy = side === "left" ? 1 - f : f; // left wall walks bottom→top, right top→bottom
+  return { x: pos.x, y: yTop + (yBot - yTop) * fy, side };
+}
+
 // Which card in a completed High Low Jack trick won it (port of engine
 // trickWinner): highest trump — joker is the lowest trump — else highest of the
 // led suit. Returns the index into the play-order cards array.
@@ -1225,7 +1231,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
     const bounds = mini ? { x1: 18, x2: 82, y1: 10, y2: 88 } : { x1: 22, x2: 78, y1: 16, y2: 74 };
-    const { x, y } = perimPos(off / n, bounds);
+    const { x, y } = wallPerimPos(off, n, bounds);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const cardRotation = (seat) => {
@@ -1417,7 +1423,7 @@ function renderHLJ(v) {
     // User's own seat: fixed lower-center to match the chip panel position
     if (off === 0) return "top:87%;left:50%;transform:translate(-50%,-50%)";
     // Other seats: tighter bounds so chips appear inward from card backs
-    const { x, y } = perimPos(off / n, { x1: 26, x2: 74, y1: 33, y2: 71 });
+    const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71 });
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = (() => {
@@ -1429,7 +1435,7 @@ function renderHLJ(v) {
         if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
         const off = (seat - bh.you + n) % n;
         if (off === 0) return "top:87%;left:50%;transform:translate(-50%,-50%)";
-        const { x, y } = perimPos(off / n, { x1: 26, x2: 74, y1: 33, y2: 71 });
+        const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71 });
         return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
       };
       const highBidSeat = bh.highBid?.seat ?? null;
