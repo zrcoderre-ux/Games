@@ -994,9 +994,12 @@ function renderLobby(v) {
 
     // Team games and Rummy use outlined box-style seats
     if (isTeamGame || isRummyLobby) {
-      const boxLabel = isEmpty ? "OPEN" : (isBot && !reserved ? "BOT" : name.toUpperCase().substring(0, 8));
-      const boxIcon = isEmpty ? "+" : initial;
-      return `<div class="lby-seat-box ${tc} ${isEmpty ? "lby-seat-empty" : ""}"${seatClick}>
+      const isEmptyUnreserved = isEmpty && !reserved;
+      const boxLabel = reserved ? name.toUpperCase().substring(0, 8)
+        : isEmpty ? "OPEN"
+        : (isBot ? "BOT" : name.toUpperCase().substring(0, 8));
+      const boxIcon = isEmptyUnreserved ? "+" : initial;
+      return `<div class="lby-seat-box ${tc} ${isEmptyUnreserved ? "lby-seat-empty" : ""}"${seatClick}>
         <div class="lby-seat-box-main">${boxIcon}</div>
         <div class="lby-seat-box-sub">${boxLabel}</div>
         ${removeBtn}
