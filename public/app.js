@@ -71,6 +71,7 @@ const S = {
   hljShowDealtHands: false,
   hljBidHold: null,   // frozen bid overlay shown briefly after bidding ends
   hljBidHoldTimer: null,
+  hljHandTrickCount: 0, // tricks resolved in current hand; 0 at hand start so stale lastTrick isn't shown
   hljTrickHold: null, // {trick, winSeat} held briefly after last card played
   hljTrickHoldTimer: null,
   hljTrickWinReady: false, // delayed win-card highlight within the hold
@@ -343,6 +344,7 @@ function onFrame(e) {
     S.view = msg.view;
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
+      S.hljHandTrickCount = 0; // new hand — suppress stale lastTrick from previous hand
       if (S.hljBidHoldTimer) clearTimeout(S.hljBidHoldTimer);
       // Use the NEW view's bidHistory — the dealer's final action may only exist there
       // (server batches the dealer-bot move in the same frame as the phase transition)
@@ -372,6 +374,7 @@ function onFrame(e) {
             || (newTrickLen > 0 && prevTrickLen >= n - 1
                 && JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick)));
     if (trickJustResolved) {
+      S.hljHandTrickCount++;
       if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
       const lt = msg.view.lastTrick;
       const n = prev.seats.length; // use prev seats (new hand may differ in phase)
@@ -1269,7 +1272,7 @@ function renderHLJ(v) {
   } else if (v.currentTrick.length) {
     const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
     hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
-  } else if (v.phase !== "bidding" && v.lastTrick) {
+  } else if (v.phase !== "bidding" && v.lastTrick && S.hljHandTrickCount > 0) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     const winCard = v.lastTrick.cards[winIdx];
     const ltCards = [...v.lastTrick.cards].sort((a, b) => {
