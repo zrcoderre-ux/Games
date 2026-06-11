@@ -389,14 +389,15 @@ function onFrame(e) {
     // A trick just resolved when: the previous trick was full (or nearly full) AND
     // the new view shows 0 cards in the trick (human won/led) OR 1 card (bot won and led).
     // Also fires for end-of-hand where msg.view.lastTrick comes from lastHand.lastTrick.
+    const lastTrickChanged = msg.view?.lastTrick
+        && JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick);
+    // prevTrickLen > 0 normally, but offline bots resolve in one batch so the user
+    // can play first (prevTrickLen = 0) and still complete the trick in the same frame.
     const trickJustResolved = S.party === "high-low-jack"
-        && prevTrickLen > 0
         && prev?.phase === "playing"
-        && msg.view?.lastTrick
+        && lastTrickChanged
         && (newTrickLen === 0
-            // Bot won and immediately led — detect by trick having been "full" before
-            || (newTrickLen > 0 && prevTrickLen >= n - 1
-                && JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick)));
+            || (newTrickLen > 0 && prevTrickLen >= n - 1));
     if (trickJustResolved) {
       // Cancel any in-progress drip — trick just ended.
       if (S.hljDripTimer) { clearTimeout(S.hljDripTimer); S.hljDripTimer = null; }
@@ -406,12 +407,19 @@ function onFrame(e) {
       if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
       const lt = msg.view.lastTrick;
       const n = prev.seats.length; // use prev seats (new hand may differ in phase)
-      // Build trick plays from lastTrick.cards in play order using prev.currentTrick seats
+      // Build trick plays from lastTrick.cards using prev.currentTrick for known seats,
+      // then prev.toAct for the player who just acted, then seat order for the rest
+      // (offline bots batch-resolve so prev.currentTrick may be empty).
       const trick = lt.cards.map((card, i) => {
-        // prev.currentTrick has n-1 cards; the last card's seat comes from prev.toAct
-        const seat = i < prev.currentTrick.length
-          ? prev.currentTrick[i].seat
-          : (prev.toAct ?? i);
+        let seat;
+        if (i < prev.currentTrick.length) {
+          seat = prev.currentTrick[i].seat;
+        } else if (i === prev.currentTrick.length) {
+          seat = prev.toAct ?? i;
+        } else {
+          // Remaining seats follow in table order from toAct (offline batch case)
+          seat = ((prev.toAct ?? 0) + (i - prev.currentTrick.length)) % n;
+        }
         return { card, seat, name: prev.seats[seat]?.name ?? `Player ${seat + 1}` };
       });
       S.hljLastTrickOpen = false;
