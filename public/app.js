@@ -1550,11 +1550,9 @@ function renderHLJ(v) {
 
   const selfExtra = `${teamScores}${signalControl}${trumpControl}${playHint}`;
 
-  const partners = you != null ? v.seats.map((s, i) => i).filter((i) => i !== you && i % 2 === you % 2) : [];
-  const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfMeta = you != null
-    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>${v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you ? ` <span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>` : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
+    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span>${v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you ? ` <span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>` : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
     : `play to ${v.target}`;
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
