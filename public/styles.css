@@ -413,7 +413,7 @@ button{font-family:inherit}
   #app:not(:has(.lby-outer)):has(.table){overflow-y:auto;}
   #app:not(:has(.lby-outer)) .table{min-height:100dvh;}
   #app:not(:has(.lby-outer)) .table .selfwrap{position:fixed;bottom:0;left:0;right:0;}
-  #app:not(:has(.lby-outer)) .table .selfwrap-spacer{height:190px;}
+  #app:not(:has(.lby-outer)) .table .selfwrap-spacer{height:165px;}
 }
 
 /* ---------- App bar ---------- */
