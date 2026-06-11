@@ -441,6 +441,26 @@ function onFrame(e) {
         }
       }, PHANTOM + 2400);
     }
+    // HLJ: start drip for bot cards that arrive outside of hold/drip
+    // (e.g. when bots play mid-trick and the user isn't the last player).
+    if (S.party === "high-low-jack" && !trickJustResolved && !S.hljTrickHold
+        && S.hljDripTrick === null && msg.view?.phase === "playing") {
+      const prevTrick = prev?.currentTrick ?? [];
+      const incoming = msg.view.currentTrick ?? [];
+      const userSeat = msg.view.you;
+      if (incoming.length > prevTrick.length) {
+        const newCards = incoming.slice(prevTrick.length);
+        const botNew = userSeat == null ? newCards : newCards.filter(c => c.seat !== userSeat);
+        const userNew = userSeat == null ? [] : newCards.filter(c => c.seat === userSeat);
+        if (botNew.length > 0) {
+          // Show everything already visible (prev trick + user's own new card if any) as the base,
+          // then drip each bot card in one at a time.
+          S.hljDripTrick = [...prevTrick, ...userNew];
+          S.hljDripPending = botNew;
+          startTrickDrip();
+        }
+      }
+    }
     // HLJ: if a new hand result arrived but trickJustResolved didn't fire (server batched the
     // last bot trick), hljHandVisible may already be true — enforce a short hold so the modal
     // doesn't flash in immediately.
