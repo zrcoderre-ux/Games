@@ -1251,7 +1251,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     if (mini) {
       ({ x, y } = wallPerimPos(off, n, { x1: 18, x2: 82, y1: 10, y2: 88 }));
     } else {
-      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 55, rx: 34, ry: 23 }));
+      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 53, rx: 24, ry: 26 }));
     }
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
