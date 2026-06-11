@@ -1215,13 +1215,13 @@ function wallPerimPos(off, n, b) {
   const f = wall.length === 1 ? 0.5 : i / (wall.length - 1);
   const fy = side === "left" ? 1 - f : f; // left wall walks bottom→top, right top→bottom
   let y;
-  if (wall.length < 3) {
-    y = yTop + (yBot - yTop) * fy;
-  } else {
-    // Equal spacing: same gap as 6-player (y2-y1), so bottom = y2 + (y2-y1)
+  if (wall.length >= 3 && yBot > y2) {
+    // Extended bounds (pods only): top two slots at y1/y2, third extrapolates equally below
     const step = y2 - y1;
     if (fy <= 0.5) y = y1 + step * (fy / 0.5);
     else y = y2 + step * ((fy - 0.5) / 0.5);
+  } else {
+    y = yTop + (yBot - yTop) * fy;
   }
   return { x: pos.x, y, side };
 }
