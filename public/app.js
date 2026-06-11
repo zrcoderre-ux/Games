@@ -1365,10 +1365,7 @@ function renderHLJ(v) {
         const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
-      const dealerTok = bh.you !== bh.dealerSeat
-        ? `<div class="hlj-bid-token dealer-felt" style="${holdPos(bh.dealerSeat)}"><div class="pod-dealer-badge">D</div></div>`
-        : "";
-      return histToks + dealerTok;
+      return histToks;
     }
     if (v.phase === "bidding") {
       const highBidSeat = v.highBid?.seat ?? null;
@@ -1379,18 +1376,11 @@ function renderHLJ(v) {
         const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
-      // Dealer chip on the felt for everyone except the dealer (they see it in their selfbar)
-      const dealerTok = v.you !== v.dealerSeat
-        ? `<div class="hlj-bid-token dealer-felt" style="${bidPosStyle(v.dealerSeat)}"><div class="pod-dealer-badge">D</div></div>`
-        : "";
-      return histToks + dealerTok;
+      return histToks;
     }
     if (v.phase === "playing" && v.highBid) {
       const bidTok = `<div class="hlj-bid-token chip steal" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
-      const dealerTok = v.you !== v.dealerSeat
-        ? `<div class="hlj-bid-token dealer-felt" style="${bidPosStyle(v.dealerSeat)}"><div class="pod-dealer-badge">D</div></div>`
-        : "";
-      return bidTok + dealerTok;
+      return bidTok;
     }
     return "";
   })();
