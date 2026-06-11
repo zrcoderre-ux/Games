@@ -73,6 +73,7 @@ const S = {
   hljBidHoldTimer: null,
   hljHandTrickCount: 0, // tricks resolved in current hand; 0 at hand start so stale lastTrick isn't shown
   hljTrickHold: null, // {trick, winSeat} held briefly after last card played
+  hljPendingHold: null, // hold data deferred while drip flushes remaining cards
   hljTrickHoldTimer: null,
   hljTrickWinReady: false, // delayed win-card highlight within the hold
   hljTrickWinTimer: null,
@@ -397,10 +398,7 @@ function onFrame(e) {
             || (newTrickLen > 0 && prevTrickLen >= n - 1
                 && JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick)));
     if (trickJustResolved) {
-      // Cancel any in-progress drip — trick just ended.
       if (S.hljDripTimer) { clearTimeout(S.hljDripTimer); S.hljDripTimer = null; }
-      S.hljDripTrick = null;
-      S.hljDripPending = [];
       S.hljHandTrickCount++;
       if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
       const lt = msg.view.lastTrick;
@@ -416,30 +414,18 @@ function onFrame(e) {
       S.hljLastTrickOpen = false;
       if (S.hljTrickWinTimer) { clearTimeout(S.hljTrickWinTimer); S.hljTrickWinTimer = null; }
       S.hljTrickWinReady = false;
-      S.hljTrickHold = { trick, winSeat: lt.winner, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`), collecting: false };
-      const PHANTOM = 1200;
-      // After phantom pause, switch to collecting (fan animation)
-      S.hljTrickWinTimer = setTimeout(() => {
-        if (S.hljTrickHold) { S.hljTrickHold = { ...S.hljTrickHold, collecting: true }; render(); }
-        S.hljTrickWinTimer = null;
-      }, PHANTOM);
       S.hljHandVisible = false;
-      S.hljTrickHoldTimer = setTimeout(() => {
-        S.hljTrickHold = null;
-        S.hljTrickHoldTimer = null;
-        S.hljHandVisible = true;
-        const snapshot = [...(S.view?.currentTrick ?? [])];
-        if (snapshot.length > 1) {
-          // Cards accumulated while hold was active — drip them in one by one.
-          S.hljDripTrick = snapshot.slice(0, 1);
-          S.hljDripPending = snapshot.slice(1);
-          render();
-          startTrickDrip();
-        } else {
-          S.hljDripTrick = null;
-          render();
-        }
-      }, PHANTOM + 2400);
+      const holdData = { trick, winSeat: lt.winner, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`), collecting: false };
+      if (S.hljDripTrick !== null && S.hljDripPending.length > 0) {
+        // Drip still has unseen bot cards — flush them at 250ms each so every
+        // card appears individually before the hold animation starts.
+        S.hljPendingHold = holdData;
+        startTrickDrip(250);
+      } else {
+        S.hljDripTrick = null;
+        S.hljDripPending = [];
+        startHljHold(holdData);
+      }
     }
     // HLJ: start drip for bot cards that arrive outside of hold/drip
     // (e.g. when bots play mid-trick and the user isn't the last player).
@@ -505,26 +491,64 @@ function onFrame(e) {
 }
 
 // Drip accumulated trick cards in one at a time after the trick hold expires.
-function startTrickDrip() {
+function startHljHold(holdData) {
+  const PHANTOM = 1200;
+  S.hljTrickHold = holdData;
+  S.hljTrickWinTimer = setTimeout(() => {
+    if (S.hljTrickHold) { S.hljTrickHold = { ...S.hljTrickHold, collecting: true }; render(); }
+    S.hljTrickWinTimer = null;
+  }, PHANTOM);
+  S.hljTrickHoldTimer = setTimeout(() => {
+    S.hljTrickHold = null;
+    S.hljTrickHoldTimer = null;
+    S.hljHandVisible = true;
+    const snapshot = [...(S.view?.currentTrick ?? [])];
+    if (snapshot.length > 1) {
+      S.hljDripTrick = snapshot.slice(0, 1);
+      S.hljDripPending = snapshot.slice(1);
+      render();
+      startTrickDrip();
+    } else {
+      S.hljDripTrick = null;
+      render();
+    }
+  }, PHANTOM + 2400);
+  render();
+}
+
+function startTrickDrip(interval) {
+  const ms = interval ?? 800;
   if (S.hljDripTimer) clearTimeout(S.hljDripTimer);
   S.hljDripTimer = setTimeout(() => {
     S.hljDripTimer = null;
     if (!S.hljDripPending.length) {
       S.hljDripTrick = null;
-      render();
-      maybeAutoPlay(S.view);
+      if (S.hljPendingHold) {
+        const h = S.hljPendingHold;
+        S.hljPendingHold = null;
+        startHljHold(h);
+      } else {
+        render();
+        maybeAutoPlay(S.view);
+      }
       return;
     }
     S.hljDripTrick = [...S.hljDripTrick, S.hljDripPending.shift()];
     render();
     if (S.hljDripPending.length > 0) {
-      startTrickDrip();
+      startTrickDrip(ms);
     } else {
       S.hljDripTrick = null;
-      render();
-      maybeAutoPlay(S.view);
+      if (S.hljPendingHold) {
+        const h = S.hljPendingHold;
+        S.hljPendingHold = null;
+        startHljHold(h);
+      } else {
+        render();
+        maybeAutoPlay(S.view);
+      }
     }
-  }, 800);
+  }, ms);
 }
 
 // Auto-play: when it's your turn in HLJ playing phase and only one card is legal,
