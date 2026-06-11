@@ -1446,7 +1446,7 @@ function renderHLJ(v) {
     // User's own seat: fixed lower-center to match the chip panel position
     if (off === 0) return "top:87%;left:50%;transform:translate(-50%,-50%)";
     // Other seats: tighter bounds so chips appear inward from card backs
-    const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71 });
+    const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 });
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = (() => {
@@ -1458,7 +1458,7 @@ function renderHLJ(v) {
         if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
         const off = (seat - bh.you + n) % n;
         if (off === 0) return "top:87%;left:50%;transform:translate(-50%,-50%)";
-        const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71 });
+        const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 });
         return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
       };
       const highBidSeat = bh.highBid?.seat ?? null;
