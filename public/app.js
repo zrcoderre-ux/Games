@@ -1196,6 +1196,15 @@ function perimPos(t, { x1 = 2, x2 = 98, y1 = 2, y2 = 96 } = {}) {
   }
 }
 
+// Ellipse position: place seat off/n evenly around an oval (clockwise from bottom).
+function ovalPos(off, n, { cx = 50, cy, rx, ry }) {
+  const t = off / n;
+  return {
+    x: cx - rx * Math.sin(2 * Math.PI * t),
+    y: cy + ry * Math.cos(2 * Math.PI * t),
+  };
+}
+
 // Wall-aware perimeter position: classifies a seat onto a wall by its computed
 // x (corner offsets land exactly on x1/x2), then evenly re-spaces side-wall
 // seats so trick cards and bid chips track the pods. wideY1/wideY2 (optional)
@@ -1239,8 +1248,12 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const bounds = mini ? { x1: 18, x2: 82, y1: 10, y2: 88 } : { x1: 22, x2: 78, y1: 30, y2: 80 };
-    const { x, y } = wallPerimPos(off, n, bounds);
+    let x, y;
+    if (mini) {
+      ({ x, y } = wallPerimPos(off, n, { x1: 18, x2: 82, y1: 10, y2: 88 }));
+    } else {
+      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 55, rx: 34, ry: 23 }));
+    }
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const cardRotation = (seat) => {
