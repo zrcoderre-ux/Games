@@ -725,19 +725,22 @@ function tableShell(v, parts) {
     // Square perimeter layout: each player sits on an edge of the felt.
     const n = v.seats.length;
     const you = v.you;
-    const podStyle = (seat) => {
+    const podInfo = (seat) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
       // Tighten y2 for larger tables so bottom-side pods don't crowd the user's hand
       const podY2 = n >= 6 ? 50 : n >= 5 ? 65 : 79;
       const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 21, y2: podY2 });
-      return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
+      const t = off / n;
+      const side = (t >= 1/8 && t < 3/8) ? "pos-left" : (t >= 5/8 && t < 7/8) ? "pos-right" : "pos-top";
+      return { x, y, side };
     };
     const slots = podItems.length
-      ? podItems.map(({ seat, html }) =>
-          `<div class="pod-slot" style="position:absolute;${podStyle(seat)};z-index:2">${html}</div>`
-        ).join("")
+      ? podItems.map(({ seat, html }) => {
+          const { x, y, side } = podInfo(seat);
+          return `<div class="pod-slot ${side}" style="position:absolute;top:${y}%;left:${x}%;transform:translate(-50%,-50%);z-index:2">${html}</div>`;
+        }).join("")
       : `<div class="pod-slot" style="position:absolute;top:14%;left:50%;transform:translate(-50%,-50%);z-index:2"><div class="callout">Waiting for players to arrive…</div></div>`;
     feltPods = slots;
   }

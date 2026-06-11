@@ -1157,6 +1157,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   padding:4px 6px;border-radius:12px;position:relative;
   transition:transform .2s;
 }
+/* Side pods: lay out horizontally — card backs against the wall, badge toward center */
+.pod-slot.pos-left .pod{flex-direction:row;align-items:center}
+.pod-slot.pos-right .pod{flex-direction:row-reverse;align-items:center}
+.pod-slot.pos-left .pod-dealer-badge,
+.pod-slot.pos-right .pod-dealer-badge{margin-top:0;margin-inline:4px 0}
+.pod-slot.pos-right .pod-dealer-badge{margin-inline:0 4px}
+.pod-slot.pos-left .pod-info,
+.pod-slot.pos-right .pod-info{margin-top:0}
 .pod .ministack{
   position:relative;
   display:flex;align-items:flex-end;justify-content:center;
