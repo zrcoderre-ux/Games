@@ -259,7 +259,7 @@ function podHTML(v, i, o = {}) {
       ${mb}
       <span class="back-name">${esc(name)}${disconnectedBadge}</span>
     </div>
-    ${o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
+    ${o.highBid != null ? `<div class="pod-dealer-badge bid">${o.highBid}</div>` : o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
     ${o.pts != null || o.count != null ? `<div class="pod-info">
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
       ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
@@ -1246,6 +1246,7 @@ function renderHLJ(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
+            highBid: v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === i ? v.highBid.amount : null,
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             backs: v.handCounts[i],
@@ -1378,7 +1379,7 @@ function renderHLJ(v) {
       }).join("");
       return histToks;
     }
-    if (v.phase === "playing" && v.highBid) {
+    if (v.phase === "playing" && v.highBid && !v.trumpRevealed) {
       const bidTok = `<div class="hlj-bid-token chip steal" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
       return bidTok;
     }
@@ -1445,7 +1446,7 @@ function renderHLJ(v) {
   const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfMeta = you != null
-    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>${isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
+    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>${v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you ? ` <span class="pod-dealer-badge bid">${v.highBid.amount}</span>` : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
     : `play to ${v.target}`;
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
