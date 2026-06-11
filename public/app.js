@@ -727,7 +727,7 @@ function tableShell(v, parts) {
     // Wall-aware layout shared with trick cards and bid chips (wallPerimPos):
     // classify by computed x, evenly re-space side walls, widen for 3+ pods.
     const podY2 = n >= 6 ? 50 : n >= 5 ? 65 : 79;
-    const podBounds = { x1: 12, x2: 88, y1: 5, y2: podY2, wideY1: 16, wideY2: Math.max(podY2, 68) };
+    const podBounds = { x1: 12, x2: 88, y1: 21, y2: podY2, wideY1: 16, wideY2: Math.max(podY2, 68), topY: 9 };
     const infos = podItems.map(({ seat, html }) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
@@ -1209,12 +1209,14 @@ function ovalPos(off, n, { cx = 50, cy, rx, ry }) {
 // seats so trick cards and bid chips track the pods. wideY1/wideY2 (optional)
 // widen the side range when a wall holds 3+ seats (8-player tables).
 function wallPerimPos(off, n, b) {
-  const { x1, x2, y1, y2, wideY1 = y1, wideY2 = y2 } = b;
+  const { x1, x2, y1, y2, wideY1 = y1, wideY2 = y2, topY = y1 } = b;
   const at = (o) => perimPos(o / n, { x1, x2, y1, y2 });
   const sideOf = (p) => (p.x <= x1 ? "left" : p.x >= x2 ? "right" : "top");
   const pos = at(off);
   const side = sideOf(pos);
-  if (side === "top" || off === 0) return { ...pos, side };
+  // Top-wall player uses topY (lets it sit higher than side-wall reference y1).
+  if (side === "top") return { ...pos, y: topY, side };
+  if (off === 0) return { ...pos, side };
   const wall = [];
   for (let o = 1; o < n; o++) if (sideOf(at(o)) === side) wall.push(o);
   const i = wall.indexOf(off);
