@@ -39,9 +39,6 @@ var LocalRoom = class {
     this.emit = emit;
     this.seats = emptySeats(game.seatCount(config));
   }
-  game;
-  config;
-  emit;
   state = null;
   seats;
   hostSeat = null;
@@ -3135,7 +3132,7 @@ var LocalSocket = class {
     } catch {
       return;
     }
-    this.room.handle(msg);
+    queueMicrotask(() => this.room.handle(msg));
   }
   close() {
     this.readyState = 3;

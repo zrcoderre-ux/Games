@@ -49,7 +49,9 @@ class LocalSocket {
   send(data: string): void {
     let msg: ClientMessage<any, any>;
     try { msg = JSON.parse(data); } catch { return; }
-    this.room.handle(msg);
+    // Dispatch asynchronously so onmessage fires after send() returns,
+    // matching real WebSocket behaviour (responses are never synchronous).
+    queueMicrotask(() => this.room.handle(msg));
   }
 
   close(): void {
