@@ -1157,6 +1157,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   padding:4px 6px;border-radius:12px;position:relative;
   transition:transform .2s;
 }
+/* Side pods: lay out horizontally — card backs against the wall, badge toward center */
+.pod-slot.pos-left .pod{flex-direction:row;align-items:center}
+.pod-slot.pos-right .pod{flex-direction:row-reverse;align-items:center}
+.pod-slot.pos-left .pod-dealer-badge,
+.pod-slot.pos-right .pod-dealer-badge{margin-top:0;margin-inline:4px 0}
+.pod-slot.pos-right .pod-dealer-badge{margin-inline:0 4px}
+.pod-slot.pos-left .pod-info,
+.pod-slot.pos-right .pod-info{margin-top:0}
 .pod .ministack{
   position:relative;
   display:flex;align-items:flex-end;justify-content:center;
@@ -1810,7 +1818,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   display:grid;place-items:center;
   animation:dropinB .35s cubic-bezier(.2,.8,.2,1) both;
 }
-/* Shared notched-chip look for table tokens */
+/* Shared notched-chip look for table tokens — team B (blue) is the base */
 .hlj-bid-token.chip{
   width:40px;height:40px;border-radius:50%;
   background:
@@ -1819,11 +1827,19 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   color:#d0e4ff;
   box-shadow:0 3px 8px rgba(0,0,0,.55);
 }
-.hlj-bid-token.chip.steal{
+/* Team A bid chip — red */
+.hlj-bid-token.chip.tA{
   background:
-    radial-gradient(circle at 50% 50%, #5a1a1a 0% 56%, #3a0808 56% 60%, transparent 60%),
-    repeating-conic-gradient(#5a1a1a 0deg 28deg, #fff 28deg 45deg);
-  color:#ff9090;
+    radial-gradient(circle at 50% 50%, #6a1a1a 0% 56%, #400a0a 56% 60%, transparent 60%),
+    repeating-conic-gradient(#6a1a1a 0deg 28deg, #fff 28deg 45deg);
+  color:#ffd0d0;
+}
+/* Highest-bid highlight — glow ring in team colour, no background change */
+.hlj-bid-token.chip.tB.high{
+  box-shadow:0 0 0 3px rgba(80,128,224,.8),0 3px 8px rgba(0,0,0,.55);
+}
+.hlj-bid-token.chip.tA.high{
+  box-shadow:0 0 0 3px rgba(224,80,80,.8),0 3px 8px rgba(0,0,0,.55);
 }
 .hlj-bid-token.dealer{display:none}
 .hlj-bid-token.dealer-felt{background:none;border:none;box-shadow:none;padding:0;width:auto;height:auto}
@@ -1837,6 +1853,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   box-shadow:0 2px 6px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.9);
   margin-top:3px;
 }
+/* Pod bid badge — team B (blue) base */
 .pod-dealer-badge.bid{
   color:#d0e4ff;
   background:
@@ -1845,6 +1862,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   border:none;
   box-shadow:0 2px 6px rgba(0,0,0,.55);
   font-size:12px;
+}
+/* Team A pod bid badge — red, inherited from .pod.tA or explicit .tA class */
+.pod.tA .pod-dealer-badge.bid,
+.pod-dealer-badge.bid.tA{
+  color:#ffd0d0;
+  background:
+    radial-gradient(circle at 50% 50%, #6a1a1a 0% 56%, #400a0a 56% 60%, transparent 60%),
+    repeating-conic-gradient(#6a1a1a 0deg 28deg, #fff 28deg 45deg);
 }
 .hlj-bid-token.pass{
   width:40px;height:40px;border-radius:50%;
@@ -1885,12 +1910,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   box-shadow:0 7px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.2);
 }
 .hlj-chip:active:not(:disabled){transform:translateY(0) scale(.97)}
-/* Steal chips use red fill */
-.hlj-chip.steal{
+/* Team A bid button — red */
+.hlj-chip.tA{
   background:
-    radial-gradient(circle at 50% 50%, #5a1a1a 0% 56%, #3a0808 56% 60%, transparent 60%),
-    repeating-conic-gradient(#5a1a1a 0deg 28deg, #fff 28deg 45deg);
-  color:#ff9090;
+    radial-gradient(circle at 50% 50%, #6a1a1a 0% 56%, #400a0a 56% 60%, transparent 60%),
+    repeating-conic-gradient(#6a1a1a 0deg 28deg, #fff 28deg 45deg);
+  color:#ffd0d0;
 }
 /* Non-clickable stolen-number display chip */
 span.hlj-chip.steal{cursor:default;pointer-events:none;opacity:.85}

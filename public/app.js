@@ -725,19 +725,22 @@ function tableShell(v, parts) {
     // Square perimeter layout: each player sits on an edge of the felt.
     const n = v.seats.length;
     const you = v.you;
-    const podStyle = (seat) => {
+    const podInfo = (seat) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
       // Tighten y2 for larger tables so bottom-side pods don't crowd the user's hand
       const podY2 = n >= 6 ? 50 : n >= 5 ? 65 : 79;
       const { x, y } = perimPos(off / n, { x1: 12, x2: 88, y1: 21, y2: podY2 });
-      return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
+      const t = off / n;
+      const side = (t >= 1/8 && t < 3/8) ? "pos-left" : (t >= 5/8 && t < 7/8) ? "pos-right" : "pos-top";
+      return { x, y, side };
     };
     const slots = podItems.length
-      ? podItems.map(({ seat, html }) =>
-          `<div class="pod-slot" style="position:absolute;${podStyle(seat)};z-index:2">${html}</div>`
-        ).join("")
+      ? podItems.map(({ seat, html }) => {
+          const { x, y, side } = podInfo(seat);
+          return `<div class="pod-slot ${side}" style="position:absolute;top:${y}%;left:${x}%;transform:translate(-50%,-50%);z-index:2">${html}</div>`;
+        }).join("")
       : `<div class="pod-slot" style="position:absolute;top:14%;left:50%;transform:translate(-50%,-50%);z-index:2"><div class="callout">Waiting for players to arrive…</div></div>`;
     feltPods = slots;
   }
@@ -1413,7 +1416,8 @@ function renderHLJ(v) {
         const style = holdPos(b.seat);
         const label = b.type === "pass" ? "Pass" : String(b.amount);
         const isHigh = b.type === "bid" && b.seat === highBidSeat;
-        const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
+        const team = `t${b.seat % 2 === 0 ? "A" : "B"}`;
+        const cls = b.type === "pass" ? "pass" : `chip ${team}${isHigh ? " high" : ""}`;
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
       return histToks;
@@ -1424,13 +1428,15 @@ function renderHLJ(v) {
         const style = bidPosStyle(b.seat);
         const label = b.type === "pass" ? "Pass" : String(b.amount);
         const isHigh = b.type === "bid" && b.seat === highBidSeat;
-        const cls = b.type === "pass" ? "pass" : isHigh ? "chip steal" : "chip";
+        const team = `t${b.seat % 2 === 0 ? "A" : "B"}`;
+        const cls = b.type === "pass" ? "pass" : `chip ${team}${isHigh ? " high" : ""}`;
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
       return histToks;
     }
     if (v.phase === "playing" && v.highBid && !v.trumpRevealed) {
-      const bidTok = `<div class="hlj-bid-token chip steal" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
+      const team = `t${v.highBid.seat % 2 === 0 ? "A" : "B"}`;
+      const bidTok = `<div class="hlj-bid-token chip ${team} high" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
       return bidTok;
     }
     return "";
@@ -1445,6 +1451,7 @@ function renderHLJ(v) {
   );
   const isDealer = v.you != null && v.dealerSeat === v.you;
   const userHasActed = v.you != null && bidHistory.some(b => b.seat === v.you);
+  const myTeamCls = you != null ? `t${you % 2 === 0 ? "A" : "B"}` : "";
   const feltBidPanel = v.phase === "bidding" && v.you != null && !userHasActed
     ? `<div class="hlj-felt-bid${v.yourTurn ? "" : " waiting"}">
         <div class="hlj-chips">
@@ -1452,13 +1459,13 @@ function renderHLJ(v) {
             if (claimedAmounts.has(n)) {
               // Dealer can steal the current high bid
               if (isDealer && n === curHighAmt)
-                return `<button class="hlj-chip steal" data-action="move-bid" data-amount="${n}" ${!v.yourTurn ? "disabled" : ""}>STEAL</button>`;
+                return `<button class="hlj-chip ${myTeamCls} steal" data-action="move-bid" data-amount="${n}" ${!v.yourTurn ? "disabled" : ""}>STEAL</button>`;
               return "";
             }
             // Hide amounts that can't outbid the current high (non-dealer can't match, only beat)
             if (curHighAmt != null && n <= curHighAmt) return "";
             const legal = n >= minBid;
-            return `<button class="hlj-chip${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${(!legal || !v.yourTurn) ? "disabled" : ""}>${n}</button>`;
+            return `<button class="hlj-chip ${myTeamCls}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${(!legal || !v.yourTurn) ? "disabled" : ""}>${n}</button>`;
           }).join("")}
           <button class="hlj-pass-btn" data-action="move-pass" ${!v.yourTurn ? "disabled" : ""}>Pass</button>
         </div>
@@ -1496,7 +1503,7 @@ function renderHLJ(v) {
   const partnerNames = partners.map((i) => seatName(v, i)).join(", ");
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfMeta = you != null
-    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>${v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you ? ` <span class="pod-dealer-badge bid">${v.highBid.amount}</span>` : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
+    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span> <span class="me-partner">partner: ${esc(partnerNames || "\u2014")}</span>${v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you ? ` <span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>` : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
     : `play to ${v.target}`;
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
