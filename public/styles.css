@@ -1837,6 +1837,15 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   box-shadow:0 2px 6px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.9);
   margin-top:3px;
 }
+.pod-dealer-badge.bid{
+  color:#d0e4ff;
+  background:
+    radial-gradient(circle at 50% 50%, #1a3a6a 0% 56%, #0a1a40 56% 60%, transparent 60%),
+    repeating-conic-gradient(#1a3a6a 0deg 28deg, #fff 28deg 45deg);
+  border:none;
+  box-shadow:0 2px 6px rgba(0,0,0,.55);
+  font-size:12px;
+}
 .hlj-bid-token.pass{
   width:40px;height:40px;border-radius:50%;
   font-family:"Hanken Grotesk",sans-serif;font-size:9px;font-weight:800;
