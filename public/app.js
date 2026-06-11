@@ -1474,7 +1474,9 @@ function renderHLJ(v) {
 
   // hand (fanned), sorted by suit then rank, dim non-legal cards while it's your turn to play
   const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
-  const sortedHand = [...v.yourHand].sort((a, b) =>
+  // Hide new hand cards while the end-of-hand result is pending (hold animation or modal).
+  const handResultPending = v.lastHand && S.hljHandAcked !== JSON.stringify(v.lastHand);
+  const sortedHand = handResultPending ? [] : [...v.yourHand].sort((a, b) =>
     (a.joker ? 1 : 0) - (b.joker ? 1 : 0) ||
     (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
     a.rank - b.rank
