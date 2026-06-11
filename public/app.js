@@ -1157,9 +1157,9 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     const winPos = total - 1;
     const nonWinners = sorted.filter(p => p.seat !== winSeat);
     nonWinners.sort((a, b) => {
-      const ccwA = (winSeat - a.seat + n) % n;
-      const ccwB = (winSeat - b.seat + n) % n;
-      return ccwA - ccwB;
+      const cwA = (a.seat - winSeat + n) % n;
+      const cwB = (b.seat - winSeat + n) % n;
+      return cwA - cwB;
     });
     const ccwOrder = {};
     nonWinners.forEach((p, i) => { ccwOrder[p.seat] = i; });
