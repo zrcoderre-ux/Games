@@ -1239,7 +1239,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    const bounds = mini ? { x1: 18, x2: 82, y1: 10, y2: 88 } : { x1: 22, x2: 78, y1: 16, y2: 74 };
+    const bounds = mini ? { x1: 18, x2: 82, y1: 10, y2: 88 } : { x1: 22, x2: 78, y1: 30, y2: 80 };
     const { x, y } = wallPerimPos(off, n, bounds);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
