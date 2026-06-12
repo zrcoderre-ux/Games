@@ -422,9 +422,23 @@ function onFrame(e) {
         S.hljPendingHold = holdData;
         startTrickDrip(250);
       } else {
-        S.hljDripTrick = null;
-        S.hljDripPending = [];
-        startHljHold(holdData);
+        // Check if multiple bot cards arrived simultaneously in this final batch.
+        const prevShown = prev?.currentTrick ?? [];
+        const userSeat = prev?.you ?? null;
+        const finalBatch = trick.slice(prevShown.length);
+        const newBotCards = finalBatch.filter(c => c.seat !== userSeat);
+        if (newBotCards.length > 1) {
+          // Drip each unseen bot card individually before showing the hold.
+          const userInBatch = finalBatch.filter(c => c.seat === userSeat);
+          S.hljDripTrick = [...prevShown, ...userInBatch];
+          S.hljDripPending = newBotCards;
+          S.hljPendingHold = holdData;
+          startTrickDrip(250);
+        } else {
+          S.hljDripTrick = null;
+          S.hljDripPending = [];
+          startHljHold(holdData);
+        }
       }
     }
     // HLJ: start drip for bot cards that arrive outside of hold/drip
