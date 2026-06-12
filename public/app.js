@@ -1486,10 +1486,12 @@ function renderHLJ(v) {
     : `<span class="trump-watermark joker-placeholder" role="img" aria-label="No trump chosen yet"></span>`;
   const feltOverlay = trumpMark;
 
+  // While the end-of-hand result is pending (hold animation or modal not yet
+  // acked), the view already carries next-hand state — suppress all of it.
+  const handResultPending = v.lastHand && S.hljHandAcked !== JSON.stringify(v.lastHand);
+
   // hand (fanned), sorted by suit then rank, dim non-legal cards while it's your turn to play
   const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
-  // Hide new hand cards while the end-of-hand result is pending (hold animation or modal).
-  const handResultPending = v.lastHand && S.hljHandAcked !== JSON.stringify(v.lastHand);
   const sortedHand = handResultPending ? [] : [...v.yourHand].sort((a, b) =>
     (a.joker ? 1 : 0) - (b.joker ? 1 : 0) ||
     (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
@@ -1543,7 +1545,7 @@ function renderHLJ(v) {
       }).join("");
       return histToks;
     }
-    if (v.phase === "bidding") {
+    if (v.phase === "bidding" && !handResultPending) {
       const highBidSeat = v.highBid?.seat ?? null;
       const histToks = bidHistory.filter(b => !b.implicit).map(b => {
         const style = bidPosStyle(b.seat);
@@ -1573,7 +1575,7 @@ function renderHLJ(v) {
   const isDealer = v.you != null && v.dealerSeat === v.you;
   const userHasActed = v.you != null && bidHistory.some(b => b.seat === v.you);
   const myTeamCls = you != null ? `t${you % 2 === 0 ? "A" : "B"}` : "";
-  const feltBidPanel = v.phase === "bidding" && v.you != null && !userHasActed
+  const feltBidPanel = v.phase === "bidding" && !handResultPending && v.you != null && !userHasActed
     ? `<div class="hlj-felt-bid${v.yourTurn ? "" : " waiting"}">
         <div class="hlj-chips">
           ${[2,3,4,5,6].map(n => {
@@ -1624,7 +1626,9 @@ function renderHLJ(v) {
   const selfMeta = you != null
     ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span>${v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you ? ` <span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>` : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
     : `play to ${v.target}`;
-  const selfTurn = v.yourTurn
+  const selfTurn = handResultPending
+    ? ""
+    : v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
