@@ -1393,9 +1393,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .card.red{color:var(--suit-red)}
 
-/* Joker card — image fills the card face; div provides shadow + clip */
+/* Joker card — character image overlaid on standard card background */
 .card.joker{
-  background:none;
   overflow:hidden;
 }
 .joker-img{
