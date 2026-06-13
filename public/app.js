@@ -67,20 +67,10 @@ const S = {
   rummyRoundVisible: false, // true once the pause after going-out has elapsed
   hljHandAcked: null, // JSON key of the lastHand already dismissed
   hljHandTimer: null, // auto-dismiss setTimeout handle
-  hljHandVisible: false, // delayed until trick hold animation completes
   hljShowDealtHands: false,
   hljBidHold: null,   // frozen bid overlay shown briefly after bidding ends
   hljBidHoldTimer: null,
-  hljHandTrickCount: 0, // tricks resolved in current hand; 0 at hand start so stale lastTrick isn't shown
-  hljTrickHold: null, // {trick, winSeat} held briefly after last card played
-  hljPendingHold: null, // hold data deferred while drip flushes remaining cards
-  hljTrickHoldTimer: null,
-  hljTrickWinReady: false, // delayed win-card highlight within the hold
-  hljTrickWinTimer: null,
   hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
-  hljDripTrick: null,    // array of plays being dripped in one-at-a-time after hold expires
-  hljDripPending: [],    // queued plays not yet shown
-  hljDripTimer: null,
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
@@ -347,30 +337,8 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
-    // HLJ: if drip mode is active, queue any newly arrived trick cards.
-    // If the user just played their own card, flush everything immediately so it
-    // never disappears from hand without appearing in the trick.
-    if (S.hljDripTrick !== null && S.party === "high-low-jack" && msg.view?.phase === "playing") {
-      const shown = S.hljDripTrick.length + S.hljDripPending.length;
-      const incoming = msg.view.currentTrick ?? [];
-      if (incoming.length > shown) {
-        const newCards = incoming.slice(shown);
-        const userSeat = msg.view.you;
-        if (userSeat != null && newCards.some(c => c.seat === userSeat)) {
-          // User's card arrived — flush all pending + new cards at once
-          if (S.hljDripTimer) { clearTimeout(S.hljDripTimer); S.hljDripTimer = null; }
-          S.hljDripTrick = [...S.hljDripTrick, ...S.hljDripPending, ...newCards];
-          S.hljDripPending = [];
-          // Don't set to null yet — let the next render pick it up, then clear
-          setTimeout(() => { S.hljDripTrick = null; }, 0);
-        } else {
-          S.hljDripPending.push(...newCards);
-        }
-      }
-    }
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
-      S.hljHandTrickCount = 0; // new hand — suppress stale lastTrick from previous hand
       if (S.hljBidHoldTimer) clearTimeout(S.hljBidHoldTimer);
       // Use the NEW view's bidHistory — the dealer's final action may only exist there
       // (server batches the dealer-bot move in the same frame as the phase transition)
@@ -381,103 +349,8 @@ function onFrame(e) {
         render();
       }, 900);
     }
-    // HLJ: when the trick just resolved (currentTrick went from non-empty → empty OR
-    // directly to the next trick when the bot both wins and leads immediately).
-    // msg.view.lastTrick is now always set even on end-of-hand (server preserves it
-    // via lastHand.lastTrick when tricksWon resets on new deal).
-    const prevTrickLen = prev?.currentTrick?.length ?? 0;
-    const newTrickLen = msg.view?.currentTrick?.length ?? 0;
-    const n = msg.view?.seats?.length ?? 4;
-    // A trick just resolved when: the previous trick was full (or nearly full) AND
-    // the new view shows 0 cards in the trick (human won/led) OR 1 card (bot won and led).
-    // Also fires for end-of-hand where msg.view.lastTrick comes from lastHand.lastTrick.
-    const trickJustResolved = S.party === "high-low-jack"
-        && prevTrickLen > 0
-        && prev?.phase === "playing"
-        && msg.view?.lastTrick
-        && (newTrickLen === 0
-            || (newTrickLen > 0 && prevTrickLen >= n - 1
-                && JSON.stringify(msg.view.lastTrick) !== JSON.stringify(prev?.lastTrick)));
-    if (trickJustResolved) {
-      if (S.hljDripTimer) { clearTimeout(S.hljDripTimer); S.hljDripTimer = null; }
-      S.hljHandTrickCount++;
-      if (S.hljTrickHoldTimer) clearTimeout(S.hljTrickHoldTimer);
-      const lt = msg.view.lastTrick;
-      const n = prev.seats.length; // use prev seats (new hand may differ in phase)
-      // Build trick plays from lastTrick.cards in play order using prev.currentTrick seats
-      const trick = lt.cards.map((card, i) => {
-        // prev.currentTrick has n-1 cards; the last card's seat comes from prev.toAct
-        const seat = i < prev.currentTrick.length
-          ? prev.currentTrick[i].seat
-          : (prev.toAct ?? i);
-        return { card, seat, name: prev.seats[seat]?.name ?? `Player ${seat + 1}` };
-      });
-      S.hljLastTrickOpen = false;
-      if (S.hljTrickWinTimer) { clearTimeout(S.hljTrickWinTimer); S.hljTrickWinTimer = null; }
-      S.hljTrickWinReady = false;
-      S.hljHandVisible = false;
-      const holdData = { trick, winSeat: lt.winner, n, you: prev.you, names: prev.seats.map((s,i) => s.name ?? `Player ${i+1}`), collecting: false };
-      if (S.hljDripTrick !== null && S.hljDripPending.length > 0) {
-        // Drip still has unseen bot cards — flush them at 250ms each so every
-        // card appears individually before the hold animation starts.
-        S.hljPendingHold = holdData;
-        startTrickDrip(250);
-      } else {
-        // Check if multiple bot cards arrived simultaneously in this final batch.
-        const prevShown = prev?.currentTrick ?? [];
-        const userSeat = prev?.you ?? null;
-        const finalBatch = trick.slice(prevShown.length);
-        const newBotCards = finalBatch.filter(c => c.seat !== userSeat);
-        if (newBotCards.length > 1) {
-          // Drip each unseen bot card individually before showing the hold.
-          const userInBatch = finalBatch.filter(c => c.seat === userSeat);
-          S.hljDripTrick = [...prevShown, ...userInBatch];
-          S.hljDripPending = newBotCards;
-          S.hljPendingHold = holdData;
-          startTrickDrip(250);
-        } else {
-          S.hljDripTrick = null;
-          S.hljDripPending = [];
-          startHljHold(holdData);
-        }
-      }
-    }
-    // HLJ: start drip for bot cards that arrive outside of hold/drip
-    // (e.g. when bots play mid-trick and the user isn't the last player).
-    if (S.party === "high-low-jack" && !trickJustResolved && !S.hljTrickHold
-        && S.hljDripTrick === null && msg.view?.phase === "playing") {
-      const prevTrick = prev?.currentTrick ?? [];
-      const incoming = msg.view.currentTrick ?? [];
-      const userSeat = msg.view.you;
-      if (incoming.length > prevTrick.length) {
-        const newCards = incoming.slice(prevTrick.length);
-        const botNew = userSeat == null ? newCards : newCards.filter(c => c.seat !== userSeat);
-        const userNew = userSeat == null ? [] : newCards.filter(c => c.seat === userSeat);
-        if (botNew.length > 0) {
-          // Show everything already visible (prev trick + user's own new card if any) as the base,
-          // then drip each bot card in one at a time.
-          S.hljDripTrick = [...prevTrick, ...userNew];
-          S.hljDripPending = botNew;
-          startTrickDrip();
-        }
-      }
-    }
-    // HLJ: if a new hand result arrived but trickJustResolved didn't fire (server batched the
-    // last bot trick), hljHandVisible may already be true — enforce a short hold so the modal
-    // doesn't flash in immediately.
-    if (S.party === "high-low-jack" && !trickJustResolved) {
-      const prevHandKey = prev?.lastHand ? JSON.stringify(prev.lastHand) : null;
-      const newHandKey  = msg.view?.lastHand ? JSON.stringify(msg.view.lastHand) : null;
-      if (newHandKey && newHandKey !== prevHandKey && newHandKey !== S.hljHandAcked) {
-        S.hljHandVisible = false;
-        if (S.hljTrickHoldTimer) { clearTimeout(S.hljTrickHoldTimer); S.hljTrickHoldTimer = null; }
-        S.hljTrickHoldTimer = setTimeout(() => {
-          S.hljHandVisible = true;
-          S.hljTrickHoldTimer = null;
-          render();
-        }, 1200);
-      }
-    }
+    // HLJ trick pacing now lives entirely on the server: the `trickComplete` gate
+    // holds the full trick + winner, and the render reads it straight from the view.
     // If the round result changed (new round ended), reset the ack so the popup shows again.
     const prevKey = prev?.lastRound ? JSON.stringify(prev.scores) : null;
     const newKey  = msg.view?.lastRound ? JSON.stringify(msg.view.scores) : null;
@@ -505,74 +378,12 @@ function onFrame(e) {
   else if (msg.t === "error") { toast(msg.message); }
 }
 
-// Drip accumulated trick cards in one at a time after the trick hold expires.
-function startHljHold(holdData) {
-  const PHANTOM = 1200;
-  S.hljTrickHold = holdData;
-  S.hljTrickWinTimer = setTimeout(() => {
-    if (S.hljTrickHold) { S.hljTrickHold = { ...S.hljTrickHold, collecting: true }; render(); }
-    S.hljTrickWinTimer = null;
-  }, PHANTOM);
-  S.hljTrickHoldTimer = setTimeout(() => {
-    S.hljTrickHold = null;
-    S.hljTrickHoldTimer = null;
-    S.hljHandVisible = true;
-    const snapshot = [...(S.view?.currentTrick ?? [])];
-    if (snapshot.length > 1) {
-      S.hljDripTrick = snapshot.slice(0, 1);
-      S.hljDripPending = snapshot.slice(1);
-      render();
-      startTrickDrip();
-    } else {
-      S.hljDripTrick = null;
-      render();
-    }
-  }, PHANTOM + 2400);
-  render();
-}
-
-function startTrickDrip(interval) {
-  const ms = interval ?? 800;
-  if (S.hljDripTimer) clearTimeout(S.hljDripTimer);
-  S.hljDripTimer = setTimeout(() => {
-    S.hljDripTimer = null;
-    if (!S.hljDripPending.length) {
-      S.hljDripTrick = null;
-      if (S.hljPendingHold) {
-        const h = S.hljPendingHold;
-        S.hljPendingHold = null;
-        startHljHold(h);
-      } else {
-        render();
-        maybeAutoPlay(S.view);
-      }
-      return;
-    }
-    S.hljDripTrick = [...S.hljDripTrick, S.hljDripPending.shift()];
-    render();
-    if (S.hljDripPending.length > 0) {
-      startTrickDrip(ms);
-    } else {
-      S.hljDripTrick = null;
-      if (S.hljPendingHold) {
-        const h = S.hljPendingHold;
-        S.hljPendingHold = null;
-        startHljHold(h);
-      } else {
-        render();
-        maybeAutoPlay(S.view);
-      }
-    }
-  }, ms);
-}
-
 // Auto-play: when it's your turn in HLJ playing phase and only one card is legal,
 // play it automatically after a short delay so the game flows without tap-spam.
 let _autoPlayTimer = null;
 function maybeAutoPlay(v) {
   if (_autoPlayTimer) { clearTimeout(_autoPlayTimer); _autoPlayTimer = null; }
   if (!v || !v.yourTurn) return;
-  if (S.hljDripTrick !== null) return; // block during drip — re-triggered when drip finishes
   const legal = v.legalMoves || [];
   if (legal.length !== 1) return;
   const move = legal[0];
@@ -1432,21 +1243,24 @@ function renderHLJ(v) {
   const myTeam = you != null ? you % 2 : null;
   let hljTrick;
   let centerExtra = "";
-  // Hold state takes priority over live currentTrick — prevents bot's new lead
-  // card from interrupting the phantom pause / collecting animation.
-  if (S.hljTrickHold) {
-    const h = S.hljTrickHold;
-    const trickPlays = h.trick.map((p) => ({ ...p, name: h.names[p.seat] ?? seatName(v, p.seat) }));
-    if (h.collecting) {
-      hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: h.winSeat, collecting: true });
-    } else {
-      hljTrick = trickHTML(trickPlays, h.you, h.n, { mini: false, winSeat: null, collecting: false });
-    }
-  } else if ((S.hljDripTrick ?? v.currentTrick).length) {
-    const displayTrick = S.hljDripTrick ?? v.currentTrick;
-    const trickPlays = displayTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+  // Trick pacing now lives on the server. The center is a pure function of
+  // view.phase + currentTrick + trickWinner + lastTrick.
+  // `lastTrick` falls back to the previous hand's final trick when tricksWon is
+  // empty (start of a new hand) — treat that as stale so it isn't shown as "Last trick".
+  const ltFresh = v.lastTrick && !(v.lastHand
+    && JSON.stringify(v.lastTrick) === JSON.stringify(v.lastHand.lastTrick));
+  if (v.phase === "trickComplete") {
+    // Completed trick held on the felt with the winner highlighted; tap (or the
+    // server's auto-advance timer) clears it.
+    const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+    const winName = v.trickWinner != null ? esc(seatName(v, v.trickWinner)) : null;
+    const trickEl = trickHTML(trickPlays, you, v.seats.length, { mini: false, winSeat: v.trickWinner });
+    hljTrick = `<div class="trick-gate" data-action="advance-trick">${trickEl}`
+      + `<div class="trick-gate-hint">${winName ? `Won by ${winName} · ` : ""}Tap to continue</div></div>`;
+  } else if (v.phase === "playing" && v.currentTrick.length) {
+    const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
     hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
-  } else if (v.phase !== "bidding" && v.lastTrick && S.hljHandTrickCount > 0) {
+  } else if (v.phase !== "bidding" && ltFresh) {
     const winIdx = hljWinIdx(v.lastTrick.cards, v.trump);
     const winCard = v.lastTrick.cards[winIdx];
     const ltCards = [...v.lastTrick.cards].sort((a, b) => {
@@ -1498,7 +1312,7 @@ function renderHLJ(v) {
     (HLJ_SUIT_ORDER[a.suit] ?? 4) - (HLJ_SUIT_ORDER[b.suit] ?? 4) ||
     a.rank - b.rank
   );
-  const holdActive = !!S.hljTrickHold || S.hljDripTrick !== null;
+  const holdActive = v.phase === "trickComplete"; // cards aren't playable during the gate
   const hand = `<div class="fan-inner">${fanHand(sortedHand, (c) => ({
     playable: !holdActive && plays.has(cardKey(c)),
     dim: !holdActive && plays.size > 0 && !plays.has(cardKey(c)),
@@ -1639,8 +1453,8 @@ function renderHLJ(v) {
     if (!lh || v.phase === "gameOver") return "";
     const handKey = JSON.stringify(lh);
     if (S.hljHandAcked === handKey) return "";
-    // Wait for the trick-hold animation to finish before showing the result screen
-    if (!S.hljHandVisible) return "";
+    // The server's final-trick gate (trickComplete) already elapsed before lastHand
+    // appears, so the result screen can show as soon as it arrives.
 
     if (S.hljHandTimer == null) {
       S.hljHandTimer = setTimeout(() => {
@@ -2667,6 +2481,7 @@ app.addEventListener("click", (e) => {
     case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
     case "toggle-last-trick": S.hljLastTrickOpen = !S.hljLastTrickOpen; return render();
+    case "advance-trick": return send({ t: "advance" });
     case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
     case "setcount": {
       const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
@@ -2709,7 +2524,6 @@ app.addEventListener("click", (e) => {
       if (lh) S.hljHandAcked = JSON.stringify(lh);
       if (S.hljHandTimer) { clearTimeout(S.hljHandTimer); S.hljHandTimer = null; }
       S.hljShowDealtHands = false;
-      S.hljHandVisible = false;
       return render();
     }
     case "hlj-show-dealt-hands": S.hljShowDealtHands = true; return render();

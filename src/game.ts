@@ -96,6 +96,12 @@ export interface Game<State, Move extends SeatedMove, Config, View> {
   // OPTIONAL: ms between bot moves (default 1600). Can be a function of state for dynamic scaling.
   botStepMs?: number | ((state: State) => number);
 
+  // OPTIONAL: pacing for non-player gate phases (no seat to act, game not over),
+  // e.g. Pitch's trickComplete gate. The room driver owns a single timer keyed off
+  // this. `move` is the transition to apply; `kind` "auto" always auto-advances,
+  // "wait" auto-advances only when no human is present (a human may advance sooner).
+  pacing?(state: State): { kind: "auto" | "wait"; ms: number; move: Move } | null;
+
   // OPTIONAL: side actions that do NOT advance the turn (Pitch hand signals).
   // Games without them (Rummy) omit this property entirely.
   aux?: {
@@ -116,6 +122,7 @@ export type ClientMessage<Config, Move> =
   | { t: "setConfig"; config: Config } // host resizes the lobby table / options before dealing
   | { t: "start"; config: Config } // host fills empty seats with bots and deals
   | { t: "move"; move: Move } // a game action (opaque to the server)
+  | { t: "advance" } // skip a pacing gate (e.g. tap a completed trick to continue)
   | { t: "aux"; payload: unknown } // a non-turn side action (opaque to the server)
   | { t: "newGame" } // after game over, reset to the lobby
   | { t: "setBotReplacement"; enabled: boolean } // host toggles auto bot-replacement

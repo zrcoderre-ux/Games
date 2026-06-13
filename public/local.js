@@ -71,6 +71,8 @@ var LocalRoom = class {
           return this.start(msg.config);
         case "move":
           return this.move(msg.move);
+        case "advance":
+          return this.advance();
         case "aux":
           return this.aux(msg.payload);
         case "newGame":
@@ -236,6 +238,27 @@ var LocalRoom = class {
     this.broadcast();
     this.scheduleBotStep();
   }
+  // A human stack-tap during a pacing gate (e.g. Pitch's trickComplete): apply the
+  // gate's advance move immediately instead of waiting for the auto-advance timer.
+  advance() {
+    if (!this.state) throw new Error("No game in progress");
+    const pace = this.game.pacing ? this.game.pacing(this.state) : null;
+    if (!pace || !pace.move) throw new Error("Nothing to advance");
+    this.state = this.game.applyMove(this.state, pace.move);
+    this.syncViewSeat();
+    this.resolveBotsAndBroadcast();
+  }
+  // The driver-owned auto-advance for a pacing gate, fired by the single timer.
+  autoAdvance(move) {
+    this.botTimer = null;
+    const s = this.state;
+    if (!s || this.game.isOver(s)) return;
+    if (this.game.seatToAct(s) !== null) return;
+    this.state = this.game.applyMove(s, move);
+    this.syncViewSeat();
+    this.broadcast();
+    this.scheduleBotStep();
+  }
   scheduleBotStep() {
     if (this.botTimer) {
       clearTimeout(this.botTimer);
@@ -244,10 +267,20 @@ var LocalRoom = class {
     const s = this.state;
     if (!s || this.game.isOver(s)) return;
     const seat = this.game.seatToAct(s);
-    if (seat !== null && this.seats[seat]?.kind === "bot") {
-      const raw = this.game.botStepMs;
-      const ms = typeof raw === "function" ? raw(s) : raw ?? BOT_STEP_MS_DEFAULT;
-      this.botTimer = setTimeout(() => this.botStep(), ms);
+    if (seat !== null) {
+      if (this.seats[seat]?.kind === "bot") {
+        const raw = this.game.botStepMs;
+        const ms = typeof raw === "function" ? raw(s) : raw ?? BOT_STEP_MS_DEFAULT;
+        this.botTimer = setTimeout(() => this.botStep(), ms);
+      }
+      return;
+    }
+    const pace = this.game.pacing ? this.game.pacing(s) : null;
+    if (!pace || !pace.move) return;
+    const hasHuman = this.seats.some((x) => x?.kind === "human");
+    if (pace.kind === "auto" || !hasHuman) {
+      const move = pace.move;
+      this.botTimer = setTimeout(() => this.autoAdvance(move), pace.ms);
     }
   }
   botStep() {
@@ -432,6 +465,7 @@ function setSignal(state, seat, level) {
   return { ...state, signals };
 }
 function legalMoves(state) {
+  if (state.phase === "trickComplete") return [{ type: "advance", seat: state.trickWinner ?? 0 }];
   if (state.phase === "gameOver") return [];
   if (state.phase === "bidding") {
     const seat2 = state.bidTurn;
@@ -482,6 +516,9 @@ function moveEq(a, b) {
   return true;
 }
 function applyMove(state, move) {
+  if (move.type === "advance") {
+    return advanceTrick(state);
+  }
   const legal = legalMoves(state);
   if (!legal.some((m) => moveEq(m, move))) {
     throw new Error(`Illegal move: ${JSON.stringify(move)} in phase ${state.phase}`);
@@ -554,22 +591,27 @@ function applyPlay(state, move) {
   if (currentTrick.length < state.players) {
     return { ...state, hands, currentTrick, turn: (seat + 1) % state.players };
   }
-  const trump = state.trump;
-  const winnerSeat = trickWinner(currentTrick, trump);
-  const tricksWon = [...state.tricksWon, { seat: winnerSeat, plays: [...currentTrick] }];
+  const winnerSeat = trickWinner(currentTrick, state.trump);
+  return { ...state, hands, currentTrick, phase: "trickComplete", trickWinner: winnerSeat };
+}
+function advanceTrick(state) {
+  if (state.phase !== "trickComplete") return state;
+  const winnerSeat = state.trickWinner;
+  const tricksWon = [...state.tricksWon, { seat: winnerSeat, plays: [...state.currentTrick] }];
   const trickIndex = state.trickIndex + 1;
   if (trickIndex < 6) {
     return {
       ...state,
-      hands,
       currentTrick: [],
       tricksWon,
       trickIndex,
       leaderSeat: winnerSeat,
-      turn: winnerSeat
+      turn: winnerSeat,
+      trickWinner: null,
+      phase: "playing"
     };
   }
-  return scoreHand({ ...state, hands, currentTrick: [], tricksWon, trickIndex });
+  return scoreHand({ ...state, currentTrick: [], tricksWon, trickIndex, trickWinner: null });
 }
 function scoreHand(state) {
   const trump = state.trump;
@@ -1118,6 +1160,7 @@ function redact(state, seat, meta) {
     bidHistory: state.bidHistory ?? [],
     signals: state.signals,
     currentTrick: state.currentTrick,
+    trickWinner: state.phase === "trickComplete" ? state.trickWinner ?? null : null,
     lastTrick,
     lastHand: state.lastHand,
     lastKitty: state.lastHand ? state.lastHand.kitty : null,
@@ -1204,7 +1247,16 @@ var hljModule = {
     return attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]);
   },
   // Pitch's turn order: bidder during bidding, otherwise the player to act.
-  seatToAct: (s) => s.phase === "gameOver" ? null : s.phase === "bidding" ? s.bidTurn : s.turn,
+  // No seat acts during the trickComplete gate — the driver auto-advances it.
+  seatToAct: (s) => s.phase === "gameOver" || s.phase === "trickComplete" ? null : s.phase === "bidding" ? s.bidTurn : s.turn,
+  // Pacing contract for non-player gate phases. The driver owns the single timer.
+  // Every completed trick lingers so players can read it; the final trick lingers
+  // longer so the game never snaps to the win screen. A stack tap (advance) skips ahead.
+  pacing: (s) => {
+    if (s.phase !== "trickComplete") return null;
+    const lastTrick = s.trickIndex >= 5;
+    return { kind: "auto", ms: lastTrick ? 2600 : 1500, move: { type: "advance", seat: s.trickWinner ?? 0 } };
+  },
   // Pitch's move set is tiny, so enumerate-and-compare is a fine authorizer.
   isLegal: (s, move) => legalMoves(s).some((m) => moveEq2(m, move)),
   legalMoves: (s) => legalMoves(s),

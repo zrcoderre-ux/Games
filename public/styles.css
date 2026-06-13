@@ -1627,6 +1627,16 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .lt-expanded-fan{width:100%;padding-bottom:8px}
 .lt-expanded-fan .card{pointer-events:none}
 
+/* trick-complete gate — full trick held on the felt, tap (or auto-advance) to clear */
+.trick-gate{position:absolute;inset:0;cursor:pointer;user-select:none}
+.trick-gate-hint{
+  position:absolute;left:50%;bottom:6%;transform:translateX(-50%);
+  font-family:"Fraunces",serif;font-style:italic;font-size:12.5px;
+  color:var(--ink-soft);white-space:nowrap;pointer-events:none;
+  opacity:.85;animation:trickGateHint 1.4s ease-in-out infinite;
+}
+@keyframes trickGateHint{0%,100%{opacity:.55}50%{opacity:.95}}
+
 /* move-log slide-up sheet */
 .logsheet{position:fixed;left:0;right:0;bottom:0;z-index:120;max-height:62vh;display:flex;flex-direction:column;
   background:linear-gradient(180deg,#0e1a12,#080f0a);border-top:1px solid rgba(205,160,90,.35);
