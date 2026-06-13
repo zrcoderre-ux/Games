@@ -1358,7 +1358,7 @@ function renderHLJ(v) {
   );
   const holdActive = v.phase === "trickComplete"; // cards aren't playable during the gate
   const hand = `<div class="fan-inner">${fanHand(sortedHand, (c) => ({
-    playable: false,
+    playable: !holdActive && plays.has(cardKey(c)),
     dim: !holdActive && plays.size > 0 && !plays.has(cardKey(c)),
     action: !holdActive && plays.has(cardKey(c)) ? "play-card" : "",
     key: cardKey(c),

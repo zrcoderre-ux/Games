@@ -1445,7 +1445,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* interaction states (hand / fan) */
 .fan-inner .card{cursor:pointer}
-.fan-inner .card.playable:hover,.fan-inner .card.playable:focus{
+.fan-inner .card.playable:hover{
   transform:translateY(-22px) rotate(0deg) scale(1.04)!important;
   box-shadow:0 18px 30px -10px rgba(0,0,0,.7),0 0 0 2px var(--brass-hi),inset 0 0 0 1px rgba(150,110,60,.3)!important;
   z-index:60!important;
