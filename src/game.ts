@@ -102,6 +102,11 @@ export interface Game<State, Move extends SeatedMove, Config, View> {
   // "wait" auto-advances only when no human is present (a human may advance sooner).
   pacing?(state: State): { kind: "auto" | "wait"; ms: number; move: Move } | null;
 
+  // OPTIONAL: called by the driver after a HUMAN move to check whether a
+  // player-driven gate (e.g. confidence pick) should be opened. Returns the new
+  // state with the gate open, or null if no gate is needed.
+  openHumanGate?(state: State, move: Move): State | null;
+
   // OPTIONAL: side actions that do NOT advance the turn (Pitch hand signals).
   // Games without them (Rummy) omit this property entirely.
   aux?: {

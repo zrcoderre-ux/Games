@@ -162,32 +162,34 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   legalMoves: (s) => legalMoves(s),
 
   applyMove: (s, move) => {
-    // Clear pendingSignal gate via advance move.
+    // Clear pendingSignal gate via advance move (30s server safety-net path).
     if (move.type === "advance" && s.pendingSignal) {
       return { ...s, pendingSignal: false };
     }
     const next = engineApplyMove(s, move);
-    const withLog = attach(next, s.log, s.logSeq, hljEntries(s, next, move));
-    // After a bid, open the confidence-pick gate if a teammate still has a turn.
-    if (move.type === "bid") {
-      const n = s.players;
-      const dealer = s.dealerSeat;
-      const actedSeats = new Set(s.bidHistory.map((b) => b.seat));
-      let teammateLeft = false;
-      if (move.seat !== dealer) {
-        if (move.amount === 6) {
-          teammateLeft = dealer % 2 === move.seat % 2 && !actedSeats.has(dealer);
-        } else {
-          for (let i = 1; i <= n; i++) {
-            const s2 = (move.seat + i) % n;
-            if (!actedSeats.has(s2) && s2 % 2 === move.seat % 2) { teammateLeft = true; break; }
-            if (s2 === dealer) break;
-          }
-        }
+    return attach(next, s.log, s.logSeq, hljEntries(s, next, move));
+  },
+
+  // Called by the driver after a HUMAN bid to open the confidence-pick gate.
+  // Bots set their signal via botAux and never need the gate.
+  openHumanGate: (s, move) => {
+    if (move.type !== "bid") return null;
+    const hs = s as HljState;
+    const n = hs.players;
+    const dealer = hs.dealerSeat;
+    if (move.seat === dealer) return null;
+    const actedSeats = new Set(hs.bidHistory.map((b) => b.seat));
+    let teammateLeft = false;
+    if (move.amount === 6) {
+      teammateLeft = dealer % 2 === move.seat % 2 && !actedSeats.has(dealer);
+    } else {
+      for (let i = 1; i <= n; i++) {
+        const s2 = (move.seat + i) % n;
+        if (!actedSeats.has(s2) && s2 % 2 === move.seat % 2) { teammateLeft = true; break; }
+        if (s2 === dealer) break;
       }
-      if (teammateLeft) return { ...withLog, pendingSignal: true };
     }
-    return withLog;
+    return teammateLeft ? { ...s, pendingSignal: true } : null;
   },
 
   isOver: (s) => s.phase === "gameOver",

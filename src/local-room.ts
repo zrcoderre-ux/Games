@@ -206,7 +206,8 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     if (this.seats[seat].kind !== "human") throw new Error("It is not your turn");
     if (move.seat !== seat) throw new Error("Seat mismatch");
     if (!this.game.isLegal(this.state, move)) throw new Error("Illegal move");
-    this.state = this.game.applyMove(this.state, move);
+    const afterMove = this.game.applyMove(this.state, move);
+    this.state = this.game.openHumanGate?.(afterMove, move) ?? afterMove;
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
