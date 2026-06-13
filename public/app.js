@@ -1389,7 +1389,7 @@ function renderHLJ(v) {
         return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
       };
       const highBidSeat = bh.highBid?.seat ?? null;
-      const histToks = (bh.bidHistory ?? []).filter(b => !b.implicit).map(b => {
+      const histToks = (bh.bidHistory ?? []).filter(b => !b.implicit && b.seat !== bh.you).map(b => {
         const style = holdPos(b.seat);
         const label = b.type === "pass" ? "Pass" : String(b.amount);
         const isHigh = b.type === "bid" && b.seat === highBidSeat;
@@ -1401,7 +1401,7 @@ function renderHLJ(v) {
     }
     if (v.phase === "bidding" && !handResultPending) {
       const highBidSeat = v.highBid?.seat ?? null;
-      const histToks = bidHistory.filter(b => !b.implicit).map(b => {
+      const histToks = bidHistory.filter(b => !b.implicit && b.seat !== you).map(b => {
         const style = bidPosStyle(b.seat);
         const label = b.type === "pass" ? "Pass" : String(b.amount);
         const isHigh = b.type === "bid" && b.seat === highBidSeat;
@@ -1421,7 +1421,7 @@ function renderHLJ(v) {
       })();
       return histToks + signalToks;
     }
-    if (v.phase === "playing" && v.highBid && !v.trumpRevealed) {
+    if (v.phase === "playing" && v.highBid && !v.trumpRevealed && v.highBid.seat !== you) {
       const team = `t${v.highBid.seat % 2 === 0 ? "A" : "B"}`;
       const bidTok = `<div class="hlj-bid-token chip ${team} high" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
       return bidTok;
