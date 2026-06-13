@@ -1903,11 +1903,12 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* Signal chip on the felt (your own signal, chip-sized) */
 .hlj-signal-chip{
-  width:36px;height:36px;padding:2px;border-radius:50%;
-  background:rgba(0,0,0,.55);border:2px solid rgba(205,160,90,.5);
+  width:36px;height:36px;padding:0;border-radius:50%;
+  background:none;border:none;
   display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 6px rgba(0,0,0,.45);
 }
-.hlj-signal-chip .signal-img{width:26px;height:26px;object-fit:contain;}
+.hlj-signal-chip .signal-img{width:36px;height:36px;object-fit:contain;border-radius:50%;}
 
 /* Signal confidence badge on pods */
 .pod-dealer-badge.signal{
@@ -1925,17 +1926,16 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   font-size:11px;color:#fff;letter-spacing:.05em;margin-right:2px;
 }
 .hlj-signal-btn{
-  width:52px;height:52px;border-radius:50%;border:2px solid transparent;
-  background:rgba(0,0,0,.25);cursor:pointer;padding:6px;
+  width:52px;height:52px;border-radius:50%;border:none;
+  background:none;cursor:pointer;padding:0;
   display:inline-flex;align-items:center;justify-content:center;
-  transition:background .15s,border-color .15s,opacity .15s,transform .12s,box-shadow .12s;
+  transition:transform .12s,box-shadow .12s,opacity .15s;
   opacity:1;box-shadow:0 4px 10px rgba(0,0,0,.5);
 }
-.hlj-signal-btn .signal-img{width:100%;height:100%;object-fit:contain;display:block;}
-.hlj-signal-btn:hover:not(.active){opacity:.9;transform:translateY(-3px) scale(1.08);box-shadow:0 7px 16px rgba(0,0,0,.55);}
+.hlj-signal-btn .signal-img{width:52px;height:52px;object-fit:contain;display:block;border-radius:50%;}
+.hlj-signal-btn:hover{transform:translateY(-3px) scale(1.08);box-shadow:0 7px 16px rgba(0,0,0,.55);}
 .hlj-signal-btn.active{
-  border-color:var(--gold,#b8962e);background:rgba(184,150,46,.2);opacity:1;
-  transform:translateY(-3px) scale(1.08);box-shadow:0 7px 16px rgba(0,0,0,.55);
+  transform:translateY(-3px) scale(1.08);box-shadow:0 7px 16px rgba(0,0,0,.55),0 0 0 2px var(--gold,#b8962e);
 }
 
 /* Poker chip bid buttons */
