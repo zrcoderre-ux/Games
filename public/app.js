@@ -254,7 +254,7 @@ function podHTML(v, i, o = {}) {
       ${mb}
       <span class="back-name">${esc(name)}${disconnectedBadge}</span>
     </div>
-    ${o.highBid != null ? `<div class="pod-dealer-badge bid">${o.highBid}</div>` : o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
+    ${o.highBid != null ? `<div class="pod-dealer-badge bid">${o.highBid}</div>` : o.signalIcon != null ? `<div class="pod-dealer-badge signal">${o.signalIcon}</div>` : o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
     ${o.pts != null || o.count != null ? `<div class="pod-info">
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
       ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
@@ -1230,6 +1230,9 @@ function renderHLJ(v) {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
             highBid: v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === i ? v.highBid.amount : null,
+            signalIcon: v.phase === "bidding" && v.highBid?.seat === i && v.signals?.[i]
+              ? SIGNAL_ICONS[v.signals[i]]
+              : null,
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             backs: v.handCounts[i],
@@ -1411,13 +1414,21 @@ function renderHLJ(v) {
     : "";
   const bidSlider = "";  // removed from selfExtra
 
-  // Signal -- only shown for players who have bid (not passed)
+  // Signal confidence picker — shown in the selfbar during bidding for human players.
+  const SIGNAL_ICONS = { weak: "○", medium: "◐", strong: "●" };
+  const SIGNAL_LABELS = { weak: "Weak", medium: "Medium", strong: "Strong" };
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
   const sigIdx = curSignal ? signalLevels.indexOf(curSignal) : -1;
   const youHaveBid = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "bid");
-  // Signal control hidden for now — architecture kept for later
-  const signalControl = "";
+  const signalControl = v.phase === "bidding" && v.you != null
+    ? `<div class="hlj-signal-picker">
+        <span class="hlj-signal-label">Confidence</span>
+        ${signalLevels.map(lvl =>
+          `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}">${SIGNAL_ICONS[lvl]}</button>`
+        ).join("")}
+      </div>`
+    : "";
   const trumpControl = "";
 
   const playHint = "";
@@ -1439,7 +1450,12 @@ function renderHLJ(v) {
 
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfMeta = you != null
-    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span>${v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you ? ` <span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>` : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
+    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span>${
+        v.phase === "bidding" && v.highBid?.seat === you && curSignal
+          ? ` <span class="pod-dealer-badge signal">${SIGNAL_ICONS[curSignal]}</span>`
+          : v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you
+          ? ` <span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>`
+          : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
     : `play to ${v.target}`;
   const selfTurn = handResultPending
     ? ""
