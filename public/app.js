@@ -1231,7 +1231,7 @@ function renderHLJ(v) {
             dealer: i === v.dealerSeat,
             highBid: v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === i ? v.highBid.amount : null,
             signalIcon: v.phase === "bidding" && v.highBid?.seat === i && v.signals?.[i]
-              ? SIGNAL_ICONS[v.signals[i]]
+              ? `<img src="${SIGNAL_SRCS[v.signals[i]]}" alt="${SIGNAL_LABELS[v.signals[i]]}" class="signal-img">`
               : null,
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
@@ -1416,6 +1416,7 @@ function renderHLJ(v) {
 
   // Signal confidence picker — shown in the selfbar during bidding for human players.
   const SIGNAL_ICONS = { weak: "○", medium: "◐", strong: "●" };
+  const SIGNAL_SRCS = { weak: "/low-signal.webp", medium: "/medium-signal.webp", strong: "/high-signal.webp" };
   const SIGNAL_LABELS = { weak: "Weak", medium: "Medium", strong: "Strong" };
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
@@ -1425,7 +1426,7 @@ function renderHLJ(v) {
     ? `<div class="hlj-signal-picker">
         <span class="hlj-signal-label">Confidence</span>
         ${signalLevels.map(lvl =>
-          `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}">${SIGNAL_ICONS[lvl]}</button>`
+          `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
         ).join("")}
       </div>`
     : "";
@@ -1452,7 +1453,7 @@ function renderHLJ(v) {
   const selfMeta = you != null
     ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span>${
         v.phase === "bidding" && v.highBid?.seat === you && curSignal
-          ? ` <span class="pod-dealer-badge signal">${SIGNAL_ICONS[curSignal]}</span>`
+          ? ` <span class="pod-dealer-badge signal"><img src="${SIGNAL_SRCS[curSignal]}" alt="${SIGNAL_LABELS[curSignal]}" class="signal-img"></span>`
           : v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you
           ? ` <span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>`
           : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
