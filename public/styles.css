@@ -1925,7 +1925,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   background:rgba(0,0,0,.25);cursor:pointer;padding:6px;
   display:inline-flex;align-items:center;justify-content:center;
   transition:background .15s,border-color .15s,opacity .15s,transform .12s,box-shadow .12s;
-  opacity:.65;box-shadow:0 4px 10px rgba(0,0,0,.5);
+  opacity:1;box-shadow:0 4px 10px rgba(0,0,0,.5);
 }
 .hlj-signal-btn .signal-img{width:100%;height:100%;object-fit:contain;display:block;}
 .hlj-signal-btn:hover:not(.active){opacity:.9;transform:translateY(-3px) scale(1.08);box-shadow:0 7px 16px rgba(0,0,0,.55);}
