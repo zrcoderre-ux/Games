@@ -133,7 +133,7 @@ export function trickWinner(plays: TrickPlay[], trump: Suit): number {
 
 // ---------- Game state ----------
 
-export type Phase = "bidding" | "playing" | "gameOver";
+export type Phase = "bidding" | "playing" | "trickComplete" | "gameOver";
 
 export type Bid = { seat: number; amount: number };
 
@@ -209,6 +209,7 @@ export type GameState = {
   leaderSeat: number; // who leads the current trick
   trickIndex: number; // 0..5
   currentTrick: TrickPlay[];
+  trickWinner?: number | null; // winner seat while phase === "trickComplete"; else null
   tricksWon: { seat: number; plays: TrickPlay[] }[]; // resolved tricks this hand
 
   lastHand: HandResult | null;
@@ -227,7 +228,8 @@ export type Move =
   | { type: "bid"; seat: number; amount: number }
   | { type: "pass"; seat: number }
   | { type: "selectTrump"; seat: number; suit: Suit }
-  | { type: "play"; seat: number; card: Card };
+  | { type: "play"; seat: number; card: Card }
+  | { type: "advance"; seat: number }; // seat is nominal — advanceTrick reads state.trickWinner
 
 // ---------- Setup / dealing ----------
 
@@ -332,6 +334,7 @@ export function setSignal(state: GameState, seat: number, level: HandSignal): Ga
 // ---------- Legal moves ----------
 
 export function legalMoves(state: GameState): Move[] {
+  if (state.phase === "trickComplete") return [{ type: "advance", seat: state.trickWinner ?? 0 }];
   if (state.phase === "gameOver") return [];
 
   if (state.phase === "bidding") {
@@ -402,6 +405,9 @@ function moveEq(a: Move, b: Move): boolean {
 // ---------- Apply ----------
 
 export function applyMove(state: GameState, move: Move): GameState {
+  if (move.type === "advance") {
+    return advanceTrick(state);
+  }
   const legal = legalMoves(state);
   if (!legal.some((m) => moveEq(m, move))) {
     throw new Error(`Illegal move: ${JSON.stringify(move)} in phase ${state.phase}`);
@@ -499,27 +505,38 @@ function applyPlay(state: GameState, move: Move): GameState {
     return { ...state, hands, currentTrick, turn: (seat + 1) % state.players };
   }
 
-  // Trick complete — resolve it.
-  const trump = state.trump!;
-  const winnerSeat = trickWinner(currentTrick, trump);
-  const tricksWon = [...state.tricksWon, { seat: winnerSeat, plays: [...currentTrick] }];
+  // Trick is full. Do NOT resolve here — hold it on the table in a `trickComplete`
+  // gate phase with the winner exposed, so observers can see the finished trick.
+  // The trick is cleared + scored only on the explicit `advance` transition
+  // (auto-advance timer in the driver, or a human tapping the stack).
+  const winnerSeat = trickWinner(currentTrick, state.trump!);
+  return { ...state, hands, currentTrick, phase: "trickComplete", trickWinner: winnerSeat };
+}
+
+// Resolve the held `trickComplete` trick: score it and either start the next
+// trick or finish the hand. Triggered by an `advance` move.
+function advanceTrick(state: GameState): GameState {
+  if (state.phase !== "trickComplete") return state;
+  const winnerSeat = state.trickWinner!;
+  const tricksWon = [...state.tricksWon, { seat: winnerSeat, plays: [...state.currentTrick] }];
   const trickIndex = state.trickIndex + 1;
 
   // Hand still in progress.
   if (trickIndex < 6) {
     return {
       ...state,
-      hands,
       currentTrick: [],
       tricksWon,
       trickIndex,
       leaderSeat: winnerSeat,
       turn: winnerSeat,
+      trickWinner: null,
+      phase: "playing",
     };
   }
 
   // Hand complete — score it.
-  return scoreHand({ ...state, hands, currentTrick: [], tricksWon, trickIndex });
+  return scoreHand({ ...state, currentTrick: [], tricksWon, trickIndex, trickWinner: null });
 }
 
 // ---------- Scoring ----------

@@ -91,6 +91,7 @@ export abstract class RoomServer<
         case "setConfig": return await this.handleSetConfig(conn, msg.config);
         case "start":   return await this.handleStart(conn, msg.config);
         case "move":              return await this.handleMove(conn, msg.move);
+        case "advance":           return await this.handleAdvance(conn);
         case "aux":               return await this.handleAux(conn, msg.payload);
         case "newGame":           return await this.handleNewGame(conn);
         case "setBotReplacement": return await this.handleSetBotReplacement(conn, msg.enabled);
@@ -302,6 +303,21 @@ export abstract class RoomServer<
     await this.resolveBotsAndBroadcast();
   }
 
+  // A seated human taps a pacing gate (e.g. a completed trick) to skip its wait.
+  // No-op-safe: throws only if there's no gate to advance. The auto-advance alarm
+  // covers the case where nobody taps.
+  private async handleAdvance(conn: Connection<ConnState>) {
+    const state = this.room.state;
+    if (!state) throw new Error("No game in progress");
+    const seat = conn.state?.seat;
+    if (seat === null || seat === undefined) throw new Error("You are not seated");
+    const pace = this.game.pacing ? this.game.pacing(state) : null;
+    if (!pace || !pace.move) throw new Error("Nothing to advance");
+    this.room.state = this.game.applyMove(state, pace.move);
+    await this.persist();
+    await this.resolveBotsAndBroadcast();
+  }
+
   private async handleAux(conn: Connection<ConnState>, payload: unknown) {
     const state = this.room.state;
     if (!state) throw new Error("No game in progress");
@@ -377,6 +393,17 @@ export abstract class RoomServer<
         const stepMs = typeof raw === "function" ? raw(s) : (raw ?? BOT_STEP_MS);
         const botTime = Date.now() + stepMs;
         next = next === null ? botTime : Math.min(next, botTime);
+      } else if (seat === null) {
+        // No seat to act and not over → a pacing gate (e.g. trickComplete). Schedule
+        // the auto-advance; a human stack-tap can advance sooner via handleAdvance.
+        const pace = this.game.pacing ? this.game.pacing(s) : null;
+        if (pace && pace.move) {
+          const hasHuman = this.room.seats.some((x) => x?.kind === "human");
+          if (pace.kind === "auto" || !hasHuman) {
+            const gateTime = Date.now() + pace.ms;
+            next = next === null ? gateTime : Math.min(next, gateTime);
+          }
+        }
       }
     }
     if (next !== null) await this.ctx.storage.setAlarm(next);
@@ -418,6 +445,20 @@ export abstract class RoomServer<
         this.broadcastViews();
         await this.scheduleNextAlarm();
         return;
+      }
+      // 2b. Pacing gate auto-advance (no seat to act, game not over).
+      if (seat === null && this.game.pacing) {
+        const pace = this.game.pacing(s);
+        if (pace && pace.move) {
+          const hasHuman = this.room.seats.some((x) => x?.kind === "human");
+          if (pace.kind === "auto" || !hasHuman) {
+            this.room.state = this.game.applyMove(s, pace.move);
+            await this.persist();
+            this.broadcastViews();
+            await this.scheduleNextAlarm();
+            return;
+          }
+        }
       }
     }
 

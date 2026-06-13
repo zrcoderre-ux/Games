@@ -68,6 +68,7 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
         case "setConfig": return this.setConfig(msg.config);
         case "start": return this.start(msg.config);
         case "move": return this.move(msg.move);
+        case "advance": return this.advance();
         case "aux": return this.aux(msg.payload);
         case "newGame": return this.newGame();
       }
@@ -254,16 +255,52 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     this.scheduleBotStep();
   }
 
+  // A human stack-tap during a pacing gate (e.g. Pitch's trickComplete): apply the
+  // gate's advance move immediately instead of waiting for the auto-advance timer.
+  private advance(): void {
+    if (!this.state) throw new Error("No game in progress");
+    const pace = this.game.pacing ? this.game.pacing(this.state) : null;
+    if (!pace || !pace.move) throw new Error("Nothing to advance");
+    this.state = this.game.applyMove(this.state, pace.move);
+    this.syncViewSeat();
+    this.resolveBotsAndBroadcast();
+  }
+
+  // The driver-owned auto-advance for a pacing gate, fired by the single timer.
+  private autoAdvance(move: Move): void {
+    this.botTimer = null;
+    const s = this.state;
+    if (!s || this.game.isOver(s)) return;
+    if (this.game.seatToAct(s) !== null) return; // no longer in a gate
+    this.state = this.game.applyMove(s, move);
+    this.syncViewSeat();
+    this.broadcast();
+    this.scheduleBotStep();
+  }
+
   private scheduleBotStep(): void {
     if (this.botTimer) { clearTimeout(this.botTimer); this.botTimer = null; }
     const s = this.state;
     if (!s || this.game.isOver(s)) return;
     const seat = this.game.seatToAct(s);
-    if (seat !== null && this.seats[seat]?.kind === "bot") {
-      const raw = this.game.botStepMs;
-      const ms = typeof raw === "function" ? raw(s) : (raw ?? BOT_STEP_MS_DEFAULT);
-      this.botTimer = setTimeout(() => this.botStep(), ms);
+    if (seat !== null) {
+      if (this.seats[seat]?.kind === "bot") {
+        const raw = this.game.botStepMs;
+        const ms = typeof raw === "function" ? raw(s) : (raw ?? BOT_STEP_MS_DEFAULT);
+        this.botTimer = setTimeout(() => this.botStep(), ms);
+      }
+      return; // a human is to act → wait for their move
     }
+    // No seat to act and not over → a pacing gate (e.g. trickComplete). The driver
+    // owns the single auto-advance timer; a human stack-tap can advance() sooner.
+    const pace = this.game.pacing ? this.game.pacing(s) : null;
+    if (!pace || !pace.move) return;
+    const hasHuman = this.seats.some((x) => x?.kind === "human");
+    if (pace.kind === "auto" || !hasHuman) {
+      const move = pace.move;
+      this.botTimer = setTimeout(() => this.autoAdvance(move), pace.ms);
+    }
+    // pace.kind === "wait" with a human present → no timer; wait for the tap.
   }
 
   private botStep(): void {

@@ -79,6 +79,7 @@ export type PlayerView = {
   bidHistory: { seat: number; type: "bid" | "pass"; amount?: number; implicit?: true }[];
   signals: (HandSignal | null)[]; // public confidence signal per seat
   currentTrick: TrickPlay[]; // cards on the table (public)
+  trickWinner: number | null; // winner seat while phase === "trickComplete"; else null
   lastTrick: { winner: number; cards: Card[] } | null; // for animating the previous trick
   lastHand: HandResult | null; // scoring breakdown at hand end
   lastKitty: Card[] | null; // kitty revealed after the hand completes
@@ -126,6 +127,7 @@ export function redact(
     bidHistory: state.bidHistory ?? [],
     signals: state.signals,
     currentTrick: state.currentTrick,
+    trickWinner: state.phase === "trickComplete" ? (state.trickWinner ?? null) : null,
     lastTrick,
     lastHand: state.lastHand,
     lastKitty: state.lastHand ? state.lastHand.kitty : null,

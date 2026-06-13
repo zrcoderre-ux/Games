@@ -142,7 +142,17 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   },
 
   // Pitch's turn order: bidder during bidding, otherwise the player to act.
-  seatToAct: (s) => (s.phase === "gameOver" ? null : s.phase === "bidding" ? s.bidTurn : s.turn),
+  // No seat acts during the trickComplete gate — the driver auto-advances it.
+  seatToAct: (s) => ((s.phase === "gameOver" || s.phase === "trickComplete") ? null : s.phase === "bidding" ? s.bidTurn : s.turn),
+
+  // Pacing contract for non-player gate phases. The driver owns the single timer.
+  // Every completed trick lingers so players can read it; the final trick lingers
+  // longer so the game never snaps to the win screen. A stack tap (advance) skips ahead.
+  pacing: (s) => {
+    if (s.phase !== "trickComplete") return null;
+    const lastTrick = s.trickIndex >= 5;
+    return { kind: "auto", ms: lastTrick ? 2600 : 1500, move: { type: "advance", seat: s.trickWinner ?? 0 } };
+  },
 
   // Pitch's move set is tiny, so enumerate-and-compare is a fine authorizer.
   isLegal: (s, move) => legalMoves(s).some((m) => moveEq(m, move)),
