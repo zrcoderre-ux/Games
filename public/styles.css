@@ -218,8 +218,8 @@ body:has(.felt-table)::before{
 }
 
 .felt-title{
-  font-family:"Fraunces",serif;font-style:italic;font-weight:500;
-  font-size:52px;letter-spacing:.02em;line-height:1;margin-bottom:6px;
+  font-family:"Fraunces",serif;font-style:normal;font-weight:700;
+  font-size:52px;letter-spacing:.12em;line-height:1;margin-bottom:6px;
   color:#122e1d;
   text-shadow:0 1px 0 rgba(255,255,255,.07),0 -1px 0 rgba(0,0,0,.6),0 2px 5px rgba(0,0,0,.35);
 }

@@ -940,7 +940,7 @@ function renderStart() {
       <div class="cb cb5"></div><div class="cb cb6"></div>
 
       <div class="felt-content">
-        <h1 class="felt-title">Bonhomme</h1>
+        <h1 class="felt-title">BONHOMME</h1>
         <p class="felt-sub">a cozy room for cards</p>
         <div class="felt-rule"></div>
 
