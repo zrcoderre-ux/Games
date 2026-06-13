@@ -1935,7 +1935,7 @@ function renderRummy(v) {
 
   const myScore = v.you != null ? v.scores[v.you] : null;
   const selfMeta = myScore != null
-    ? `<span class="score-chip">${myScore}</span><span class="score-meta"> of ${v.target}</span>`
+    ? `${myScore} of ${v.target}`
     : `play to ${v.target}`;
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
