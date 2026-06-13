@@ -1159,7 +1159,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   padding:4px 6px;border-radius:12px;position:relative;
   transition:transform .2s;
 }
-.pod-slot.pos-top .pod-dealer-badge{margin-top:0}
+/* Top pod: horizontal row, but badge is absolutely positioned so it doesn't shift the ministack */
+.pod-slot.pos-top .pod{flex-direction:row;align-items:center;justify-content:center;gap:0;position:relative}
+.pod-slot.pos-top .pod-dealer-badge{position:absolute;left:calc(100% + 4px);top:50%;transform:translateY(-50%);margin-top:0}
 
 /* Mirror the ministack for right-side pods so cards fan toward center */
 .pod-slot.pos-right .ministack{transform:scaleX(-1)}
