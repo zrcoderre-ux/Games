@@ -890,8 +890,10 @@ function keepValue(c, trump, low, p, myTeamAhead) {
     if (c.rank === low) return 40 + c.rank + p.lowKeepBonus;
     return 40 + c.rank;
   }
-  if (c.rank === 10) return myTeamAhead ? 30 + p.tenProtectMargin : 30;
+  if (c.rank === 10) return myTeamAhead ? 50 + p.tenProtectMargin : 50;
   if (c.rank === 14) return 25;
+  if (c.rank === 13) return 15;
+  if (c.rank === 12) return 12;
   return c.rank;
 }
 function loadValue(c, trump) {
@@ -908,9 +910,14 @@ function pick(items, score, mode) {
 function bestDiscard(cards, trump, low, p, myTeamAhead) {
   const offSuit = cards.filter((c) => !isTrump(c, trump) && !isJoker(c));
   if (!offSuit.length) return pick(cards, (c) => keepValue(c, trump, low, p, myTeamAhead), "min");
+  const cheapOptions = offSuit.filter((c) => gameValue(c) < 10);
+  const pool = cheapOptions.length ? cheapOptions : offSuit;
   const suitCounts = {};
-  for (const c of offSuit) suitCounts[c.suit] = (suitCounts[c.suit] ?? 0) + 1;
-  const sorted = offSuit.slice().sort((a, b) => {
+  for (const c of pool) {
+    const s = c.suit;
+    suitCounts[s] = (suitCounts[s] ?? 0) + 1;
+  }
+  const sorted = pool.slice().sort((a, b) => {
     const byLen = suitCounts[a.suit] - suitCounts[b.suit];
     if (byLen !== 0) return byLen;
     return keepValue(a, trump, low, p, myTeamAhead) - keepValue(b, trump, low, p, myTeamAhead);

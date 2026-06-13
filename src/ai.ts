@@ -261,9 +261,11 @@ function keepValue(c: Card, trump: Suit, low: number, p: Personality, myTeamAhea
     if (c.rank === low) return 40 + c.rank + p.lowKeepBonus; // Low point — protect it
     return 40 + c.rank;
   }
-  // Ten protection: if our team is clearly ahead on pips, hold tens more tightly.
-  if (c.rank === 10) return myTeamAhead ? 30 + p.tenProtectMargin : 30;
-  if (c.rank === 14) return 25;
+  // Off-suit tens are worth 10 game points — most valuable non-trump card to keep.
+  if (c.rank === 10) return myTeamAhead ? 50 + p.tenProtectMargin : 50;
+  if (c.rank === 14) return 25; // Ace: 4 game points, but can win tricks
+  if (c.rank === 13) return 15; // King: 3 game points
+  if (c.rank === 12) return 12; // Queen: 2 game points
   return c.rank;
 }
 
@@ -284,17 +286,25 @@ function pick<T>(items: T[], score: (t: T) => number, mode: "max" | "min"): T {
 
 // Choose a discard that creates voids: prefer shortest non-trump suit,
 // then least keepable card within that suit.
+// Never discard a card worth 10+ game points (a ten) when any cheaper card exists.
 function bestDiscard(cards: Card[], trump: Suit, low: number, p: Personality, myTeamAhead: boolean): Card {
   const offSuit = cards.filter((c) => !isTrump(c, trump) && !isJoker(c));
   if (!offSuit.length) return pick(cards, (c) => keepValue(c, trump, low, p, myTeamAhead), "min");
 
-  // Count how many of each non-trump suit we hold.
+  // Never throw a ten (10 game points) when a cheaper card exists.
+  const cheapOptions = offSuit.filter((c) => gameValue(c) < 10);
+  const pool = cheapOptions.length ? cheapOptions : offSuit;
+
+  // Count how many of each non-trump suit we hold (within the pool).
   const suitCounts: Record<string, number> = {};
-  for (const c of offSuit) suitCounts[c.suit] = (suitCounts[c.suit] ?? 0) + 1;
+  for (const c of pool) {
+    const s = (c as { suit: string }).suit;
+    suitCounts[s] = (suitCounts[s] ?? 0) + 1;
+  }
 
   // Shortest suit first (void creation), break ties by lowest keepValue.
-  const sorted = offSuit.slice().sort((a, b) => {
-    const byLen = suitCounts[a.suit] - suitCounts[b.suit];
+  const sorted = pool.slice().sort((a, b) => {
+    const byLen = suitCounts[(a as { suit: string }).suit] - suitCounts[(b as { suit: string }).suit];
     if (byLen !== 0) return byLen;
     return keepValue(a, trump, low, p, myTeamAhead) - keepValue(b, trump, low, p, myTeamAhead);
   });
