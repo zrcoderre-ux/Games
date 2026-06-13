@@ -1434,7 +1434,7 @@ function renderHLJ(v) {
   const showSignalPicker = v.phase === "bidding" && v.you != null && !youHavePassed;
   const signalControl = showSignalPicker
     ? `<div class="hlj-signal-picker${signalLocked ? " locked" : ""}">
-        <span class="hlj-signal-label">Confidence</span>
+        <span class="hlj-signal-label">Bid Confidence</span>
         ${signalLevels.map(lvl =>
           `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}"${signalLocked ? " disabled" : ""} data-action="${signalLocked ? "" : "signal"}" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
         ).join("")}
@@ -1457,7 +1457,7 @@ function renderHLJ(v) {
     <span class="hlj-score-pill t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
   </div>`;
 
-  const selfExtra = `${teamScores}${signalControl}${trumpControl}${playHint}`;
+  const selfExtra = `${showSignalPicker ? signalControl : teamScores}${trumpControl}${playHint}`;
 
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfMeta = you != null
