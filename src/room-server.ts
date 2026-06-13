@@ -298,7 +298,8 @@ export abstract class RoomServer<
     if (move.seat !== seat) throw new Error("Seat mismatch");
     if (!this.game.isLegal(state, move)) throw new Error("Illegal move");
 
-    this.room.state = this.game.applyMove(state, move);
+    const afterMove = this.game.applyMove(state, move);
+    this.room.state = this.game.openHumanGate?.(afterMove, move) ?? afterMove;
     await this.persist();
     await this.resolveBotsAndBroadcast();
   }

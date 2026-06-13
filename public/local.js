@@ -199,7 +199,8 @@ var LocalRoom = class {
     if (this.seats[seat].kind !== "human") throw new Error("It is not your turn");
     if (move.seat !== seat) throw new Error("Seat mismatch");
     if (!this.game.isLegal(this.state, move)) throw new Error("Illegal move");
-    this.state = this.game.applyMove(this.state, move);
+    const afterMove = this.game.applyMove(this.state, move);
+    this.state = this.game.openHumanGate?.(afterMove, move) ?? afterMove;
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
@@ -1267,29 +1268,31 @@ var hljModule = {
       return { ...s, pendingSignal: false };
     }
     const next = applyMove(s, move);
-    const withLog = attach(next, s.log, s.logSeq, hljEntries(s, next, move));
-    if (move.type === "bid") {
-      const n = s.players;
-      const dealer = s.dealerSeat;
-      const actedSeats = new Set(s.bidHistory.map((b) => b.seat));
-      let teammateLeft = false;
-      if (move.seat !== dealer) {
-        if (move.amount === 6) {
-          teammateLeft = dealer % 2 === move.seat % 2 && !actedSeats.has(dealer);
-        } else {
-          for (let i = 1; i <= n; i++) {
-            const s2 = (move.seat + i) % n;
-            if (!actedSeats.has(s2) && s2 % 2 === move.seat % 2) {
-              teammateLeft = true;
-              break;
-            }
-            if (s2 === dealer) break;
-          }
+    return attach(next, s.log, s.logSeq, hljEntries(s, next, move));
+  },
+  // Called by the driver after a HUMAN bid to open the confidence-pick gate.
+  // Bots set their signal via botAux and never need the gate.
+  openHumanGate: (s, move) => {
+    if (move.type !== "bid") return null;
+    const hs = s;
+    const n = hs.players;
+    const dealer = hs.dealerSeat;
+    if (move.seat === dealer) return null;
+    const actedSeats = new Set(hs.bidHistory.map((b) => b.seat));
+    let teammateLeft = false;
+    if (move.amount === 6) {
+      teammateLeft = dealer % 2 === move.seat % 2 && !actedSeats.has(dealer);
+    } else {
+      for (let i = 1; i <= n; i++) {
+        const s2 = (move.seat + i) % n;
+        if (!actedSeats.has(s2) && s2 % 2 === move.seat % 2) {
+          teammateLeft = true;
+          break;
         }
+        if (s2 === dealer) break;
       }
-      if (teammateLeft) return { ...withLog, pendingSignal: true };
     }
-    return withLog;
+    return teammateLeft ? { ...s, pendingSignal: true } : null;
   },
   isOver: (s) => s.phase === "gameOver",
   redact: (s, seat, meta) => redact(s, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats }),
