@@ -437,6 +437,7 @@ button{font-family:inherit}
 }
 .brand .wordmark{font-family:"Fraunces",serif;font-size:19px;font-weight:600;color:var(--ink);letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .appbar .spacer{flex:1}
+.appbar-left{flex:1;display:flex;align-items:center;min-width:0}
 .roomtag{
   font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;
   background:rgba(0,0,0,.22);border:1px solid rgba(205,160,90,.22);
