@@ -1941,7 +1941,15 @@ function renderRummy(v) {
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, feltBottom: melds, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
+  // Center watermark: suit of the most recent meld (first non-joker card's suit).
+  const lastMeldSuit = v.melds.length
+    ? v.melds[v.melds.length - 1].cards.find((c) => !c.joker)?.suit ?? null
+    : null;
+  const rummyFeltOverlay = lastMeldSuit
+    ? `<span class="trump-watermark${RED.has(lastMeldSuit) ? " red" : ""}">${SUIT[lastMeldSuit]}</span>`
+    : "";
+
+  app.__set = tableShell(v, { pods, center, feltBottom: melds, feltOverlay: rummyFeltOverlay, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
 }
 
 // Round-end summary popup: shown after a round finishes, auto-dismisses after 20s.
