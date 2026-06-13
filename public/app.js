@@ -1206,6 +1206,29 @@ function hljWinIdx(cards, trump) {
 }
 
 // ---------- High Low Jack ----------
+
+// Returns true if at least one teammate hasn't yet had a bid turn after `you`
+// (and could therefore use the confidence signal). For a bid of 6, everyone
+// between you and the dealer gets an implicit pass, so only the dealer remains.
+function hljTeammateStillToBid(v, bidAmount) {
+  const you = v.you;
+  const n = v.seats.length;
+  const dealer = v.dealerSeat;
+  if (you === dealer) return false; // dealer bids last; nobody after
+  const actedSeats = new Set((v.bidHistory ?? []).map(b => b.seat));
+  if (bidAmount === 6) {
+    // Only the dealer remains; did they act already? (shouldn't be, but guard)
+    return dealer % 2 === you % 2 && !actedSeats.has(dealer);
+  }
+  // Normal bid: seats from you+1 up to dealer (inclusive) still have turns
+  for (let i = 1; i <= n; i++) {
+    const seat = (you + i) % n;
+    if (!actedSeats.has(seat) && seat % 2 === you % 2) return true;
+    if (seat === dealer) break; // dealer is last; stop here
+  }
+  return false;
+}
+
 function renderHLJ(v) {
   if (v.phase === "gameOver") {
     const w = v.winner;
@@ -2537,15 +2560,19 @@ app.addEventListener("click", (e) => {
     case "start": return doStart();
     case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
     case "move-bid": {
-      // Open 5-second confidence window after placing a bid
-      if (S.hljSignalTimer) clearTimeout(S.hljSignalTimer);
-      S.hljSignalWindow = true;
-      S.hljSignalTimer = setTimeout(() => {
-        S.hljSignalWindow = false;
-        S.hljSignalTimer = null;
-        render();
-      }, 10000);
-      return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
+      const amt = +t.dataset.amount;
+      // Only show confidence picker if a teammate still has a bid turn coming.
+      // After a bid of 6, only the dealer remains; otherwise check seats up to the dealer.
+      if (v.you != null && hljTeammateStillToBid(v, amt)) {
+        if (S.hljSignalTimer) clearTimeout(S.hljSignalTimer);
+        S.hljSignalWindow = true;
+        S.hljSignalTimer = setTimeout(() => {
+          S.hljSignalWindow = false;
+          S.hljSignalTimer = null;
+          render();
+        }, 10000);
+      }
+      return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
     }
     case "hlj-bid-confirm": {
       const amt = +(document.getElementById("hlj-bid-slider")?.value ?? 2);

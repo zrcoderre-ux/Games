@@ -183,7 +183,19 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
       const next = setSignal(s, seat, payload as HandSignal);
       return { ...(next as HljState), log: s.log, logSeq: s.logSeq };
     },
-    botAux: (s, seat) =>
-      s.phase === "bidding" && s.signals[seat] == null ? handConfidence(s.hands[seat], s.players) : null,
+    botAux: (s, seat) => {
+      if (s.phase !== "bidding" || s.signals[seat] != null) return null;
+      // Only signal if a teammate still has a bid turn coming after this seat.
+      const n = s.players;
+      const dealer = s.dealerSeat;
+      if (seat === dealer) return null; // dealer bids last, nobody to signal
+      const actedSeats = new Set(s.bidHistory.map((b) => b.seat));
+      for (let i = 1; i <= n; i++) {
+        const s2 = (seat + i) % n;
+        if (!actedSeats.has(s2) && s2 % 2 === seat % 2) return handConfidence(s.hands[seat], s.players);
+        if (s2 === dealer) break;
+      }
+      return null;
+    },
   },
 };
