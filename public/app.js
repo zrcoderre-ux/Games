@@ -1455,14 +1455,11 @@ function renderHLJ(v) {
     : "";
   const bidSlider = "";  // removed from selfExtra
 
-  // Signal confidence picker — shown after human places a non-pass bid during bidding.
-  // pendingSignal gates bots only when a teammate is still to bid; we show the picker
-  // any time the human has bid (so they can always signal, even when no gate is active).
+  // Signal confidence picker — shown for 10s after human places a bid (not pass/steal).
+  // Rendered into the feltBid slot so it appears in the same spot as the bid chip row.
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
-  const humanHasBid = v.you != null && v.phase === "bidding"
-    && (v.bidHistory ?? []).some(b => b.seat === v.you && b.type === "bid");
-  const showSignalPicker = !!v.pendingSignal || humanHasBid;
+  const showSignalPicker = !!v.pendingSignal;
   const trumpControl = "";
 
   const playHint = "";
