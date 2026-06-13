@@ -1,7 +1,7 @@
-// Parlor — card games client. Vanilla ES module, native WebSocket, no build step.
+// Bonhomme — card games client. Vanilla ES module, native WebSocket, no build step.
 // The server is the rules authority: we turn `view.legalMoves` into controls, and
 // for Rummy melds we let the player select cards and submit — the server validates.
-// This file's RENDER layer draws a cozy parlor table; all networking/protocol is unchanged.
+// This file's RENDER layer draws a cozy bonhomme table; all networking/protocol is unchanged.
 
 const SUIT = { S: "\u2660", H: "\u2665", D: "\u2666", C: "\u2663" };
 const RED = new Set(["H", "D"]);
@@ -862,7 +862,7 @@ function render() {
 }
 
 function renderConnecting() {
-  const gameName = S.party && GAMES[S.party] ? esc(GAMES[S.party].label) : "Parlor";
+  const gameName = S.party && GAMES[S.party] ? esc(GAMES[S.party].label) : "Bonhomme";
   const suit = S.party && GAMES[S.party] ? GAMES[S.party].suit : "\u2663";
   const sub = S.connected ? "Joined \u2014 dealing you in." : "Connecting\u2026";
   app.__set = `<div class="felt-screen">
@@ -940,7 +940,7 @@ function renderStart() {
       <div class="cb cb5"></div><div class="cb cb6"></div>
 
       <div class="felt-content">
-        <h1 class="felt-title">Parlor</h1>
+        <h1 class="felt-title">Bonhomme</h1>
         <p class="felt-sub">a cozy room for cards</p>
         <div class="felt-rule"></div>
 
@@ -2519,7 +2519,7 @@ function doConnect() {
 
 function shareLink() {
   const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
-  const game = GAMES[S.party]?.label ?? "Parlor";
+  const game = GAMES[S.party]?.label ?? "Bonhomme";
   if (navigator.share) {
     navigator.share({ title: game, text: `Join my ${game} game!`, url: link }).catch(() => {});
   } else {

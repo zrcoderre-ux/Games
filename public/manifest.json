@@ -1,6 +1,6 @@
 {
-  "name": "Parlor",
-  "short_name": "Parlor",
+  "name": "Bonhomme",
+  "short_name": "Bonhomme",
   "description": "Card games — High Low Jack, Hearts, Rummy 500, and more",
   "start_url": "/",
   "display": "standalone",
