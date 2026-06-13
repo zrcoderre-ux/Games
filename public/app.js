@@ -1228,6 +1228,12 @@ function renderHLJ(v) {
 
   const teamLetter = (i) => (i % 2 === 0 ? "A" : "B");
 
+  // Confidence-signal image maps — declared before any use (pod badges, your
+  // chip, and the picker) to avoid a temporal-dead-zone ReferenceError that
+  // would throw mid-render and freeze the table.
+  const SIGNAL_SRCS = { weak: "/low-signal.webp", medium: "/medium-signal.webp", strong: "/high-signal.webp" };
+  const SIGNAL_LABELS = { weak: "Weak", medium: "Medium", strong: "Strong" };
+
   // pods (everyone but you), tagged with their team
   const pods = v.seats
     .map((s, i) =>
@@ -1432,8 +1438,6 @@ function renderHLJ(v) {
   const bidSlider = "";  // removed from selfExtra
 
   // Signal confidence picker — shown for 5s after human places a bid (not pass/steal).
-  const SIGNAL_SRCS = { weak: "/low-signal.webp", medium: "/medium-signal.webp", strong: "/high-signal.webp" };
-  const SIGNAL_LABELS = { weak: "Weak", medium: "Medium", strong: "Strong" };
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
   const showSignalPicker = S.hljSignalWindow;
