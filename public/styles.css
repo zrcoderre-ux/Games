@@ -1159,8 +1159,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   padding:4px 6px;border-radius:12px;position:relative;
   transition:transform .2s;
 }
-/* Top pod: badge sits to the right of the card stack instead of below */
-.pod-slot.pos-top .pod{flex-direction:row;align-items:center;gap:6px}
 .pod-slot.pos-top .pod-dealer-badge{margin-top:0}
 
 /* Mirror the ministack for right-side pods so cards fan toward center */
@@ -1921,12 +1919,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .hlj-signal-chip .signal-img{width:36px;height:36px;object-fit:contain;border-radius:50%;}
 
-/* Signal confidence badge on pods */
-.pod-dealer-badge.signal{
-  background:none;border:none;box-shadow:none;
-  width:28px;height:28px;padding:0;overflow:hidden;
-}
-.pod-dealer-badge.signal .signal-img{width:28px;height:28px;object-fit:contain;display:block;}
+/* Signal confidence badge on pods — same circle as dealer chip, image inside */
+.pod-dealer-badge.signal{padding:2px;overflow:hidden;}
+.pod-dealer-badge.signal .signal-img{width:18px;height:18px;object-fit:contain;display:block;border-radius:50%;}
 
 /* Signal confidence picker in selfbar (during bidding) */
 .hlj-signal-picker{
