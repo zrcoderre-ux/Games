@@ -217,7 +217,8 @@ var LocalRoom = class {
     if (!this.game.aux) throw new Error("This game has no side actions");
     if (this.viewSeat === null) throw new Error("You are not seated");
     this.state = this.game.aux.apply(this.state, this.viewSeat, payload);
-    this.broadcast();
+    this.syncViewSeat();
+    this.resolveBotsAndBroadcast();
   }
   newGame() {
     if (this.state && !this.game.isOver(this.state)) throw new Error("Game still in progress");
