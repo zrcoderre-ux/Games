@@ -339,11 +339,12 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
-    // HLJ: clear signal window when a new hand starts
-    if (S.party === "high-low-jack" && msg.view?.phase === "bidding"
-        && (msg.view.bidHistory?.length ?? 0) === 0) {
-      if (S.hljSignalTimer) { clearTimeout(S.hljSignalTimer); S.hljSignalTimer = null; }
-      S.hljSignalWindow = false;
+    // HLJ: clear signal window when new hand starts or when server clears pendingSignal
+    if (S.party === "high-low-jack") {
+      if ((msg.view?.phase === "bidding" && (msg.view.bidHistory?.length ?? 0) === 0)
+          || (S.hljSignalWindow && !msg.view?.pendingSignal)) {
+        S.hljSignalWindow = false;
+      }
     }
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
@@ -2551,16 +2552,9 @@ app.addEventListener("click", (e) => {
     case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
     case "move-bid": {
       const amt = +t.dataset.amount;
-      // Only show confidence picker if a teammate still has a bid turn coming.
-      // After a bid of 6, only the dealer remains; otherwise check seats up to the dealer.
+      // Open confidence window if a teammate still has a turn; bots wait server-side.
       if (v.you != null && hljTeammateStillToBid(v, amt)) {
-        if (S.hljSignalTimer) clearTimeout(S.hljSignalTimer);
         S.hljSignalWindow = true;
-        S.hljSignalTimer = setTimeout(() => {
-          S.hljSignalWindow = false;
-          S.hljSignalTimer = null;
-          render();
-        }, 10000);
       }
       return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
     }
@@ -2571,7 +2565,6 @@ app.addEventListener("click", (e) => {
     case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
 
     case "signal":
-      if (S.hljSignalTimer) { clearTimeout(S.hljSignalTimer); S.hljSignalTimer = null; }
       S.hljSignalWindow = false;
       return send({ t: "aux", payload: t.dataset.level });
     case "play-card": {

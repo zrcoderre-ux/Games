@@ -215,6 +215,7 @@ export type GameState = {
   lastHand: HandResult | null;
   dealtHands: Card[][] | null; // starting hands this round, revealed at end of hand
   bidHistory: { seat: number; type: "bid" | "pass"; amount?: number; implicit?: true }[];
+  pendingSignal?: boolean; // true while waiting for bidder to pick confidence before bots advance
 
   // Cross-hand player profiles, updated after each hand scores.
   profiles: PlayerProfile[];

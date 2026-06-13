@@ -143,12 +143,14 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
 
   // Pitch's turn order: bidder during bidding, otherwise the player to act.
   // No seat acts during the trickComplete gate — the driver auto-advances it.
-  seatToAct: (s) => ((s.phase === "gameOver" || s.phase === "trickComplete") ? null : s.phase === "bidding" ? s.bidTurn : s.turn),
+  seatToAct: (s) => ((s.phase === "gameOver" || s.phase === "trickComplete" || s.pendingSignal) ? null : s.phase === "bidding" ? s.bidTurn : s.turn),
 
   // Pacing contract for non-player gate phases. The driver owns the single timer.
   // Every completed trick lingers so players can read it; the final trick lingers
   // longer so the game never snaps to the win screen. A stack tap (advance) skips ahead.
   pacing: (s) => {
+    // Confidence-pick gate: bidder must pick before bots advance. 30s server safety net.
+    if (s.pendingSignal) return { kind: "wait", ms: 30000, move: { type: "advance", seat: s.bidTurn } };
     if (s.phase !== "trickComplete") return null;
     const lastTrick = s.trickIndex >= 5;
     return { kind: "auto", ms: lastTrick ? 2600 : 1500, move: { type: "advance", seat: s.trickWinner ?? 0 } };
@@ -160,8 +162,32 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   legalMoves: (s) => legalMoves(s),
 
   applyMove: (s, move) => {
+    // Clear pendingSignal gate via advance move.
+    if (move.type === "advance" && s.pendingSignal) {
+      return { ...s, pendingSignal: false };
+    }
     const next = engineApplyMove(s, move);
-    return attach(next, s.log, s.logSeq, hljEntries(s, next, move));
+    const withLog = attach(next, s.log, s.logSeq, hljEntries(s, next, move));
+    // After a bid, open the confidence-pick gate if a teammate still has a turn.
+    if (move.type === "bid") {
+      const n = s.players;
+      const dealer = s.dealerSeat;
+      const actedSeats = new Set(s.bidHistory.map((b) => b.seat));
+      let teammateLeft = false;
+      if (move.seat !== dealer) {
+        if (move.amount === 6) {
+          teammateLeft = dealer % 2 === move.seat % 2 && !actedSeats.has(dealer);
+        } else {
+          for (let i = 1; i <= n; i++) {
+            const s2 = (move.seat + i) % n;
+            if (!actedSeats.has(s2) && s2 % 2 === move.seat % 2) { teammateLeft = true; break; }
+            if (s2 === dealer) break;
+          }
+        }
+      }
+      if (teammateLeft) return { ...withLog, pendingSignal: true };
+    }
+    return withLog;
   },
 
   isOver: (s) => s.phase === "gameOver",
@@ -181,7 +207,7 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   aux: {
     apply: (s, seat, payload) => {
       const next = setSignal(s, seat, payload as HandSignal);
-      return { ...(next as HljState), log: s.log, logSeq: s.logSeq };
+      return { ...(next as HljState), log: s.log, logSeq: s.logSeq, pendingSignal: false };
     },
     botAux: (s, seat) => {
       if (s.phase !== "bidding" || s.signals[seat] != null) return null;
