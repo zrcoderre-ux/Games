@@ -71,7 +71,8 @@ const S = {
   hljBidHold: null,   // frozen bid overlay shown briefly after bidding ends
   hljBidHoldTimer: null,
   hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
-  hljSignalPickedAt: null, // bidHistory.length when the human last picked a signal; locks after next action
+  hljSignalWindow: false,  // true for 5s after human bids (non-pass), shows confidence picker
+  hljSignalTimer: null,    // setTimeout handle for the 5s window
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
@@ -338,10 +339,11 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
-    // HLJ: reset signal lock when a new hand's bidding starts (bidHistory goes back to empty)
+    // HLJ: clear signal window when a new hand starts
     if (S.party === "high-low-jack" && msg.view?.phase === "bidding"
         && (msg.view.bidHistory?.length ?? 0) === 0) {
-      S.hljSignalPickedAt = null;
+      if (S.hljSignalTimer) { clearTimeout(S.hljSignalTimer); S.hljSignalTimer = null; }
+      S.hljSignalWindow = false;
     }
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
@@ -1378,7 +1380,17 @@ function renderHLJ(v) {
         const cls = b.type === "pass" ? "pass" : `chip ${team}${isHigh ? " high" : ""}`;
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
-      return histToks;
+      // Signal chip for YOU only — other players' signals appear in their pods.
+      const yourSig = you != null ? (v.signals?.[you] ?? null) : null;
+      const signalToks = (() => {
+        if (!yourSig || you == null) return "";
+        const hasBid = bidHistory.some(b => b.seat === you && b.type === "bid");
+        if (!hasBid) return "";
+        const raw = bidPosStyle(you);
+        const sigStyle = raw.replace(/top:([\d.]+)%/, (_, n) => `top:${+n - 12}%`);
+        return `<div class="hlj-bid-token hlj-signal-chip" style="${sigStyle}"><img src="${SIGNAL_SRCS[yourSig]}" alt="${SIGNAL_LABELS[yourSig]}" class="signal-img"></div>`;
+      })();
+      return histToks + signalToks;
     }
     if (v.phase === "playing" && v.highBid && !v.trumpRevealed) {
       const team = `t${v.highBid.seat % 2 === 0 ? "A" : "B"}`;
@@ -1419,23 +1431,17 @@ function renderHLJ(v) {
     : "";
   const bidSlider = "";  // removed from selfExtra
 
-  // Signal confidence picker — shown in the selfbar during bidding for human players.
-  const SIGNAL_ICONS = { weak: "○", medium: "◐", strong: "●" };
+  // Signal confidence picker — shown for 5s after human places a bid (not pass/steal).
   const SIGNAL_SRCS = { weak: "/low-signal.webp", medium: "/medium-signal.webp", strong: "/high-signal.webp" };
   const SIGNAL_LABELS = { weak: "Weak", medium: "Medium", strong: "Strong" };
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
-  const sigIdx = curSignal ? signalLevels.indexOf(curSignal) : -1;
-  const youHaveBid = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "bid");
-  const youHavePassed = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "pass");
-  // Lock the signal once someone else acts after the human picked — the next bid/pass locks it in.
-  const signalLocked = S.hljSignalPickedAt !== null && (v.bidHistory?.length ?? 0) > S.hljSignalPickedAt;
-  const showSignalPicker = v.phase === "bidding" && v.you != null && !youHavePassed;
+  const showSignalPicker = S.hljSignalWindow;
   const signalControl = showSignalPicker
-    ? `<div class="hlj-signal-picker${signalLocked ? " locked" : ""}">
+    ? `<div class="hlj-signal-picker">
         <span class="hlj-signal-label">Bid Confidence</span>
         ${signalLevels.map(lvl =>
-          `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}"${signalLocked ? " disabled" : ""} data-action="${signalLocked ? "" : "signal"}" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
+          `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
         ).join("")}
       </div>`
     : "";
@@ -2524,7 +2530,17 @@ app.addEventListener("click", (e) => {
     }
     case "start": return doStart();
     case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
-    case "move-bid": return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
+    case "move-bid": {
+      // Open 5-second confidence window after placing a bid
+      if (S.hljSignalTimer) clearTimeout(S.hljSignalTimer);
+      S.hljSignalWindow = true;
+      S.hljSignalTimer = setTimeout(() => {
+        S.hljSignalWindow = false;
+        S.hljSignalTimer = null;
+        render();
+      }, 5000);
+      return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
+    }
     case "hlj-bid-confirm": {
       const amt = +(document.getElementById("hlj-bid-slider")?.value ?? 2);
       return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
@@ -2532,7 +2548,8 @@ app.addEventListener("click", (e) => {
     case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
 
     case "signal":
-      S.hljSignalPickedAt = S.view?.bidHistory?.length ?? 0;
+      if (S.hljSignalTimer) { clearTimeout(S.hljSignalTimer); S.hljSignalTimer = null; }
+      S.hljSignalWindow = false;
       return send({ t: "aux", payload: t.dataset.level });
     case "play-card": {
       const c = v.yourHand.find((x) => cardKey(x) === t.dataset.key);
