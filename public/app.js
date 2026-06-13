@@ -725,14 +725,14 @@ const GAME_CARD_META = {
 function renderStart() {
   const g = S.pickGame;
   // HLJ first (longest name, should be visible), then the rest
-  const gameIds = ["high-low-jack", "rummy500", "hearts", "pegs-and-jokers"];
+  // Pegs & Jokers hidden until ready for prime time
+  const gameIds = ["high-low-jack", "rummy500", "hearts"];
 
-  // Wider spread so each card name is legible
+  // Spread three cards with a slight fan
   const positions = [
-    { left: "0px",   top: "18px", rot: "-9deg" },
-    { left: "86px",  top: "6px",  rot: "-2deg" },
-    { left: "172px", top: "6px",  rot: "4deg"  },
-    { left: "258px", top: "16px", rot: "10deg" },
+    { left: "0px",   top: "16px", rot: "-7deg" },
+    { left: "86px",  top: "4px",  rot: "0deg"  },
+    { left: "172px", top: "14px", rot: "7deg"  },
   ];
 
   const gameCards = gameIds.map((id, i) => {
