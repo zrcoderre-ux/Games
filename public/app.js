@@ -1370,8 +1370,8 @@ function renderHLJ(v) {
     const n = v.seats.length;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    // User's own seat: fixed lower-center to match the chip panel position
-    if (off === 0) return "top:87%;left:50%;transform:translate(-50%,-50%)";
+    // User's own seat: raised so it clears the confidence chip row
+    if (off === 0) return "top:76%;left:50%;transform:translate(-50%,-50%)";
     // Other seats: tighter bounds so chips appear inward from card backs
     const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 });
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
@@ -1384,12 +1384,12 @@ function renderHLJ(v) {
         const n = bh.seats.length;
         if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
         const off = (seat - bh.you + n) % n;
-        if (off === 0) return "top:87%;left:50%;transform:translate(-50%,-50%)";
+        if (off === 0) return "top:76%;left:50%;transform:translate(-50%,-50%)";
         const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 });
         return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
       };
       const highBidSeat = bh.highBid?.seat ?? null;
-      const histToks = (bh.bidHistory ?? []).filter(b => !b.implicit && b.seat !== bh.you).map(b => {
+      const histToks = (bh.bidHistory ?? []).filter(b => !b.implicit).map(b => {
         const style = holdPos(b.seat);
         const label = b.type === "pass" ? "Pass" : String(b.amount);
         const isHigh = b.type === "bid" && b.seat === highBidSeat;
@@ -1401,7 +1401,7 @@ function renderHLJ(v) {
     }
     if (v.phase === "bidding" && !handResultPending) {
       const highBidSeat = v.highBid?.seat ?? null;
-      const histToks = bidHistory.filter(b => !b.implicit && b.seat !== you).map(b => {
+      const histToks = bidHistory.filter(b => !b.implicit).map(b => {
         const style = bidPosStyle(b.seat);
         const label = b.type === "pass" ? "Pass" : String(b.amount);
         const isHigh = b.type === "bid" && b.seat === highBidSeat;
@@ -1409,19 +1409,9 @@ function renderHLJ(v) {
         const cls = b.type === "pass" ? "pass" : `chip ${team}${isHigh ? " high" : ""}`;
         return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
       }).join("");
-      // Signal chip for YOU only — other players' signals appear in their pods.
-      const yourSig = you != null ? (v.signals?.[you] ?? null) : null;
-      const signalToks = (() => {
-        if (!yourSig || you == null) return "";
-        const hasBid = bidHistory.some(b => b.seat === you && b.type === "bid");
-        if (!hasBid) return "";
-        const raw = bidPosStyle(you);
-        const sigStyle = raw.replace(/top:([\d.]+)%/, (_, n) => `top:${+n - 12}%`);
-        return `<div class="hlj-bid-token hlj-signal-chip" style="${sigStyle}"><img src="${SIGNAL_SRCS[yourSig]}" alt="${SIGNAL_LABELS[yourSig]}" class="signal-img"></div>`;
-      })();
-      return histToks + signalToks;
+      return histToks;
     }
-    if (v.phase === "playing" && v.highBid && !v.trumpRevealed && v.highBid.seat !== you) {
+    if (v.phase === "playing" && v.highBid && !v.trumpRevealed) {
       const team = `t${v.highBid.seat % 2 === 0 ? "A" : "B"}`;
       const bidTok = `<div class="hlj-bid-token chip ${team} high" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
       return bidTok;
