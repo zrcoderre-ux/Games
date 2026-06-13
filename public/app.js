@@ -503,8 +503,7 @@ async function connectLocal(serverSeats = null, startConfig = null) {
 // ---------- app bar ----------
 function appbar(v, opts = {}) {
   return `<div class="appbar">
-    <div class="brand"><div class="glyph">P</div><span class="wordmark">${esc(GAMES[S.party].label)}</span></div>
-    <div class="spacer"></div>
+    ${opts.leftContent ? `<div class="appbar-left">${opts.leftContent}</div>` : `<div class="spacer"></div>`}
     ${S.offline ? `<div class="roomtag">offline · ${S.hotseat ? "pass &amp; play" : "vs bots"}</div>` : `<div class="roomtag">room <b>${esc(S.room)}</b></div>`}
     ${opts.log ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
     ${S.offline ? "" : `<button class="btn sm ghost" data-action="share-link">Share</button>`}
@@ -642,7 +641,7 @@ function tableShell(v, parts) {
     self = `<div class="selfbar"><div class="name">Spectating</div><div class="me-pts">${parts.selfMeta || ""}</div></div>`;
   }
   return `<div class="table">
-    ${appbar(v, { log: true })}
+    ${appbar(v, { log: true, leftContent: parts.appbarLeft || "" })}
     <div class="felt-frame${parts.feltHeader ? ' has-frame-title' : ''}">
     ${parts.feltHeader ? `<div class="frame-title">${parts.feltHeader}</div>` : ""}
     ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
@@ -1457,7 +1456,7 @@ function renderHLJ(v) {
     <span class="hlj-score-pill t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
   </div>`;
 
-  const selfExtra = `${showSignalPicker ? signalControl : teamScores}${trumpControl}${playHint}`;
+  const selfExtra = `${showSignalPicker ? signalControl : ""}${trumpControl}${playHint}`;
 
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfMeta = you != null
@@ -1611,7 +1610,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra });
+  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, appbarLeft: teamScores });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
