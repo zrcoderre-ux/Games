@@ -1165,9 +1165,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 
 /* Mirror the ministack for right-side pods so cards fan toward center */
 .pod-slot.pos-right .ministack{transform:scaleX(-1)}
-/* Counter-mirror text inside the mirrored ministack */
-.pod-slot.pos-right .back-name{transform:translateX(-50%) scaleX(-1)}
-.pod-slot.pos-right .mb-count{transform:translateX(-50%) scaleX(-1)}
 .pod .ministack{
   position:relative;
   display:flex;align-items:flex-end;justify-content:center;
@@ -1205,6 +1202,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   color:rgba(255,255,255,.95);text-shadow:0 1px 2px rgba(0,0,0,.8);
   line-height:1;pointer-events:none;
 }
+/* Counter-mirror text inside the mirrored right-side ministack.
+   Must come AFTER the base .pod .back-name / .mb-count rules to win the cascade. */
+.pod-slot.pos-right .pod .back-name{transform:translateX(-50%) scaleX(-1)}
+.pod-slot.pos-right .pod .ministack .mb-count{transform:translateX(-50%) scaleX(-1)}
 
 /* pts + count row — only shows when those values exist */
 .pod-info{
