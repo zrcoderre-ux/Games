@@ -1437,16 +1437,18 @@ function renderHLJ(v) {
     : "";
   const bidSlider = "";  // removed from selfExtra
 
-  // Signal confidence picker — shown for 5s after human places a bid (not pass/steal).
+  // Signal confidence picker — shown for 10s after human places a bid (not pass/steal).
+  // Rendered into the feltBid slot so it appears in the same spot as the bid chip row.
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
   const showSignalPicker = S.hljSignalWindow;
-  const signalControl = showSignalPicker
-    ? `<div class="hlj-signal-picker">
-        <span class="hlj-signal-label">Bid Confidence</span>
-        ${signalLevels.map(lvl =>
-          `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
-        ).join("")}
+  const signalPanel = showSignalPicker
+    ? `<div class="hlj-felt-bid">
+        <div class="hlj-chips">
+          ${signalLevels.map(lvl =>
+            `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
+          ).join("")}
+        </div>
       </div>`
     : "";
   const trumpControl = "";
@@ -1466,7 +1468,7 @@ function renderHLJ(v) {
     <span class="hlj-score-pill t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b></span>
   </div>`;
 
-  const selfExtra = `${showSignalPicker ? signalControl : ""}${trumpControl}${playHint}`;
+  const selfExtra = `${trumpControl}${playHint}`;
 
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfMeta = you != null
@@ -1620,7 +1622,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, appbarLeft: teamScores });
+  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: signalPanel || feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, appbarLeft: teamScores });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
@@ -2542,7 +2544,7 @@ app.addEventListener("click", (e) => {
         S.hljSignalWindow = false;
         S.hljSignalTimer = null;
         render();
-      }, 5000);
+      }, 10000);
       return send({ t: "move", move: { type: "bid", seat: v.you, amount: +t.dataset.amount } });
     }
     case "hlj-bid-confirm": {

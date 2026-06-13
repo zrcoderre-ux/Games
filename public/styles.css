@@ -1932,10 +1932,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   border-color:var(--gold,#b8962e);background:rgba(184,150,46,.15);opacity:1;
 }
 .hlj-signal-btn:hover:not(.active){opacity:.85;}
-.hlj-signal-picker.locked .hlj-signal-btn{cursor:default;pointer-events:none;}
-.hlj-signal-picker.locked .hlj-signal-btn:not(.active){opacity:.25;}
-  background:rgba(180,160,100,.2);border-color:rgba(180,160,100,.6);
-}
 
 /* Poker chip bid buttons */
 .hlj-bid-row{
