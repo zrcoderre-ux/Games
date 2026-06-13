@@ -2111,11 +2111,9 @@ function renderHearts(v) {
         ? null
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
-            backs: v.handCounts[i],
             cardCount: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
-            extraClass: "hearts-backs",
           }) },
     )
     .filter(Boolean);
