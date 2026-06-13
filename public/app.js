@@ -71,8 +71,7 @@ const S = {
   hljBidHold: null,   // frozen bid overlay shown briefly after bidding ends
   hljBidHoldTimer: null,
   hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
-  hljSignalWindow: false,  // true for 5s after human bids (non-pass), shows confidence picker
-  hljSignalTimer: null,    // setTimeout handle for the 5s window
+  hljSignalTimer: null,    // unused, kept for wire-compat
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
@@ -339,13 +338,6 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
-    // HLJ: clear signal window when new hand starts or when server clears pendingSignal
-    if (S.party === "high-low-jack") {
-      if ((msg.view?.phase === "bidding" && (msg.view.bidHistory?.length ?? 0) === 0)
-          || (S.hljSignalWindow && !msg.view?.pendingSignal)) {
-        S.hljSignalWindow = false;
-      }
-    }
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
       if (S.hljBidHoldTimer) clearTimeout(S.hljBidHoldTimer);
@@ -1463,7 +1455,7 @@ function renderHLJ(v) {
   // Rendered into the feltBid slot so it appears in the same spot as the bid chip row.
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
-  const showSignalPicker = S.hljSignalWindow;
+  const showSignalPicker = !!v.pendingSignal;
   const trumpControl = "";
 
   const playHint = "";
@@ -2558,9 +2550,6 @@ app.addEventListener("click", (e) => {
     case "move-bid": {
       const amt = +t.dataset.amount;
       // Open confidence window if a teammate still has a turn; bots wait server-side.
-      if (v.you != null && hljTeammateStillToBid(v, amt)) {
-        S.hljSignalWindow = true;
-      }
       return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
     }
     case "hlj-bid-confirm": {
@@ -2570,7 +2559,6 @@ app.addEventListener("click", (e) => {
     case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
 
     case "signal":
-      S.hljSignalWindow = false;
       return send({ t: "aux", payload: t.dataset.level });
     case "play-card": {
       const c = v.yourHand.find((x) => cardKey(x) === t.dataset.key);
