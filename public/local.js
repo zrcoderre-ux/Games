@@ -1009,7 +1009,11 @@ function decideBid(state, seat, rng, p) {
     const theirConf = calibratedSignal(state.signals[high.seat], holderProf);
     if (!sameTeam) {
       const threat = opponentThreatLevel(state, high.seat, high.amount);
-      if (threat === 2 && needed <= 6) return { type: "bid", seat, amount: needed };
+      if (threat === 2 && needed <= 6) {
+        if (needed < 6) return { type: "bid", seat, amount: needed };
+        const sixProb = estimateSixBidProb(hand, state.players);
+        if (sixProb >= 0.05) return { type: "bid", seat, amount: 6 };
+      }
       if (threat === 1 && needed <= willing + 2) {
         const blockProb = clamp(0.5 + theirConf * 0.2 - (2 - myConf) * 0.1, 0.2, 0.95);
         if (rng() < blockProb) return { type: "bid", seat, amount: needed };

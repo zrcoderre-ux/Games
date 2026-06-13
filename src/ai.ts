@@ -458,9 +458,16 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
     if (!sameTeam) {
       const threat = opponentThreatLevel(state, high.seat, high.amount);
 
-      // A game-winning opponent bid must be contested regardless of hand strength.
-      // Taking a setback hurts; losing the game is worse.
-      if (threat === 2 && needed <= 6) return { type: "bid", seat, amount: needed };
+      // A game-winning opponent bid must be contested — but only if we have some
+      // realistic chance. Bidding 6 with no Ace/Jack/Joker guarantees a -6 set,
+      // which is often worse than letting the opponent score their bid.
+      if (threat === 2 && needed <= 6) {
+        if (needed < 6) return { type: "bid", seat, amount: needed };
+        // For a forced 6-bid, require at least a minimal shot (>5%) of making it.
+        const sixProb = estimateSixBidProb(hand, state.players);
+        if (sixProb >= 0.05) return { type: "bid", seat, amount: 6 };
+        // Hand is hopeless for 6 — pass and hope partner or game circumstance saves it.
+      }
 
       // Game-threatening bid: contest if we have any reasonable hand (willing >= 1)
       // OR if the opponent's signal/profile suggests they'll actually make it —
