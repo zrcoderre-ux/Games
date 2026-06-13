@@ -611,18 +611,21 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
   const trumpLedThisTrick = isTrump(state.currentTrick[0].card, trump);
 
   // The Joker is safe to play only when it cannot be over-trumped:
-  //   – trump was led (trick is already a trump trick; Joker still loses to higher trumps
-  //     but playing it is the norm), OR
-  //   – all opponents are known trump-void (they showed out on a prior trump lead), OR
+  //   – trump was led (trick is already a trump trick), OR
+  //   – all opponents are known trump-void, OR
   //   – every other trump is accounted for in completed tricks or own hand, OR
-  //   – we are the last to play (nobody can over-trump after us).
+  //   – the current trick winner holds the boss trump — no one can play a higher trump
+  //     to beat the Joker regardless of what suit was led, OR
+  //   – we are the last to play.
   const voids = trumpVoidSeats(state, trump);
   const allOpponentsVoid = [...Array(players).keys()]
     .filter((i) => i !== seat && teamOf(i) !== myTeam)
     .every((i) => voids.has(i));
+  const currentWinnerHoldsBoss = trumpValue(winnerCard, trump) === boss;
   const jokerSafe = trumpLedThisTrick
     || allOpponentsVoid
     || higherTrumpsAllAccountedFor(state, trump, { joker: true } as Card, cards)
+    || currentWinnerHoldsBoss
     || isLast;
 
   const wouldWin = (c: Card) => trickWinner([...state.currentTrick, { seat, card: c }], trump) === seat;

@@ -1095,7 +1095,8 @@ function decidePlay(state, seat, p) {
   const trumpLedThisTrick = isTrump(state.currentTrick[0].card, trump);
   const voids = trumpVoidSeats(state, trump);
   const allOpponentsVoid = [...Array(players).keys()].filter((i) => i !== seat && teamOf(i) !== myTeam).every((i) => voids.has(i));
-  const jokerSafe = trumpLedThisTrick || allOpponentsVoid || higherTrumpsAllAccountedFor(state, trump, { joker: true }, cards) || isLast;
+  const currentWinnerHoldsBoss = trumpValue(winnerCard, trump) === boss;
+  const jokerSafe = trumpLedThisTrick || allOpponentsVoid || higherTrumpsAllAccountedFor(state, trump, { joker: true }, cards) || currentWinnerHoldsBoss || isLast;
   const wouldWin = (c) => trickWinner([...state.currentTrick, { seat, card: c }], trump) === seat;
   const winners = cards.filter((c) => wouldWin(c) && (!isJoker(c) || jokerSafe));
   if (partnerWinning) {
