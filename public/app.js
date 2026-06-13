@@ -206,7 +206,7 @@ function cardHTML(c, o = {}) {
       ? `<span class="joker-as-badge ${RED.has(o.jokerAs.suit) ? "red" : ""}">${rankLabel(o.jokerAs.rank)}${SUIT[o.jokerAs.suit]}</span>`
       : "";
     const action = o.jokerAs && !o.inMeld ? ` data-action="reveal-joker"` : (a.length ? ` ${a.join(" ")}` : "");
-    const jokerSrc = S.party === "high-low-jack" ? "/bonhomme-card.png" : "/joker-card.png";
+    const jokerSrc = S.party === "high-low-jack" ? "/bonhomme-card.webp" : "/joker-card.webp";
     return `<div class="${cls.join(" ")}"${st}${action}><img class="joker-img" src="${jokerSrc}" alt="Joker">${badge}</div>`;
   }
   if (RED.has(c.suit)) cls.push("red");
