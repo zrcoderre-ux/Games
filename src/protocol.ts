@@ -80,6 +80,7 @@ export type PlayerView = {
   signals: (HandSignal | null)[]; // public confidence signal per seat
   currentTrick: TrickPlay[]; // cards on the table (public)
   trickWinner: number | null; // winner seat while phase === "trickComplete"; else null
+  pendingSignal: boolean; // true while waiting for the bidder to pick confidence
   lastTrick: { winner: number; cards: Card[] } | null; // for animating the previous trick
   lastHand: HandResult | null; // scoring breakdown at hand end
   lastKitty: Card[] | null; // kitty revealed after the hand completes
@@ -128,6 +129,7 @@ export function redact(
     signals: state.signals,
     currentTrick: state.currentTrick,
     trickWinner: state.phase === "trickComplete" ? (state.trickWinner ?? null) : null,
+    pendingSignal: state.pendingSignal ?? false,
     lastTrick,
     lastHand: state.lastHand,
     lastKitty: state.lastHand ? state.lastHand.kitty : null,
