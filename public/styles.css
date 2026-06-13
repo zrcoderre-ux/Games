@@ -1922,8 +1922,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-signal-chip .signal-img{width:36px;height:36px;object-fit:contain;border-radius:50%;}
 
 /* Signal confidence badge on pods — no background, just the image at dealer-chip size */
-.pod-dealer-badge.signal{background:none;border:none;box-shadow:none;padding:0;overflow:hidden;width:40px;height:40px;border-radius:50%;}
-.pod-dealer-badge.signal .signal-img{width:40px;height:40px;object-fit:cover;display:block;}
+.pod-dealer-badge.signal{background:none;border:none;box-shadow:none;padding:0;overflow:visible;width:40px;height:40px;}
+.pod-dealer-badge.signal .signal-img{width:40px;height:40px;object-fit:contain;display:block;}
 
 /* Signal confidence picker in selfbar (during bidding) */
 .hlj-signal-picker{
