@@ -1897,6 +1897,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 .hlj-felt-bid.waiting{opacity:.45;pointer-events:none}
 
+/* Signal chip on the felt (your own signal, chip-sized) */
+.hlj-signal-chip{
+  width:36px;height:36px;padding:2px;border-radius:50%;
+  background:rgba(0,0,0,.55);border:2px solid rgba(205,160,90,.5);
+  display:flex;align-items:center;justify-content:center;
+}
+.hlj-signal-chip .signal-img{width:26px;height:26px;object-fit:contain;}
+
 /* Signal confidence badge on pods */
 .pod-dealer-badge.signal{
   background:none;border:none;box-shadow:none;
