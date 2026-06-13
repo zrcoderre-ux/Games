@@ -226,7 +226,11 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     if (!this.game.aux) throw new Error("This game has no side actions");
     if (this.viewSeat === null) throw new Error("You are not seated");
     this.state = this.game.aux.apply(this.state, this.viewSeat, payload);
-    this.broadcast(); // aux changes no turns and triggers no bots
+    // An aux action can clear a gate (e.g. HLJ's confidence pick clears
+    // pendingSignal), which changes who is to act. Resume the bot loop rather
+    // than only broadcasting, or play freezes on the next seat.
+    this.syncViewSeat();
+    this.resolveBotsAndBroadcast();
   }
 
   private newGame(): void {

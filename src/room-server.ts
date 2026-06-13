@@ -327,7 +327,10 @@ export abstract class RoomServer<
     if (seat === null || seat === undefined) throw new Error("You are not seated");
     this.room.state = this.game.aux.apply(state, seat, payload);
     await this.persist();
-    this.broadcastViews(); // aux actions change no turns and trigger no bots
+    // An aux action can clear a gate (e.g. HLJ's confidence pick clears
+    // pendingSignal), which changes who is to act. Re-arm the bot alarm rather
+    // than only broadcasting, or play freezes until the safety-net alarm fires.
+    await this.resolveBotsAndBroadcast();
   }
 
   private async handleNewGame(conn: Connection<ConnState>) {
