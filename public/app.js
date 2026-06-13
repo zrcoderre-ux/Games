@@ -604,7 +604,15 @@ function tableShell(v, parts) {
     const you = v.you;
     // Wall-aware layout shared with trick cards and bid chips (wallPerimPos):
     // classify by computed x, evenly re-space side walls, widen for 3+ pods.
-    const podY1 = n === 6 ? 30 : 21;
+    // y1/y2 = vertical range for side-wall pods. Tuned per player count so
+    // each wall's pods don't crowd the center or the top/bottom rails.
+    //   n=2: 1 top opp — y1/y2 irrelevant (topY=9 handles it)
+    //   n=3: 1 per side → single pod lands at (y1+y2)/2 = 50%
+    //   n=4: 1 per side → 50%; 1 top → topY
+    //   n=5: 1 per side, 2 at top
+    //   n=6,7: 2 per side → spread y1→y2 (n=7 has 2 top pods too)
+    //   n=8: 3 per side → wideY extension handles overflow
+    const podY1 = n === 6 || n === 7 ? 30 : 21;
     const podY2 = n >= 8 ? 50 : n >= 6 ? 70 : n >= 5 ? 65 : 79;
     const podBounds = { x1: 12, x2: 88, y1: podY1, y2: podY2, wideY1: 16, wideY2: Math.max(podY2, 68), topY: 9 };
     const infos = podItems.map(({ seat, html }) => {
