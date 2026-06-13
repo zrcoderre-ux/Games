@@ -271,7 +271,7 @@ body:has(.felt-table)::before{
   position:relative;z-index:1;
 }
 .tbl-card-corner{
-  position:absolute;font-size:9px;font-family:"Fraunces",serif;font-weight:700;line-height:1;
+  position:absolute;font-size:9px;font-family:"Bevan",serif;font-weight:400;line-height:1;
   color:#1a1a2e;z-index:1;
 }
 .tbl-card.red .tbl-card-corner{color:#8b1a1a}
@@ -1388,7 +1388,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
     inset 0 0 0 1px rgba(150,110,60,.3);
   color:var(--suit-blk);
   transition:transform .34s cubic-bezier(.2,.85,.25,1), box-shadow .24s ease, filter .24s ease;
-  font-family:"Fraunces",serif;
+  font-family:"Bevan",serif;
   cursor:default;
 }
 .card.red{color:var(--suit-red)}
@@ -1402,7 +1402,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   object-fit:fill;display:block;pointer-events:none;
 }
 .card .corner{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:.86;font-weight:700}
-.card .corner b{font-size:calc(var(--w)*.28);font-weight:700}
+.card .corner b{font-size:calc(var(--w)*.28);font-weight:400}
 .card .corner i{font-size:calc(var(--w)*.2);font-style:normal;margin-top:1px}
 .card .corner.tl{top:5px;left:6px}
 .card .corner.br{bottom:5px;right:6px;transform:rotate(180deg)}
