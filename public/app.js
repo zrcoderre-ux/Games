@@ -1456,15 +1456,6 @@ function renderHLJ(v) {
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
   const showSignalPicker = S.hljSignalWindow;
-  const signalPanel = showSignalPicker
-    ? `<div class="hlj-felt-bid">
-        <div class="hlj-chips">
-          ${signalLevels.map(lvl =>
-            `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
-          ).join("")}
-        </div>
-      </div>`
-    : "";
   const trumpControl = "";
 
   const playHint = "";
@@ -1495,9 +1486,15 @@ function renderHLJ(v) {
     : `play to ${v.target}`;
   const selfTurn = handResultPending
     ? ""
+    : showSignalPicker
+    ? `<div class="hlj-signal-inline">${signalLevels.map(lvl =>
+        `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
+      ).join("")}</div>`
     : v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
-    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+    : v.toAct != null
+    ? `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`
+    : "";
 
   // End-of-hand result popup
   const hljHandModal = (() => {
@@ -1636,7 +1633,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: signalPanel || feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, appbarLeft: teamScores });
+  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, appbarLeft: teamScores });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
