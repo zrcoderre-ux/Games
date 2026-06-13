@@ -1064,9 +1064,9 @@ function decidePlay(state, seat, p) {
       const conserve = remaining <= p.endgameCutoff;
       if (topVal === boss && !conserve) {
         if (!isJoker(top)) return asMove(top);
-        const voids = trumpVoidSeats(state, trump);
-        const allOpponentsVoid = [...Array(state.players).keys()].filter((i) => i !== seat && teamOf(i) !== myTeam).every((i) => voids.has(i));
-        if (allOpponentsVoid || higherTrumpsAllAccountedFor(state, trump, top, cards)) return asMove(top);
+        const voids2 = trumpVoidSeats(state, trump);
+        const allOpponentsVoid2 = [...Array(state.players).keys()].filter((i) => i !== seat && teamOf(i) !== myTeam).every((i) => voids2.has(i));
+        if (allOpponentsVoid2 || higherTrumpsAllAccountedFor(state, trump, top, cards)) return asMove(top);
       }
       if (shouldPullTrumps) {
         const nonBoss = myTrumps.filter((c) => trumpValue(c, trump) !== boss);
@@ -1092,8 +1092,12 @@ function decidePlay(state, seat, p) {
   const winnerCard = state.currentTrick.find((p2) => p2.seat === winnerSeat).card;
   const partnerWinning = teamOf(winnerSeat) === teamOf(seat);
   const trickHasValue = state.currentTrick.some((p2) => isTrump(p2.card, trump) || gameValue(p2.card) >= 4);
+  const trumpLedThisTrick = isTrump(state.currentTrick[0].card, trump);
+  const voids = trumpVoidSeats(state, trump);
+  const allOpponentsVoid = [...Array(players).keys()].filter((i) => i !== seat && teamOf(i) !== myTeam).every((i) => voids.has(i));
+  const jokerSafe = trumpLedThisTrick || allOpponentsVoid || higherTrumpsAllAccountedFor(state, trump, { joker: true }, cards) || isLast;
   const wouldWin = (c) => trickWinner([...state.currentTrick, { seat, card: c }], trump) === seat;
-  const winners = cards.filter(wouldWin);
+  const winners = cards.filter((c) => wouldWin(c) && (!isJoker(c) || jokerSafe));
   if (partnerWinning) {
     const partnerSeat = seat % 2 === 0 ? 1 : 0;
     const partnerCalibrated = calibratedSignal(state.signals[partnerSeat], state.profiles[partnerSeat]);
@@ -1109,11 +1113,6 @@ function decidePlay(state, seat, p) {
   if (winners.length && trickHasValue) {
     const opponentConf = state.signals.map((s, i) => teamOf(i) !== myTeam ? calibratedSignal(s, state.profiles[i]) : -1).reduce((a, b) => Math.max(a, b), -1);
     if (opponentConf >= 2 && winners.every((c) => !isTrump(c, trump))) {
-      return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
-    }
-    const regularWinners = winners.filter((c) => !isJoker(c));
-    const jokerWinner = winners.find((c) => isJoker(c));
-    if (jokerWinner && regularWinners.length === 0 && unseenTrumps > 0 && !isLast) {
       return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
     }
     return asMove(pick(winners, (c) => winCost(c, trump), "min"));

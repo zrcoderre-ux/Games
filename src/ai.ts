@@ -608,9 +608,26 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
   const winnerCard = state.currentTrick.find((p) => p.seat === winnerSeat)!.card;
   const partnerWinning = teamOf(winnerSeat) === teamOf(seat);
   const trickHasValue = state.currentTrick.some((p) => isTrump(p.card, trump) || gameValue(p.card) >= 4);
+  const trumpLedThisTrick = isTrump(state.currentTrick[0].card, trump);
+
+  // The Joker is safe to play only when it cannot be over-trumped:
+  //   – trump was led (trick is already a trump trick; Joker still loses to higher trumps
+  //     but playing it is the norm), OR
+  //   – all opponents are known trump-void (they showed out on a prior trump lead), OR
+  //   – every other trump is accounted for in completed tricks or own hand, OR
+  //   – we are the last to play (nobody can over-trump after us).
+  const voids = trumpVoidSeats(state, trump);
+  const allOpponentsVoid = [...Array(players).keys()]
+    .filter((i) => i !== seat && teamOf(i) !== myTeam)
+    .every((i) => voids.has(i));
+  const jokerSafe = trumpLedThisTrick
+    || allOpponentsVoid
+    || higherTrumpsAllAccountedFor(state, trump, { joker: true } as Card, cards)
+    || isLast;
 
   const wouldWin = (c: Card) => trickWinner([...state.currentTrick, { seat, card: c }], trump) === seat;
-  const winners = cards.filter(wouldWin);
+  // Never volunteer the Joker to win unless it's safe.
+  const winners = cards.filter((c) => wouldWin(c) && (!isJoker(c) || jokerSafe));
 
   if (partnerWinning) {
     // Heuristic 6: read partner's signal to judge whether modest win is safe to load.
@@ -644,17 +661,6 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
       .reduce((a, b) => Math.max(a, b), -1);
     if (opponentConf >= 2 && winners.every((c) => !isTrump(c, trump))) {
       // Opponent is very strong but we can only beat with a non-trump — skip it.
-      return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
-    }
-    // Prefer regular trumps over the Joker to win; winCost already encodes this
-    // (Joker costs 1000). Additional guard: if regular-trump winners exist AND
-    // there are still unseen trumps that could over-trump the Joker later, don't
-    // burn the Joker here.
-    const regularWinners = winners.filter((c) => !isJoker(c));
-    const jokerWinner = winners.find((c) => isJoker(c));
-    if (jokerWinner && regularWinners.length === 0 && unseenTrumps > 0 && !isLast) {
-      // Joker is the only trump winner, unseen trumps exist, and we're not last —
-      // an opponent could over-trump us. Discard instead.
       return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
     }
     return asMove(pick(winners, (c) => winCost(c, trump), "min"));
