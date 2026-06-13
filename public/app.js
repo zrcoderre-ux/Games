@@ -1453,7 +1453,7 @@ function renderHLJ(v) {
   const seriesSuffix = (v.winsNeeded ?? 1) > 1 ? ` (${seriesA}\u2013${seriesB})` : "";
   const teamScores = `<div class="hlj-scores">
     <span class="hlj-score-pill t${myTeamLetter} mine"><span class="teamdot t${myTeamLetter}"></span>Team ${myTeamLetter}&nbsp;<b>${v.scores[myTeamIdx]}</b>${seriesSuffix}</span>
-    <span class="hlj-score-pill t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b> \u00b7 to ${v.target}</span>
+    <span class="hlj-score-pill t${oppTeamLetter}"><span class="teamdot t${oppTeamLetter}"></span>Team ${oppTeamLetter}&nbsp;<b>${v.scores[oppTeamIdx]}</b></span>
   </div>`;
 
   const selfExtra = `${showSignalPicker ? signalControl : ""}${trumpControl}${playHint}`;
