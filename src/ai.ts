@@ -276,7 +276,11 @@ function loadValue(c: Card, trump: Suit): number {
   return gameValue(c);
 }
 
-const winCost = (c: Card, trump: Suit): number => (isTrump(c, trump) ? trumpValue(c, trump)! : (c as { rank: number }).rank);
+// How "expensive" a card is to spend winning a trick. Prefer cheapest winner.
+// Joker gets a very high cost so a regular trump is always preferred over it;
+// the Joker's 2 game-point value shouldn't be squandered when any other trump wins.
+const winCost = (c: Card, trump: Suit): number =>
+  isJoker(c) ? 1000 : isTrump(c, trump) ? trumpValue(c, trump)! : (c as { rank: number }).rank;
 
 function pick<T>(items: T[], score: (t: T) => number, mode: "max" | "min"): T {
   return items.reduce((best, t) =>
@@ -640,6 +644,17 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
       .reduce((a, b) => Math.max(a, b), -1);
     if (opponentConf >= 2 && winners.every((c) => !isTrump(c, trump))) {
       // Opponent is very strong but we can only beat with a non-trump — skip it.
+      return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
+    }
+    // Prefer regular trumps over the Joker to win; winCost already encodes this
+    // (Joker costs 1000). Additional guard: if regular-trump winners exist AND
+    // there are still unseen trumps that could over-trump the Joker later, don't
+    // burn the Joker here.
+    const regularWinners = winners.filter((c) => !isJoker(c));
+    const jokerWinner = winners.find((c) => isJoker(c));
+    if (jokerWinner && regularWinners.length === 0 && unseenTrumps > 0 && !isLast) {
+      // Joker is the only trump winner, unseen trumps exist, and we're not last —
+      // an opponent could over-trump us. Discard instead.
       return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
     }
     return asMove(pick(winners, (c) => winCost(c, trump), "min"));

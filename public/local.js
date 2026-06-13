@@ -901,7 +901,7 @@ function loadValue(c, trump) {
   if (!isJoker(c) && c.suit === trump && c.rank === 11) return 30;
   return gameValue(c);
 }
-var winCost = (c, trump) => isTrump(c, trump) ? trumpValue(c, trump) : c.rank;
+var winCost = (c, trump) => isJoker(c) ? 1e3 : isTrump(c, trump) ? trumpValue(c, trump) : c.rank;
 function pick(items, score, mode) {
   return items.reduce(
     (best, t) => mode === "max" ? score(t) > score(best) ? t : best : score(t) < score(best) ? t : best
@@ -1109,6 +1109,11 @@ function decidePlay(state, seat, p) {
   if (winners.length && trickHasValue) {
     const opponentConf = state.signals.map((s, i) => teamOf(i) !== myTeam ? calibratedSignal(s, state.profiles[i]) : -1).reduce((a, b) => Math.max(a, b), -1);
     if (opponentConf >= 2 && winners.every((c) => !isTrump(c, trump))) {
+      return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
+    }
+    const regularWinners = winners.filter((c) => !isJoker(c));
+    const jokerWinner = winners.find((c) => isJoker(c));
+    if (jokerWinner && regularWinners.length === 0 && unseenTrumps > 0 && !isLast) {
       return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
     }
     return asMove(pick(winners, (c) => winCost(c, trump), "min"));
