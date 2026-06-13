@@ -1177,7 +1177,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
   const inner = plays.map((p, idx) => {
     const isWin = p.seat === winSeat;
     const style = `${circleStyle(p.seat)};--card-half-h:${halfH}px;z-index:${idx + 1}`;
-    return `<div class="play${idx === 0 ? " lead" : ""}" style="${style}"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat)}deg)">${cardHTML(p.card, { mini, win: isWin })}</div><span class="who">${esc(p.name ?? "")}</span></div>`;
+    return `<div class="play${idx === 0 ? " lead" : ""}" style="${style}"><div class="card-rotator" style="transform:rotate(${cardRotation(p.seat)}deg)">${cardHTML(p.card, { mini, win: isWin })}</div></div>`;
   }).join("");
   return `<div class="trick positioned${faded ? " faded" : ""}">${inner}</div>`;
 }
