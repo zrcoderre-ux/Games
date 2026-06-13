@@ -1434,32 +1434,38 @@ function renderHLJ(v) {
   const isDealer = v.you != null && v.dealerSeat === v.you;
   const userHasActed = v.you != null && bidHistory.some(b => b.seat === v.you);
   const myTeamCls = you != null ? `t${you % 2 === 0 ? "A" : "B"}` : "";
-  const feltBidPanel = v.phase === "bidding" && !handResultPending && v.you != null && !userHasActed
-    ? `<div class="hlj-felt-bid${v.yourTurn ? "" : " waiting"}">
-        <div class="hlj-chips">
-          ${[2,3,4,5,6].map(n => {
-            if (claimedAmounts.has(n)) {
-              // Dealer can steal the current high bid
-              if (isDealer && n === curHighAmt)
-                return `<button class="hlj-chip ${myTeamCls} steal" data-action="move-bid" data-amount="${n}" ${!v.yourTurn ? "disabled" : ""}>STEAL</button>`;
-              return "";
-            }
-            // Hide amounts that can't outbid the current high (non-dealer can't match, only beat)
-            if (curHighAmt != null && n <= curHighAmt) return "";
-            const legal = n >= minBid;
-            return `<button class="hlj-chip ${myTeamCls}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${(!legal || !v.yourTurn) ? "disabled" : ""}>${n}</button>`;
-          }).join("")}
-          <button class="hlj-pass-btn" data-action="move-pass" ${!v.yourTurn ? "disabled" : ""}>Pass</button>
-        </div>
-      </div>`
-    : "";
-  const bidSlider = "";  // removed from selfExtra
-
-  // Signal confidence picker — shown for 10s after human places a bid (not pass/steal).
-  // Rendered into the feltBid slot so it appears in the same spot as the bid chip row.
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
   const showSignalPicker = !!v.pendingSignal;
+
+  // Bid chips on the felt (hidden once player has bid).
+  // Signal picker also on the felt, replacing the bid chips after player bids.
+  const feltBidPanel = v.phase === "bidding" && !handResultPending && v.you != null
+    ? showSignalPicker
+      ? `<div class="hlj-felt-bid">
+          <div class="hlj-signal-felt">${signalLevels.map(lvl =>
+            `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
+          ).join("")}</div>
+        </div>`
+      : !userHasActed
+        ? `<div class="hlj-felt-bid${v.yourTurn ? "" : " waiting"}">
+            <div class="hlj-chips">
+              ${[2,3,4,5,6].map(n => {
+                if (claimedAmounts.has(n)) {
+                  if (isDealer && n === curHighAmt)
+                    return `<button class="hlj-chip ${myTeamCls} steal" data-action="move-bid" data-amount="${n}" ${!v.yourTurn ? "disabled" : ""}>STEAL</button>`;
+                  return "";
+                }
+                if (curHighAmt != null && n <= curHighAmt) return "";
+                const legal = n >= minBid;
+                return `<button class="hlj-chip ${myTeamCls}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${(!legal || !v.yourTurn) ? "disabled" : ""}>${n}</button>`;
+              }).join("")}
+              <button class="hlj-pass-btn" data-action="move-pass" ${!v.yourTurn ? "disabled" : ""}>Pass</button>
+            </div>
+          </div>`
+        : ""
+    : "";
+  const bidSlider = "";  // removed from selfExtra
   const trumpControl = "";
 
   const playHint = "";
@@ -1490,10 +1496,6 @@ function renderHLJ(v) {
     : `play to ${v.target}`;
   const selfTurn = handResultPending
     ? ""
-    : showSignalPicker
-    ? `<div class="hlj-signal-inline">${signalLevels.map(lvl =>
-        `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
-      ).join("")}</div>`
     : v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
     : v.toAct != null
