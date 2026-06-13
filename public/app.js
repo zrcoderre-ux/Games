@@ -71,6 +71,7 @@ const S = {
   hljBidHold: null,   // frozen bid overlay shown briefly after bidding ends
   hljBidHoldTimer: null,
   hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
+  hljSignalPickedAt: null, // bidHistory.length when the human last picked a signal; locks after next action
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
@@ -337,6 +338,11 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
+    // HLJ: reset signal lock when a new hand's bidding starts (bidHistory goes back to empty)
+    if (S.party === "high-low-jack" && msg.view?.phase === "bidding"
+        && (msg.view.bidHistory?.length ?? 0) === 0) {
+      S.hljSignalPickedAt = null;
+    }
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
       if (S.hljBidHoldTimer) clearTimeout(S.hljBidHoldTimer);
@@ -1422,11 +1428,15 @@ function renderHLJ(v) {
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
   const sigIdx = curSignal ? signalLevels.indexOf(curSignal) : -1;
   const youHaveBid = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "bid");
-  const signalControl = v.phase === "bidding" && v.you != null
-    ? `<div class="hlj-signal-picker">
+  const youHavePassed = v.you != null && Array.isArray(v.bidHistory) && v.bidHistory.some(b => b.seat === v.you && b.type === "pass");
+  // Lock the signal once someone else acts after the human picked — the next bid/pass locks it in.
+  const signalLocked = S.hljSignalPickedAt !== null && (v.bidHistory?.length ?? 0) > S.hljSignalPickedAt;
+  const showSignalPicker = v.phase === "bidding" && v.you != null && !youHavePassed;
+  const signalControl = showSignalPicker
+    ? `<div class="hlj-signal-picker${signalLocked ? " locked" : ""}">
         <span class="hlj-signal-label">Confidence</span>
         ${signalLevels.map(lvl =>
-          `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
+          `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}"${signalLocked ? " disabled" : ""} data-action="${signalLocked ? "" : "signal"}" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
         ).join("")}
       </div>`
     : "";
@@ -2522,7 +2532,9 @@ app.addEventListener("click", (e) => {
     }
     case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
 
-    case "signal": return send({ t: "aux", payload: t.dataset.level });
+    case "signal":
+      S.hljSignalPickedAt = S.view?.bidHistory?.length ?? 0;
+      return send({ t: "aux", payload: t.dataset.level });
     case "play-card": {
       const c = v.yourHand.find((x) => cardKey(x) === t.dataset.key);
       if (c) send({ t: "move", move: { type: "play", seat: v.you, card: c } });
