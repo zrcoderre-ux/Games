@@ -1599,6 +1599,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .teamdot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
 .teamdot.tA{background:var(--teamA)}
 .teamdot.tB{background:var(--teamB)}
+.teamcircle{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:11px;font-weight:800;color:#fff;line-height:1}
+.teamcircle.tA{background:#e05050}
+.teamcircle.tB{background:#4a7fe0}
 
 .teambadge{display:inline-flex;align-items:center;gap:5px;font-weight:800;font-size:11px;letter-spacing:.6px;
   text-transform:uppercase;padding:3px 10px;border-radius:999px;box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
@@ -1821,8 +1824,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   display:flex;gap:6px;align-items:center;flex-wrap:nowrap;padding:2px 0;
 }
 .hlj-score-pill{
-  display:inline-flex;align-items:center;gap:6px;
-  padding:5px 14px;border-radius:999px;font-size:13px;font-weight:600;
+  display:inline-flex;align-items:center;gap:5px;
+  padding:4px 10px;border-radius:999px;font-size:13px;font-weight:600;
   background:rgba(0,0,0,.28);border:1px solid rgba(205,160,90,.25);color:var(--ink);
 }
 .hlj-score-pill.mine{border-color:var(--brass-hi);box-shadow:0 0 0 1px var(--brass-hi)}
