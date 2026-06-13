@@ -891,11 +891,9 @@ function renderLobby(v) {
     : isHLJ
     ? ""
     : chipRow("setcount", counts, v.players) +
-      `<div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
-         <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>` +
-      (S.party === "rummy500"
-        ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Must discard</span>
-             <button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard">${v.requireDiscard ? "On" : "Off"}</button></div>`
+      (S.party !== "rummy500"
+        ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
+             <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>`
         : "");
 
   const hasHotseats = Object.keys(S.hotseats).length > 0;
@@ -940,8 +938,6 @@ function renderLobby(v) {
     ? `<div class="lby-felt-chips">
         <span class="lby-fc-players">PLAYERS</span>
         <div class="lby-fc-row">${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>
-        <div class="lby-fc-row"><span class="lby-fc-label">Play to</span><input class="lby-pts lby-pts-felt" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>
-        <div class="lby-fc-row"><span class="lby-fc-label">Must discard</span><button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard">${v.requireDiscard ? "On" : "Off"}</button></div>
       </div>`
     : "";
   const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
@@ -984,6 +980,14 @@ function renderLobby(v) {
                 ${[1, 3, 5].map(nn => `<button class="${nn === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${nn}">${nn === 1 ? "1 game" : `${nn} games`}</button>`).join("")}
               </div>
             </div>` : ""}
+            ${isRummyLobby ? `<div class="lby-set-row">
+              <span class="lby-set-label">Play to</span>
+              <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" />
+            </div>
+            <div class="lby-set-row">
+              <span class="lby-set-label">Must discard</span>
+              <button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard">${v.requireDiscard ? "On" : "Off"}</button>
+            </div>` : ""}
             ${!S.offline ? `<div class="lby-set-row">
               <label class="lby-set-toggle">
                 <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} />
@@ -996,7 +1000,7 @@ function renderLobby(v) {
     : "";
 
   const settingsBtn = isHost
-    ? `<button class="btn sm ghost lby-gear-btn" data-action="open-lby-settings" title="Settings">⚙ Settings</button>`
+    ? `<button class="btn sm ghost lby-gear-btn" data-action="open-lby-settings" title="Settings">⚙</button>`
     : "";
 
   // Spectator view: show all seats as pods (no selfwrap)
@@ -1813,7 +1817,7 @@ function renderRummy(v) {
   const orderedForMelds = rummyOrdered(v.yourHand);
   const selCardsForMelds = orderedForMelds.filter((c) => S.rummySel.has(c.id));
 
-  const melds = v.melds.length
+  const meldsInner = v.melds.length
     ? `<div class="melds">${v.melds.map((m) => {
           const active = S.rummyLayoff === m.id;
           // Highlight melds that can accept the current hand selection as a layoff
@@ -1854,6 +1858,9 @@ function renderRummy(v) {
           return `<div class="meld tappable ${meldClass}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         }).join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
+  // Wrap in a scrollable felt container. Clicking the wrapper (but not an individual
+  // meld) opens the melds tab of the log for a full-screen view.
+  const melds = `<div class="rummy-melds-scroll" data-action="open-melds-log" title="View all melds">${meldsInner}</div>`;
   const center = `<div class="piles">${stock}${discard}</div>`;
 
   // hand: selected cards float to a row above the fan; unselected cards are fanned.
@@ -2482,6 +2489,7 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "toggle-log": S.showLog = !S.showLog; return render();
+    case "open-melds-log": S.showLog = true; S.logTab = "melds"; return render();
     case "log-tab": S.logTab = t.dataset.tab; return render();
     case "expand-log": { const eid = +t.dataset.entryid; S.logExpandedId = S.logExpandedId === eid ? null : eid; return render(); }
     case "connect": return doConnect();
