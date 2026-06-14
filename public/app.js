@@ -760,7 +760,6 @@ function renderStart() {
 
       <div class="felt-content">
         <h1 class="felt-title">BONHOMME</h1>
-        <p class="felt-sub">a cozy room for cards</p>
         <div class="felt-rule"></div>
 
         <label class="felt-label">Your Name</label>
