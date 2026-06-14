@@ -1536,21 +1536,18 @@ function renderHLJ(v) {
     const totalA = lh.pointsByTeam[0];
     const totalB = lh.pointsByTeam[1];
 
-    const honorList = (items) => items.length
-      ? items.map(h => `<div class="hlj-rr-honor">${h.label}</div>`).join("")
-      : `<div class="hlj-rr-honor none">—</div>`;
-
-    // Game point row: always show both teams' pip counts
+    // Game honor: goes under the winning team, shows both pip counts in team colors
     const gcA = pts.gameCount?.[0] ?? 0;
     const gcB = pts.gameCount?.[1] ?? 0;
-    const gameRow = pts.game != null
-      ? `<div class="hlj-rr-game-row">
-          <span class="hlj-rr-game-label">Game</span>
-          <span class="hlj-rr-game-pips${pts.game === 0 ? " win" : ""}">Team A: ${gcA}</span>
-          <span class="hlj-rr-game-sep">·</span>
-          <span class="hlj-rr-game-pips${pts.game === 1 ? " win" : ""}">Team B: ${gcB}</span>
-        </div>`
+    const gameHonor = pts.game != null
+      ? `<div class="hlj-rr-honor">Game <span class="hlj-rr-game-gc tA">${gcA}</span><span class="hlj-rr-game-gc-sep">·</span><span class="hlj-rr-game-gc tB">${gcB}</span></div>`
       : "";
+    if (pts.game === 0) colA.push({ label: "_game_" });
+    if (pts.game === 1) colB.push({ label: "_game_" });
+
+    const honorList = (items) => items.length
+      ? items.map(h => h.label === "_game_" ? gameHonor : `<div class="hlj-rr-honor">${h.label}</div>`).join("")
+      : `<div class="hlj-rr-honor none">—</div>`;
 
     const ptRows = `<div class="hlj-rr-twocol">
       <div class="hlj-rr-col tA">
@@ -1561,7 +1558,7 @@ function renderHLJ(v) {
         <div class="hlj-rr-colhdr tB">Team B · ${totalB} pt${totalB !== 1 ? "s" : ""}</div>
         ${honorList(colB)}
       </div>
-    </div>${gameRow}`;
+    </div>`;
 
     const made = lh.made;
     const scoreRows = [0, 1].map(t => {
