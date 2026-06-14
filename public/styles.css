@@ -2002,8 +2002,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   font-family:"Hanken Grotesk",sans-serif;font-size:10px;font-weight:700;
   letter-spacing:.04em;text-transform:uppercase;
   background:
-    radial-gradient(circle at 50% 50%, #2a2820 0% 56%, #1a1810 56% 60%, transparent 60%),
-    repeating-conic-gradient(#2a2820 0deg 28deg, rgba(255,255,255,.35) 28deg 45deg);
+    radial-gradient(circle at 50% 50%, #1a1a1a 0% 56%, #0a0a0a 56% 60%, transparent 60%),
+    repeating-conic-gradient(#1a1a1a 0deg 28deg, #ffffff 28deg 45deg);
   color:#fff;cursor:pointer;
   box-shadow:0 4px 10px rgba(0,0,0,.5);
   transition:transform .12s,box-shadow .12s;
