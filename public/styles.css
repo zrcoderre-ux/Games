@@ -2315,6 +2315,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     width:100%;
     max-width:var(--lg-table-max);
     margin-inline:auto;
+    margin-top:8px;
   }
   /* Keep the bottom hand/score bar aligned with the centered felt */
   .table .selfwrap{
