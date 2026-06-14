@@ -2130,17 +2130,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 }
 .hlj-rr-honor.none{color:var(--ink-dim);font-style:italic}
 .hlj-rr-pip{font-size:11px;color:var(--ink-dim);margin-left:5px}
-/* Game point row showing both teams' pip counts */
-.hlj-rr-game-row{
-  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  margin-top:8px;padding:5px 8px;
-  border-radius:7px;background:rgba(255,255,255,.04);
-  font-size:12.5px;
-}
-.hlj-rr-game-label{font-weight:700;color:var(--ink-soft);letter-spacing:.04em;margin-right:2px}
-.hlj-rr-game-pips{color:var(--ink-dim)}
-.hlj-rr-game-pips.win{color:var(--ink);font-weight:700}
-.hlj-rr-game-sep{color:var(--ink-dim)}
+.hlj-rr-game-gc{font-size:11px;font-weight:700;margin-left:4px}
+.hlj-rr-game-gc.tA{color:var(--teamA)}
+.hlj-rr-game-gc.tB{color:var(--teamB)}
+.hlj-rr-game-gc-sep{font-size:11px;color:var(--ink-dim);margin-left:3px}
 
 .hlj-rr-ptrow{
   display:flex;align-items:center;justify-content:space-between;
