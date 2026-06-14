@@ -2333,6 +2333,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      Scoped to game (not lobby) and high enough specificity to beat both the
      standalone (215px) and browser-game (165px) base rules. */
   #app:not(:has(.lby-outer)) .table .selfwrap-spacer{ height:150px; }
+  .hlj-felt-bid{ bottom:4%; }
 }
 
 /* Wide screens: there's room in the side margins (the felt is capped & centered)
