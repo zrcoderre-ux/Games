@@ -2268,3 +2268,53 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   background:linear-gradient(180deg,rgba(0,0,0,.3) 0%,transparent 40%,rgba(0,0,0,.3) 100%);
   border-radius:3px;
 }
+
+/* ============================================================
+   LARGE-SCREEN OPTIMIZATION  (iPad / laptop / desktop)
+   ------------------------------------------------------------
+   Additive only. Gated on BOTH min-width and min-height so it
+   can never apply to a phone in EITHER orientation:
+     - phone portrait  -> width too small  -> excluded
+     - phone landscape -> height too small -> excluded (mobile
+       landscape layout is deliberately left untouched)
+   Nothing here changes the mobile portrait experience.
+   ============================================================ */
+@media (min-width:768px) and (min-height:600px){
+
+  /* Shared cap. Tying max-width to viewport HEIGHT is what keeps
+     the play table from ever being wider than it is tall. */
+  .table{ --lg-table-max: min(820px, calc(100dvh - 230px)); }
+
+  /* ---- Home screen: center a sane-width form column ---------- */
+  /* (.felt-table is the home screen only; lobby uses .table) */
+  .felt-table{
+    display:flex; align-items:center; justify-content:center;
+  }
+  .felt-table .felt-content{
+    max-width:400px; width:100%;
+    margin-inline:auto;
+    padding:40px 28px 36px;
+  }
+  /* Use the freed space: larger wordmark + a bit more air */
+  .felt-table .felt-title{ font-size:60px; margin-bottom:10px; }
+  .felt-table .felt-rule{ margin-bottom:24px; }
+  .felt-table .felt-label{ font-size:11px; margin-bottom:9px; }
+  .felt-table .felt-input{ font-size:17px; padding:11px 4px; margin-bottom:22px; }
+  .felt-table .felt-cta{ font-size:19px; padding:16px 24px; }
+  /* Bigger game-card fan (cards are absolutely positioned via JS,
+     so scale the inner wrapper rather than touching coordinates) */
+  .felt-table .tbl-fan{ height:178px; margin-bottom:26px; }
+  .felt-table .tbl-fan-inner{ transform:scale(1.18); transform-origin:center center; }
+
+  /* ---- Play table: cap width to height, then center ---------- */
+  .table .felt-frame{
+    max-width:var(--lg-table-max);
+    margin-inline:auto;
+  }
+  /* Keep the bottom hand/score bar aligned with the centered felt */
+  .table .selfwrap{
+    max-width:var(--lg-table-max);
+    left:0; right:0;
+    margin-inline:auto;
+  }
+}
