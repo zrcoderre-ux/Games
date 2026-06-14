@@ -8,7 +8,7 @@
   "theme_color": "#2b1c12",
   "icons": [
     {
-      "src": "/Hat manifest .png",
+      "src": "/Hat Manifest.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
