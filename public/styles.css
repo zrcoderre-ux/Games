@@ -2072,6 +2072,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
   color:rgba(255,255,255,.4);margin-bottom:8px;
 }
+.hlj-result-gameover-banner{
+  font-size:22px;letter-spacing:.06em;color:var(--ink);margin-bottom:4px;
+}
+.hlj-result-gameover-banner.tA{color:var(--teamA)}
+.hlj-result-gameover-banner.tB{color:var(--teamB)}
 .hlj-result-bidline{
   font-size:15px;color:rgba(255,255,255,.75);margin-bottom:10px;
 }
