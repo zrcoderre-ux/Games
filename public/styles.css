@@ -1868,8 +1868,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-bid-token.dealer-felt{background:none;border:none;box-shadow:none;padding:0;width:auto;height:auto}
 .pod-dealer-badge{
   display:inline-flex;align-items:center;justify-content:center;
-  width:40px;height:40px;border-radius:50%;
-  font-family:"Fraunces",serif;font-size:18px;font-weight:900;
+  width:32px;height:32px;border-radius:50%;
+  font-family:"Fraunces",serif;font-size:14px;font-weight:900;
   color:#2a1f0e;
   background:radial-gradient(circle at 38% 32%,#fff 0%,#f0ead8 55%,#d8ceb4 100%);
   border:1.5px solid rgba(180,160,100,.5);
@@ -1923,7 +1923,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hlj-signal-chip .signal-img{width:36px;height:36px;object-fit:contain;border-radius:50%;}
 
 /* Signal confidence badge on pods — no background, just the image at dealer-chip size */
-.pod-dealer-badge.signal{background:none;border:none;box-shadow:none;padding:0;width:40px;height:40px;border-radius:50%;}
+.pod-dealer-badge.signal{background:none;border:none;box-shadow:none;padding:0;width:32px;height:32px;border-radius:50%;}
 .pod-dealer-badge.signal .signal-img{width:100%;height:100%;object-fit:contain;display:block;}
 
 /* Signal confidence picker in selfbar (during bidding) */
