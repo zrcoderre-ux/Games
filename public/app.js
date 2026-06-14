@@ -1416,7 +1416,7 @@ function renderHLJ(v) {
       }).join("");
       return histToks;
     }
-    if (v.phase === "playing" && v.highBid && !v.trumpRevealed && v.highBid.seat !== v.you) {
+    if (v.highBid && (v.phase === "bidding" || (v.phase === "playing" && !v.trumpRevealed && v.highBid.seat !== v.you))) {
       const team = `t${v.highBid.seat % 2 === 0 ? "A" : "B"}`;
       const bidTok = `<div class="hlj-bid-token chip ${team} high" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
       return bidTok;
