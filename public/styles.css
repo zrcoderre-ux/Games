@@ -2283,7 +2283,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   /* Shared cap. On desktop use a generous width; on iPad/tablet tie to height
      so the felt doesn't become a wide letterbox. */
-  .table{ --lg-table-max: min(900px, calc(100dvh - 120px)); }
+  .table{ --lg-table-max: min(1000px, calc(100dvh - 60px)); }
 
   /* ---- Home screen: center a sane-width form column ---------- */
   /* (.felt-table is the home screen only; lobby uses .table) */
@@ -2307,9 +2307,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .felt-table .tbl-fan-inner{ transform:scale(1.18); transform-origin:center center; }
 
   /* ---- Play table: cap width to height, then center ---------- */
+  /* Grow the felt downward so the user's hand overlaps onto it, as on mobile. */
   .table .felt-frame{
     width:100%;
     max-width:var(--lg-table-max);
+    height:calc(100lvh - 43px - 170px);
     margin-inline:auto;
   }
   /* Keep the bottom hand/score bar aligned with the centered felt */
