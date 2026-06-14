@@ -1270,7 +1270,7 @@ function renderHLJ(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
-            highBid: v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === i ? v.highBid.amount : null,
+            highBid: v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === i && i !== v.you ? v.highBid.amount : null,
             signalIcon: v.phase === "bidding" && v.highBid?.seat === i && v.signals?.[i]
               ? `<img src="${SIGNAL_SRCS[v.signals[i]]}" alt="${SIGNAL_LABELS[v.signals[i]]}" class="signal-img">`
               : null,
