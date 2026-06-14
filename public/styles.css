@@ -1168,10 +1168,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .pod .ministack{
   position:relative;
   display:flex;align-items:flex-end;justify-content:center;
-  min-height:40px;
+  min-height:48px;
 }
 .pod .ministack .mb{
-  width:22px;height:32px;border-radius:5px;margin-left:-13px;flex-shrink:0;
+  width:26px;height:38px;border-radius:5px;margin-left:-16px;flex-shrink:0;
   /* default neutral back — overridden per team below */
   background:repeating-linear-gradient(45deg,#0e1a30 0 3px,#1a2a48 3px 6px),#0e1a30;
   box-shadow:0 1px 2px rgba(0,0,0,.6),inset 0 0 0 1px rgba(140,180,255,.2);
