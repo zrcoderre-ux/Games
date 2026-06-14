@@ -2283,7 +2283,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   /* Shared cap. On desktop use a generous width; on iPad/tablet tie to height
      so the felt doesn't become a wide letterbox. */
-  .table{ --lg-table-max: min(1000px, calc(100dvh - 60px)); }
+  .table{
+    --lg-table-max: min(1000px, calc(100dvh - 60px));
+    min-height:100dvh; /* in browser mode, fill viewport so selfwrap:bottom:0 anchors to viewport */
+  }
 
   /* ---- Home screen: center a sane-width form column ---------- */
   /* (.felt-table is the home screen only; lobby uses .table) */
