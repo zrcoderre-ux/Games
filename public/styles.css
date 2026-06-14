@@ -2340,4 +2340,6 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     pointer-events:none; /* don't block the felt top; re-enable on children */
   }
   .table .appbar > *{ pointer-events:auto; }
+  .table .appbar .roomtag{ order:-1; }
+  .table .appbar .spacer{ order:0; }
 }
