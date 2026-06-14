@@ -2308,11 +2308,13 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   /* ---- Play table: cap width to height, then center ---------- */
   .table .felt-frame{
+    width:100%;
     max-width:var(--lg-table-max);
     margin-inline:auto;
   }
   /* Keep the bottom hand/score bar aligned with the centered felt */
   .table .selfwrap{
+    width:100%;
     max-width:var(--lg-table-max);
     left:0; right:0;
     margin-inline:auto;
