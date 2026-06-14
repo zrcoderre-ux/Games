@@ -1444,7 +1444,7 @@ function renderHLJ(v) {
     ? showSignalPicker
       ? `<div class="hlj-felt-bid">
           <div class="hlj-signal-felt">${signalLevels.map(lvl =>
-            `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
+            `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}" tabindex="-1"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
           ).join("")}</div>
         </div>`
       : !userHasActed
