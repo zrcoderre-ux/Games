@@ -80,6 +80,7 @@ const S = {
   dragId: null, // card id being dragged within the hand
   dropBeforeId: null, // drop target (insert before this card id; null = end)
   heartsPass: new Set(), // selected card ids to pass (Hearts)
+  heartsOrder: [], // display order of hand card ids (Hearts sort)
   hotseats: {}, // seat → name for pass-and-play reservations (pre-start, client-only)
   pjCard: null, // selected card id (Pegs & Jokers)
   pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
@@ -2146,11 +2147,17 @@ function renderHearts(v) {
     center = `${crests}${note}`;
   }
 
+  // Reconcile hearts sort order with live hand
+  { const ids = v.yourHand.map((c) => c.id);
+    S.heartsOrder = S.heartsOrder.filter((id) => ids.includes(id));
+    for (const id of ids) if (!S.heartsOrder.includes(id)) S.heartsOrder.push(id); }
+  const heartsHand = S.heartsOrder.map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
+
   // Hand: in passing, selected cards lift into a selrow above the fan (Rummy-style).
   let hand;
   if (passing && !v.youPassed) {
-    const selCards = v.yourHand.filter((c) => S.heartsPass.has(c.id));
-    const fanCards = v.yourHand.filter((c) => !S.heartsPass.has(c.id));
+    const selCards = heartsHand.filter((c) => S.heartsPass.has(c.id));
+    const fanCards = heartsHand.filter((c) => !S.heartsPass.has(c.id));
     const selRow = selCards.length
       ? `<div class="selrow">${selCards.map((c) => cardHTML(c, { action: "toggle-pass", id: c.id, sel: true })).join("")}</div>`
       : "";
@@ -2158,7 +2165,7 @@ function renderHearts(v) {
     const fan = fanHand(fanCards, (c) => ({ action: full ? "" : "toggle-pass", id: c.id, playable: !full, dim: full }));
     hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
   } else {
-    hand = `<div class="fan-inner">${fanHand(v.yourHand, (c) => {
+    hand = `<div class="fan-inner">${fanHand(heartsHand, (c) => {
       if (passing) return { id: c.id, dim: true };
       const can = plays.has(c.id);
       return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
@@ -2174,6 +2181,7 @@ function renderHearts(v) {
   } else if (passing) {
     acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
   }
+  if (v.yourHand.length) acts.push(`<button class="btn ghost sm" data-action="sort-hearts">Sort \u2660\u2665</button>`);
 
   const you = v.you;
   const selfMeta = you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`;
@@ -2461,6 +2469,7 @@ app.addEventListener("click", (e) => {
     case "open-discard": S.discardOpen = true; return render();
     case "close-discard": S.discardOpen = false; return render();
     case "sort-toggle": { const m = S.rummySort === "suit" ? "rank" : "suit"; S.rummySort = m; return rummySort(v.yourHand, m); }
+    case "sort-hearts": { const suitOrder = { S: 0, H: 1, C: 2, D: 3 }; S.heartsOrder = [...v.yourHand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id); return render(); }
     case "pick-game": S.pickGame = t.dataset.game; return renderStart();
     case "set-theme": {
       S.theme = t.dataset.t;
