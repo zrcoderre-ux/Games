@@ -1490,7 +1490,7 @@ function renderHLJ(v) {
     ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span>${
         v.phase === "bidding" && v.highBid?.seat === you && curSignal
           ? ` <span class="pod-dealer-badge signal"><img src="${SIGNAL_SRCS[curSignal]}" alt="${SIGNAL_LABELS[curSignal]}" class="signal-img"></span>`
-          : v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === you
+          : v.phase === "playing" && v.highBid?.seat === you
           ? ` <span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>`
           : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
     : `play to ${v.target}`;
