@@ -2281,9 +2281,9 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
    ============================================================ */
 @media (min-width:768px) and (min-height:600px){
 
-  /* Shared cap. Tying max-width to viewport HEIGHT is what keeps
-     the play table from ever being wider than it is tall. */
-  .table{ --lg-table-max: min(820px, calc(100dvh - 230px)); }
+  /* Shared cap. On desktop use a generous width; on iPad/tablet tie to height
+     so the felt doesn't become a wide letterbox. */
+  .table{ --lg-table-max: min(900px, calc(100dvh - 120px)); }
 
   /* ---- Home screen: center a sane-width form column ---------- */
   /* (.felt-table is the home screen only; lobby uses .table) */
