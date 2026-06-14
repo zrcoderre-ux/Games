@@ -770,7 +770,7 @@ function renderStart() {
         <label class="felt-label">Choose a Game</label>
         <div class="tbl-fan">
           <input type="hidden" id="f-game" value="${esc(g)}" />
-          ${gameCards}
+          <div class="tbl-fan-inner">${gameCards}</div>
         </div>
 
         <label class="felt-label">Room Code</label>
