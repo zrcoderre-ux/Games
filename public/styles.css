@@ -1925,6 +1925,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* Signal confidence badge on pods — no background, just the image at dealer-chip size */
 .pod-dealer-badge.signal{background:none;border:none;box-shadow:none;padding:0;width:32px;height:32px;border-radius:50%;}
 .pod-dealer-badge.signal .signal-img{width:100%;height:100%;object-fit:contain;display:block;}
+/* High-signal webp circle is slightly larger than low/medium — scale it down to match */
+img.signal-img[src*="high-signal"]{transform:scale(0.88);}
 
 /* Signal confidence picker in selfbar (during bidding) */
 .hlj-signal-picker{
