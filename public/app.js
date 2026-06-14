@@ -2021,7 +2021,10 @@ function renderRummy(v) {
     ? `<span class="trump-watermark${RED.has(lastMeldSuit) ? " red" : ""}">${SUIT[lastMeldSuit]}</span>`
     : "";
 
-  app.__set = tableShell(v, { pods, center, feltBottom: melds, feltOverlay: rummyFeltOverlay, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
+  const rummyCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
+    `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${['tl','tr','br','bl'][i]}">${s}</span>`
+  ).join("");
+  app.__set = tableShell(v, { pods, center, feltBottom: melds, feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
 }
 
 // Round-end summary popup: shown after a round finishes, auto-dismisses after 20s.
