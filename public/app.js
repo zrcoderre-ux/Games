@@ -1238,13 +1238,86 @@ function renderHLJ(v) {
   if (v.phase === "gameOver") {
     const w = v.winner;
     const you = v.you;
-    const gw = v.gamesWon ?? [0, 0];
-    const seriesLabel = (t) => (v.winsNeeded ?? 1) > 1 ? ` · ${gw[t]} win${gw[t] !== 1 ? "s" : ""}` : "";
-    const rows = [
-      { name: `Team A${seriesLabel(0)}`, score: v.scores[0], win: w === 0, you: you != null && you % 2 === 0 },
-      { name: `Team B${seriesLabel(1)}`, score: v.scores[1], win: w === 1, you: you != null && you % 2 === 1 },
-    ];
-    return renderGameOver(v, w == null ? "Game over" : `Team ${w === 0 ? "A" : "B"} wins!`, scoreList(rows));
+    const isHost = you !== null && you === v.hostSeat;
+    const winLabel = w == null ? "Game over" : `Team ${w === 0 ? "A" : "B"} wins!`;
+    const winTeamCls = w != null ? `t${w === 0 ? "A" : "B"}` : "";
+    const lh = v.lastHand;
+
+    let handSection = "";
+    if (lh) {
+      const bidderTeamLetter = lh.bidderTeam === 0 ? "A" : "B";
+      const bidderName = esc(seatName(v, lh.bidderSeat));
+      const pts = lh.detail;
+      const honors = [
+        { label: "High", team: pts.high },
+        { label: "Low", team: pts.low },
+        { label: "Jack", team: pts.jack },
+        { label: "Bonhomme", team: pts.bonhomme },
+      ];
+      const colA = honors.filter(h => h.team === 0 && h.team != null);
+      const colB = honors.filter(h => h.team === 1 && h.team != null);
+      const gcA = pts.gameCount?.[0] ?? 0;
+      const gcB = pts.gameCount?.[1] ?? 0;
+      const gameHonor = pts.game != null
+        ? `<div class="hlj-rr-honor">Game <span class="hlj-rr-game-gc tA">${gcA}</span><span class="hlj-rr-game-gc-sep">·</span><span class="hlj-rr-game-gc tB">${gcB}</span></div>`
+        : "";
+      if (pts.game === 0) colA.push({ label: "_game_" });
+      if (pts.game === 1) colB.push({ label: "_game_" });
+      const honorList = (items) => items.length
+        ? items.map(h => h.label === "_game_" ? gameHonor : `<div class="hlj-rr-honor">${h.label}</div>`).join("")
+        : `<div class="hlj-rr-honor none">—</div>`;
+      const ptRows = `<div class="hlj-rr-twocol">
+        <div class="hlj-rr-col tA"><div class="hlj-rr-colhdr tA">Team A · ${lh.pointsByTeam[0]} pt${lh.pointsByTeam[0] !== 1 ? "s" : ""}</div>${honorList(colA)}</div>
+        <div class="hlj-rr-col tB"><div class="hlj-rr-colhdr tB">Team B · ${lh.pointsByTeam[1]} pt${lh.pointsByTeam[1] !== 1 ? "s" : ""}</div>${honorList(colB)}</div>
+      </div>`;
+      const scoreRows = [0, 1].map(t => {
+        const letter = t === 0 ? "A" : "B";
+        const delta = lh.deltaByTeam[t];
+        const total = v.scores[t];
+        const sign = delta > 0 ? "+" : "";
+        const isBidder = t === lh.bidderTeam;
+        return `<div class="hlj-rr-scorerow${isBidder && !lh.made ? " setback" : ""}">
+          <span class="hlj-rr-scoreteam t${letter}">Team ${letter}</span>
+          <span class="hlj-rr-scoredelta">${sign}${delta}</span>
+          <span class="hlj-rr-scoretotal">${total} pts</span>
+        </div>`;
+      }).join("");
+      const kittyCards = (v.lastKitty || []).map(c => cardHTML(c, { mini: true })).join("");
+      const kittySection = kittyCards
+        ? `<div class="hlj-result-card"><div class="hlj-rr-section"><div class="hlj-rr-seclabel">Kitty</div><div class="hlj-rr-kitty">${kittyCards}</div></div></div>`
+        : "";
+      handSection = `
+        <div class="hlj-result-headline">
+          <div class="hlj-result-handover hlj-result-gameover-banner ${winTeamCls}">${winLabel}</div>
+          <div class="hlj-result-bidline">${bidderName} bid <b>${lh.bid}</b> for Team ${bidderTeamLetter}</div>
+          <div class="hlj-result-verdict ${lh.made ? "made" : "set"}">${lh.made ? "Made it" : "Set back"}</div>
+        </div>
+        <div class="hlj-result-card">
+          <div class="hlj-rr-seclabel">Points taken</div>
+          ${ptRows}
+        </div>
+        ${kittySection}
+        <div class="hlj-result-card hlj-result-scores">
+          <div class="hlj-rr-seclabel">Final score</div>
+          ${scoreRows}
+        </div>`;
+    } else {
+      handSection = `<div class="hlj-result-headline"><div class="hlj-result-handover hlj-result-gameover-banner ${winTeamCls}">${winLabel}</div></div>`;
+    }
+
+    const nextBtn = isHost
+      ? `<button class="hlj-result-next-btn" data-action="newgame">New game</button>`
+      : `<p class="sub" style="text-align:center;padding:10px 0">Waiting for the host to deal again…</p>`;
+
+    app.__set = `<div class="hlj-result-page">
+      <div class="hlj-result-felt">
+        <div class="hlj-result-scroll">
+          ${handSection}
+          ${nextBtn}
+        </div>
+      </div>
+    </div>`;
+    return;
   }
 
   const lm = v.yourTurn ? v.legalMoves : [];
