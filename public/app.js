@@ -781,6 +781,7 @@ function renderStart() {
 
       </div>
     </div>`;
+  requestAnimationFrame(() => { if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); });
 }
 // Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
 // scores=null → lobby (ghost rings). scores=[a,b] → gameplay (filled numbers).
