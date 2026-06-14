@@ -2309,12 +2309,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .felt-table .tbl-fan{ height:178px; margin-bottom:26px; }
   .felt-table .tbl-fan-inner{ transform:scale(1.18); transform-origin:center center; }
 
-  /* ---- Play table: cap width to height, then center ---------- */
-  /* Grow the felt downward so the user's hand overlaps onto it, as on mobile. */
+  /* ---- Play table: cap width, then center ---------- */
   .table .felt-frame{
     width:100%;
     max-width:var(--lg-table-max);
-    height:calc(100lvh - 43px - 170px);
     margin-inline:auto;
   }
   /* Keep the bottom hand/score bar aligned with the centered felt */
@@ -2324,4 +2322,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     left:0; right:0;
     margin-inline:auto;
   }
+  /* The felt is flex:1, so a smaller bottom reserve grows it down until the
+     hand overlaps onto it (mobile behavior). Standalone normally reserves
+     215px; use a tighter reserve in game mode so the desktop app overlaps too.
+     Scoped to game (not lobby) and high enough specificity to beat both the
+     standalone (215px) and browser-game (165px) base rules. */
+  #app:not(:has(.lby-outer)) .table .selfwrap-spacer{ height:150px; }
 }
