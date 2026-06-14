@@ -745,7 +745,7 @@ function renderStart() {
       ? `left:${pos.left};z-index:10`
       : `left:${pos.left};top:${pos.top};transform:rotate(${pos.rot});z-index:${i + 1}`;
     return `<button class="tbl-card${sel ? " selected" : ""} ${meta.color}"
-        style="${posStyle}" data-action="pick-game" data-game="${id}">
+        style="${posStyle}" data-action="pick-game" data-game="${id}" tabindex="-1">
       <span class="tbl-card-corner tl">${meta.suit}</span>
       <span class="tbl-card-suit">${meta.suit}</span>
       <span class="tbl-card-name">${esc(info.label)}</span>
