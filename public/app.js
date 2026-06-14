@@ -47,7 +47,7 @@ const S = {
   pid: null,
   name: "",
   party: null,
-  pickGame: "high-low-jack", // start-screen selection
+  pickGame: null, // start-screen selection
   room: null,
   ws: null,
   offline: false, // playing locally vs bots (no server)
