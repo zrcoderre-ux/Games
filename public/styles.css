@@ -1899,8 +1899,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   font-family:"Hanken Grotesk",sans-serif;font-size:9px;font-weight:800;
   letter-spacing:.06em;text-transform:uppercase;color:#fff;
   background:
-    radial-gradient(circle at 50% 50%, #2a2820 0% 56%, #1a1810 56% 60%, transparent 60%),
-    repeating-conic-gradient(#2a2820 0deg 28deg, rgba(255,255,255,.35) 28deg 45deg);
+    radial-gradient(circle at 50% 50%, #1a1a1a 0% 56%, #0a0a0a 56% 60%, transparent 60%),
+    repeating-conic-gradient(#1a1a1a 0deg 28deg, #ffffff 28deg 45deg);
   box-shadow:0 3px 8px rgba(0,0,0,.55);
 }
 
