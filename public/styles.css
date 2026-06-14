@@ -2340,6 +2340,13 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      standalone (215px) and browser-game (165px) base rules. */
   #app:not(:has(.lby-outer)) .table .selfwrap-spacer{ height:150px; }
   .hlj-felt-bid{ bottom:4%; }
+  .table .pod-slot .pod,
+  .table .pod-slot .lby-seat-box,
+  .table .pod-slot .lby-pod{ transform:scale(1.2); transform-origin:center top; }
+  .pod-slot.pos-left .pod,
+  .pod-slot.pos-left .lby-seat-box{ transform-origin:left center; }
+  .pod-slot.pos-right .pod,
+  .pod-slot.pos-right .lby-seat-box{ transform-origin:right center; }
 }
 
 /* Wide screens: there's room in the side margins (the felt is capped & centered)
