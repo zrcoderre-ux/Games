@@ -755,6 +755,8 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   transition:background .15s,border-color .15s;
   margin-top:10px;
 }
+.pod-slot.pos-left .lby-seat-box{ margin-top:0; margin-left:10px; }
+.pod-slot.pos-right .lby-seat-box{ margin-top:0; margin-right:10px; }
 .lby-seat-box:hover{background:rgba(0,0,0,.28);border-color:rgba(207,64,56,.9)}
 .lby-seat-box.tB{border-color:rgba(100,150,230,.65)}
 .lby-seat-box.tB:hover{background:rgba(0,0,0,.28);border-color:rgba(100,150,230,.9)}
