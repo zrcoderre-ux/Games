@@ -1081,7 +1081,10 @@ function decidePlay(state, seat, p) {
           const jack = myTrumps.find((c) => !isJoker(c) && c.rank === 11);
           const hasProtection = myTrumps.some((c) => !isJoker(c) && c.rank > 11);
           const jackSafe = jack && (hasProtection || higherTrumpsAllAccountedFor(state, trump, jack, cards));
-          const safe = nonBoss.filter((c) => !(c === jack && !jackSafe));
+          const voids2 = trumpVoidSeats(state, trump);
+          const allOppsVoid = [...Array(players).keys()].filter((i) => i !== seat && teamOf(i) !== myTeam).every((i) => voids2.has(i));
+          const jokerSafeToLead = allOppsVoid || higherTrumpsAllAccountedFor(state, trump, { joker: true }, cards);
+          const safe = nonBoss.filter((c) => !(c === jack && !jackSafe) && !(isJoker(c) && !jokerSafeToLead));
           if (safe.length) return asMove(pick(safe, (c) => trumpValue(c, trump), "max"));
         }
       }

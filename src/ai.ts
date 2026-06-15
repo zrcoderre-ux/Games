@@ -587,7 +587,13 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
           const jack = myTrumps.find((c) => !isJoker(c) && c.rank === 11);
           const hasProtection = myTrumps.some((c) => !isJoker(c) && c.rank > 11);
           const jackSafe = jack && (hasProtection || higherTrumpsAllAccountedFor(state, trump, jack, cards));
-          const safe = nonBoss.filter((c) => !(c === jack && !jackSafe));
+          // Never lead the Joker while opponents still hold higher trump — it loses the trick.
+          const voids = trumpVoidSeats(state, trump);
+          const allOppsVoid = [...Array(players).keys()]
+            .filter((i) => i !== seat && teamOf(i) !== myTeam)
+            .every((i) => voids.has(i));
+          const jokerSafeToLead = allOppsVoid || higherTrumpsAllAccountedFor(state, trump, { joker: true } as Card, cards);
+          const safe = nonBoss.filter((c) => !(c === jack && !jackSafe) && !(isJoker(c) && !jokerSafeToLead));
           if (safe.length) return asMove(pick(safe, (c) => trumpValue(c, trump)!, "max"));
         }
       }
