@@ -764,7 +764,7 @@ function renderStart() {
         <input class="hs-fld" id="f-room" value="${esc(S.room || "")}"
           placeholder="blank = new room" autocomplete="off" />
 
-        <label class="hs-lbl" style="margin-top:200px">Choose a Game</label>
+        <label class="hs-lbl" style="margin-top:120px">Choose a Game</label>
         <div class="tbl-fan">
           <input type="hidden" id="f-game" value="${esc(g)}" />
           <div class="tbl-fan-inner">${gameCards}</div>
