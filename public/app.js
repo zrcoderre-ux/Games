@@ -759,14 +759,12 @@ function renderStart() {
         <img class="hs-wm" src="/joker-hat.png" alt="">
 
         <h1 class="hs-title">BONHOMME</h1>
-        <p class="hs-tag">card games for friends</p>
-        <div class="hs-rule"><span>✦</span></div>
 
-        <label class="hs-lbl" style="margin-top:8px">Room Code</label>
+        <label class="hs-lbl" style="margin-top:10px">Room Code</label>
         <input class="hs-fld" id="f-room" value="${esc(S.room || "")}"
           placeholder="blank = new room" autocomplete="off" />
 
-        <label class="hs-lbl">Choose a Game</label>
+        <label class="hs-lbl" style="margin-top:180px">Choose a Game</label>
         <div class="tbl-fan">
           <input type="hidden" id="f-game" value="${esc(g)}" />
           <div class="tbl-fan-inner">${gameCards}</div>
