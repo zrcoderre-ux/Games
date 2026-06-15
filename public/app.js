@@ -762,7 +762,7 @@ function renderStart() {
         <input class="hs-fld" id="f-room" value="${esc(S.room || "")}"
           placeholder="blank = new room" autocomplete="off" />
 
-        <img class="hs-wm" src="/joker-hat.png" alt="">
+        <div class="hs-wm-wrap"><img class="hs-wm" src="/joker-hat.png" alt=""></div>
 
         <label class="hs-lbl">Choose a Game</label>
         <div class="tbl-fan">
