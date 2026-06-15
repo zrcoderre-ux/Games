@@ -1563,6 +1563,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   .card{--w:70px}
   .fan-inner{min-height:118px}
 }
+@media (max-width:559px){
+  .pod-slot.pos-top,.pod-slot.pos-top.pos-tl,.pod-slot.pos-top.pos-tl2,
+  .pod-slot.pos-top.pos-tr,.pod-slot.pos-top.pos-tr2{ top:20px; }
+}
 @media (max-width:360px){
   .card{--w:56px}
   .pod{max-width:80px}
