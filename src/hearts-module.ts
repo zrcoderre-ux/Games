@@ -618,7 +618,7 @@ function pacing(s: HeartsState): { kind: "auto" | "wait"; ms: number; move: Hear
 
 export const heartsModule: Game<HeartsState, HeartsMove, HeartsConfig, HeartsView> = {
   meta: { id: "hearts", name: "Hearts", supportedPlayerCounts: [3, 4, 5] },
-  botStepMs: (s) => Math.round(1600 * 4 / s.players),
+  botStepMs: (s) => s.phase === "passing" ? 350 : Math.round(1600 * 4 / s.players),
   seatCount: (config) => config.players,
   createGame,
   seatToAct,

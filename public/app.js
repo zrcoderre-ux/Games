@@ -74,6 +74,8 @@ const S = {
   heartsLastTrickOpen: false, // same, for Hearts
   heartsHandAcked: null, // JSON key of lastHand already dismissed
   heartsHandTimer: null, // auto-dismiss setTimeout handle
+  heartsReceivedCards: [], // card ids just received via pass, shown in selrow for 5s
+  heartsReceivedTimer: null, // clears heartsReceivedCards after 5s
   hljSignalTimer: null,    // unused, kept for wire-compat
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
@@ -2243,8 +2245,24 @@ function renderHearts(v) {
   { const ids = v.yourHand.map((c) => c.id);
     const knownIds = new Set(S.heartsOrder);
     const newCards = ids.filter((id) => !knownIds.has(id));
-    if (newCards.length > 1) {
-      // Multiple new cards = new deal or pass just resolved — sort the whole hand.
+    if (newCards.length > 1 && !passing) {
+      // Pass exchange just resolved — show received cards above hand for 5s before merging.
+      const prevIds = new Set(S.heartsOrder);
+      const received = ids.filter((id) => !prevIds.has(id));
+      if (received.length > 0 && S.heartsReceivedCards.length === 0) {
+        S.heartsReceivedCards = received;
+        if (S.heartsReceivedTimer) clearTimeout(S.heartsReceivedTimer);
+        S.heartsReceivedTimer = setTimeout(() => {
+          S.heartsReceivedCards = [];
+          S.heartsReceivedTimer = null;
+          render();
+        }, 5000);
+      }
+      // Sort the full hand (received cards will be shown separately in selrow during timer).
+      const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
+      S.heartsOrder = [...v.yourHand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id);
+    } else if (newCards.length > 1 && passing) {
+      // New deal — sort the whole hand.
       const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
       S.heartsOrder = [...v.yourHand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id);
     } else {
@@ -2255,7 +2273,9 @@ function renderHearts(v) {
   const heartsHand = S.heartsOrder.map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
 
   // Hand: in passing, selected cards lift into a selrow above the fan (Rummy-style).
+  // After pass exchange, received cards show in selrow for 5s before merging.
   let hand;
+  const receivedSet = new Set(S.heartsReceivedCards);
   if (passing && !v.youPassed) {
     const selCards = heartsHand.filter((c) => S.heartsPass.has(c.id));
     const fanCards = heartsHand.filter((c) => !S.heartsPass.has(c.id));
@@ -2265,6 +2285,14 @@ function renderHearts(v) {
     const full = S.heartsPass.size >= 3;
     const fan = fanHand(fanCards, (c) => ({ action: full ? "" : "toggle-pass", id: c.id, playable: !full, dim: full }));
     hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
+  } else if (!passing && receivedSet.size > 0) {
+    // Show received cards in selrow for 5s (dim, non-interactive).
+    const recCards = heartsHand.filter((c) => receivedSet.has(c.id));
+    const restCards = heartsHand.filter((c) => !receivedSet.has(c.id));
+    const selRow = recCards.length
+      ? `<div class="selrow">${recCards.map((c) => cardHTML(c, { id: c.id, dim: false, sel: true })).join("")}</div>`
+      : "";
+    hand = selRow + `<div class="fan-inner">${fanHand(restCards, (c) => ({ id: c.id, dim: true }))}</div>`;
   } else {
     hand = `<div class="fan-inner">${fanHand(heartsHand, (c) => {
       if (passing) return { id: c.id, dim: true };
@@ -2289,9 +2317,9 @@ function renderHearts(v) {
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
 
-  const ledSuit = v.currentTrick?.length
+  const ledSuit = (v.currentTrick?.length && !passing)
     ? v.currentTrick[0].card?.suit
-    : (v.lastTrick?.cards?.length ? v.lastTrick.cards[0].card?.suit : null);
+    : null;
   const heartsFeltOverlay = ledSuit
     ? `<span class="trump-watermark ${RED.has(ledSuit) ? "red" : ""}">${SUIT[ledSuit]}</span>`
     : v.heartsBroken
