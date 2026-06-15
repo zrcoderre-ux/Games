@@ -179,7 +179,7 @@ body:has(.table){
 
 /* Green felt interior */
 .hs-felt{
-  position:relative;border-radius:17px;padding:30px 28px 30px;overflow:hidden;
+  position:relative;border-radius:17px;padding:14px 28px 30px;overflow:hidden;
   background:radial-gradient(130% 90% at 50% 30%,#246444 0%,#1c4e36 45%,#153828 100%);
   box-shadow:inset 0 0 60px rgba(0,0,0,.5),inset 0 2px 0 rgba(0,0,0,.3);
   display:flex;flex-direction:column;align-items:center;
@@ -211,7 +211,7 @@ body:has(.table){
 /* Gold gradient title */
 .hs-title{
   font-family:"Fraunces",serif;font-weight:700;
-  font-size:clamp(31px,9.2vw,43px);letter-spacing:.1em;line-height:1;margin-top:6px;
+  font-size:clamp(31px,9.2vw,43px);letter-spacing:.1em;line-height:1;margin-top:0;
   background:linear-gradient(180deg,#f0dd9a,#d4b85a 44%,#a8903c 72%,#e3cd7c);
   -webkit-background-clip:text;background-clip:text;color:transparent;
   text-shadow:none;text-align:center;

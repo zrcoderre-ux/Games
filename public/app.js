@@ -760,7 +760,7 @@ function renderStart() {
 
         <h1 class="hs-title">BONHOMME</h1>
 
-        <label class="hs-lbl" style="margin-top:10px">Room Code</label>
+        <label class="hs-lbl" style="margin-top:6px">Room Code</label>
         <input class="hs-fld" id="f-room" value="${esc(S.room || "")}"
           placeholder="blank = new room" autocomplete="off" />
 
