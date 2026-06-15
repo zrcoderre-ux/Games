@@ -254,7 +254,7 @@ body:has(.table){
   font-family:"Bevan",serif;font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;
   color:#dcc26a;margin:0 0 6px;text-shadow:0 1px 3px rgba(0,0,0,.5);
 }
-.hs-lbl-game{font-size:13px;letter-spacing:.2em;margin-bottom:10px;}
+.hs-lbl-game{font-size:13px;letter-spacing:.2em;margin-bottom:22px;}
 
 /* Input fields */
 .hs-fld{
