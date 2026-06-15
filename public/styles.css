@@ -203,8 +203,8 @@ body:has(.table){
 /* Hat watermark — sits behind content */
 .hs-wm{
   display:block;pointer-events:none;
-  width:95%;max-width:360px;
-  margin:8px auto 4px;
+  width:95%;max-width:360px;max-height:220px;object-fit:contain;
+  margin:4px auto 0;
   opacity:.85;
   filter:saturate(.93) brightness(.97) drop-shadow(0 3px 6px rgba(0,0,0,.5));
 }
