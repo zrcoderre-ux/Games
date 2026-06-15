@@ -754,30 +754,29 @@ function renderStart() {
   }).join("");
 
   app.__set = `
-    <div class="felt-table">
-      <div class="cb cb1"></div><div class="cb cb2"></div>
-      <div class="cb cb3"></div><div class="cb cb4"></div>
-      <div class="cb cb5"></div><div class="cb cb6"></div>
+    <div class="hs-rail">
+      <div class="hs-felt">
+        <img class="hs-wm" src="/joker-hat.png" alt="">
 
-      <div class="felt-content">
-        <h1 class="felt-title">BONHOMME</h1>
-        <div class="felt-rule"></div>
+        <h1 class="hs-title">BONHOMME</h1>
+        <p class="hs-tag">card games for friends</p>
+        <div class="hs-rule"><span>✦</span></div>
 
-        <label class="felt-label">Your Name</label>
-        <input class="felt-input" id="f-name" value="${esc(S.name || "")}"
-          placeholder="e.g. Alex" autocomplete="off" />
+        <label class="hs-lbl" style="margin-top:8px">Room Code</label>
+        <input class="hs-fld" id="f-room" value="${esc(S.room || "")}"
+          placeholder="blank = new room" autocomplete="off" />
 
-        <label class="felt-label">Choose a Game</label>
+        <label class="hs-lbl">Choose a Game</label>
         <div class="tbl-fan">
           <input type="hidden" id="f-game" value="${esc(g)}" />
           <div class="tbl-fan-inner">${gameCards}</div>
         </div>
 
-        <label class="felt-label">Room Code</label>
-        <input class="felt-input" id="f-room" value="${esc(S.room || "")}"
-          placeholder="blank = new room" autocomplete="off" />
+        <label class="hs-lbl">Your Name</label>
+        <input class="hs-fld" id="f-name" value="${esc(S.name || "")}"
+          placeholder="e.g. Alex" autocomplete="off" />
 
-        <button class="felt-cta" data-action="connect">Take a Seat</button>
+        <button class="hs-cta" data-action="connect">Take a Seat</button>
 
       </div>
     </div>`;

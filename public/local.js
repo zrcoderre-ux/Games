@@ -39,6 +39,9 @@ var LocalRoom = class {
     this.emit = emit;
     this.seats = emptySeats(game.seatCount(config));
   }
+  game;
+  config;
+  emit;
   state = null;
   seats;
   hostSeat = null;
