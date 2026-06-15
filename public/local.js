@@ -2721,7 +2721,7 @@ function aiMove3(state, seat) {
 function pacing(s) {
   if (s.phase !== "trickComplete") return null;
   const isLastTrick = s.trickNo + 1 >= Math.floor(buildDeck3(s.players).length / s.players);
-  return { kind: "wait", ms: isLastTrick ? 2600 : 1500, move: { type: "advance", seat: s.trickWinner } };
+  return { kind: "auto", ms: isLastTrick ? 5e3 : 5e3, move: { type: "advance", seat: s.trickWinner } };
 }
 var heartsModule = {
   meta: { id: "hearts", name: "Hearts", supportedPlayerCounts: [3, 4, 5] },

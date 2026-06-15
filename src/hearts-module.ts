@@ -611,7 +611,7 @@ function pacing(s: HeartsState): { kind: "auto" | "wait"; ms: number; move: Hear
   if (s.phase !== "trickComplete") return null;
   // Last trick of the hand lingers a bit longer; any trick lingers for bot-only games too.
   const isLastTrick = s.trickNo + 1 >= Math.floor(buildDeck(s.players).length / s.players);
-  return { kind: "wait", ms: isLastTrick ? 2600 : 1500, move: { type: "advance", seat: s.trickWinner! } };
+  return { kind: "auto", ms: isLastTrick ? 5000 : 5000, move: { type: "advance", seat: s.trickWinner! } };
 }
 
 // ---------- the module ----------
