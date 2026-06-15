@@ -2205,10 +2205,10 @@ function renderHearts(v) {
     const winSeat = showLast ? v.lastTrick.winner : null;
     if (v.currentTrick.length) {
       const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-      heartsTrick = trickHTML(plays, v.you, v.seats.length);
+      heartsTrick = trickHTML(plays, v.you, v.seats.length, { mini: false });
     } else if (showLast) {
       const plays = v.lastTrick.cards.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-      heartsTrick = trickHTML(plays, v.you, v.seats.length, { winSeat, faded: true });
+      heartsTrick = trickHTML(plays, v.you, v.seats.length, { mini: false, winSeat, faded: true });
     }
     const note = showLast
       ? `<div class="callout" style="font-size:13px">Trick to ${esc(seatName(v, v.lastTrick.winner))}.</div>`
@@ -2258,8 +2258,13 @@ function renderHearts(v) {
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
 
-  const heartsFeltOverlay = v.heartsBroken
-    ? `<span class="trump-watermark hearts-broken">♥</span>`
+  const ledSuit = v.currentTrick?.length
+    ? v.currentTrick[0].card?.suit
+    : (v.lastTrick?.cards?.length ? v.lastTrick.cards[0].card?.suit : null);
+  const heartsFeltOverlay = ledSuit
+    ? `<span class="trump-watermark ${RED.has(ledSuit) ? "red" : ""}">${SUIT[ledSuit]}</span>`
+    : v.heartsBroken
+    ? `<span class="trump-watermark hearts-broken red">♥</span>`
     : `<span class="trump-watermark hearts-unbroken">♥</span>`;
   const heartsCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2?'red':''} ${['tl','tr','br','bl'][i]}">${s}</span>`
