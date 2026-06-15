@@ -72,6 +72,8 @@ const S = {
   hljBidHoldTimer: null,
   hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
   heartsLastTrickOpen: false, // same, for Hearts
+  heartsHandAcked: null, // JSON key of lastHand already dismissed
+  heartsHandTimer: null, // auto-dismiss setTimeout handle
   hljSignalTimer: null,    // unused, kept for wire-compat
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
@@ -2237,10 +2239,19 @@ function renderHearts(v) {
     }
   }
 
-  // Reconcile hearts sort order with live hand
+  // Reconcile hearts sort order with live hand; auto-sort on new deal or after pass exchange.
   { const ids = v.yourHand.map((c) => c.id);
-    S.heartsOrder = S.heartsOrder.filter((id) => ids.includes(id));
-    for (const id of ids) if (!S.heartsOrder.includes(id)) S.heartsOrder.push(id); }
+    const knownIds = new Set(S.heartsOrder);
+    const newCards = ids.filter((id) => !knownIds.has(id));
+    if (newCards.length > 1) {
+      // Multiple new cards = new deal or pass just resolved — sort the whole hand.
+      const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
+      S.heartsOrder = [...v.yourHand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id);
+    } else {
+      S.heartsOrder = S.heartsOrder.filter((id) => ids.includes(id));
+      for (const id of ids) if (!S.heartsOrder.includes(id)) S.heartsOrder.push(id);
+    }
+  }
   const heartsHand = S.heartsOrder.map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
 
   // Hand: in passing, selected cards lift into a selrow above the fan (Rummy-style).
@@ -2271,7 +2282,6 @@ function renderHearts(v) {
   } else if (passing) {
     acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
   }
-  if (v.yourHand.length) acts.push(`<button class="btn ghost sm" data-action="sort-hearts">Sort \u2660\u2665</button>`);
 
   const you = v.you;
   const selfMeta = you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`;
@@ -2290,6 +2300,57 @@ function renderHearts(v) {
   const heartsCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2?'red':''} ${['tl','tr','br','bl'][i]}">${s}</span>`
   ).join("");
+
+  // End-of-hand result modal (Hearts).
+  const heartsHandModal = (() => {
+    const lh = v.lastHand;
+    if (!lh || v.phase === "gameOver") return "";
+    const handKey = JSON.stringify(lh);
+    if (S.heartsHandAcked === handKey) return "";
+    if (S.heartsHandTimer == null) {
+      S.heartsHandTimer = setTimeout(() => {
+        S.heartsHandAcked = handKey;
+        S.heartsHandTimer = null;
+        render();
+      }, 30000);
+    }
+    const { delta, shooter } = lh;
+    const moonSeat = shooter;
+    const headline = moonSeat != null
+      ? `<div class="hlj-result-verdict made">${esc(seatName(v, moonSeat))} shot the moon!</div>`
+      : "";
+    const scoreRows = v.seats.map((_, i) => {
+      const d = delta[i];
+      const total = v.scores[i];
+      const sign = d > 0 ? "+" : "";
+      const isMoon = i === moonSeat;
+      return `<div class="hlj-rr-scorerow${isMoon ? " made" : ""}">
+        <span class="hlj-rr-scoreteam">${esc(seatName(v, i))}${i === v.you ? " (you)" : ""}</span>
+        <span class="hlj-rr-scoredelta${d === 0 && moonSeat != null && i === moonSeat ? " made" : d > 0 ? " set" : ""}">${sign}${d}</span>
+        <span class="hlj-rr-scoretotal">${total} pts</span>
+      </div>`;
+    }).join("");
+    return `<div class="hlj-result-page">
+      <div class="hlj-result-felt">
+        <div class="hlj-result-scroll">
+          <div class="hlj-result-headline">
+            <div class="hlj-result-handover">Hand over</div>
+            ${headline}
+          </div>
+          <div class="hlj-result-card hlj-result-scores">
+            <div class="hlj-rr-seclabel">Score — play to ${v.target}, low wins</div>
+            ${scoreRows}
+          </div>
+          <button class="hlj-result-next-btn" data-action="hearts-ack-hand">Next hand →</button>
+        </div>
+      </div>
+    </div>`;
+  })();
+
+  if (heartsHandModal !== "") {
+    app.__set = heartsHandModal;
+    return;
+  }
 
   app.__set = tableShell(v, { pods, center, trick: heartsTrick, feltOverlay: heartsFeltOverlay, cornerSuits: heartsCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn });
 }
@@ -2679,6 +2740,12 @@ app.addEventListener("click", (e) => {
       if (lh) S.hljHandAcked = JSON.stringify(lh);
       if (S.hljHandTimer) { clearTimeout(S.hljHandTimer); S.hljHandTimer = null; }
       S.hljShowDealtHands = false;
+      return render();
+    }
+    case "hearts-ack-hand": {
+      const lh = S.view && S.view.lastHand;
+      if (lh) S.heartsHandAcked = JSON.stringify(lh);
+      if (S.heartsHandTimer) { clearTimeout(S.heartsHandTimer); S.heartsHandTimer = null; }
       return render();
     }
     case "hlj-show-dealt-hands": S.hljShowDealtHands = true; return render();
