@@ -149,9 +149,9 @@
    Felt Table home screen
    ============================================================ */
 
-/* Outer oak rail — body becomes the wood surround (home screen only) */
-body:has(.felt-table){
-  background:linear-gradient(135deg,#7a5030 0%,#5c3a1e 25%,#3e2510 50%,#5c3a1e 75%,#7a5030 100%);
+/* ---- Home screen ---- */
+body:has(.hs-rail){
+  background:radial-gradient(125% 95% at 50% 50%,#1d4d36 0%,#102b1d 50%,#08180f 100%);
   background-attachment:fixed;
 }
 /* Deep-green room behind the game/lobby table */
@@ -159,95 +159,103 @@ body:has(.table){
   background:radial-gradient(120% 80% at 50% 42%,#143a2a 0%,#0d2419 60%,#08160f 100%);
   background-attachment:fixed;
 }
-body:has(.felt-table)::before{
-  background:linear-gradient(135deg,rgba(140,100,50,.4) 0%,transparent 40%,transparent 60%,rgba(140,100,50,.3) 100%);
-}
 
-.felt-table{
-  position:relative;
-  margin:12px;
-  border-radius:20px;
-  overflow:hidden;
-  min-height:calc(100dvh - 24px);
-  background-color:#1a4a2e;
+/* Wood rail wrapping the felt card */
+.hs-rail{
+  width:100%;max-width:428px;margin:26px auto;border-radius:24px;padding:7px;
+  background:
+    repeating-linear-gradient(89deg,rgba(18,9,3,.20) 0 1px,transparent 1px 8px),
+    repeating-linear-gradient(89deg,rgba(150,100,55,.10) 0 1px,transparent 1px 4px),
+    repeating-linear-gradient(91deg,rgba(0,0,0,.12) 0 2px,transparent 2px 22px),
+    linear-gradient(158deg,#6f4a2c 0%,#50311a 38%,#3a210f 72%,#231306 100%);
   box-shadow:
-    inset 0 0 60px rgba(0,0,0,.5),
-    inset 0 0 0 2px rgba(0,0,0,.4),
-    0 0 0 3px #2a1508,
-    0 0 0 5px rgba(160,120,60,.5);
-}
-/* Joker hat watermark — centered on home/lobby felt */
-.felt-table::before{
-  content:"";position:absolute;
-  top:50%;left:50%;transform:translate(-50%,-52%);
-  width:min(720px,110vw);height:min(720px,110vw);
-  background-color:rgba(45,122,74,.55);
-  -webkit-mask:url('/joker-hat.png') center/contain no-repeat;
-          mask:url('/joker-hat.png') center/contain no-repeat;
-  pointer-events:none;z-index:0;
-}
-/* Inner vignette */
-.felt-table::after{
-  content:"";position:absolute;inset:0;border-radius:20px;pointer-events:none;z-index:20;
-  box-shadow:inset 0 0 60px rgba(0,0,0,.5),inset 0 10px 30px rgba(0,0,0,.35);
+    inset 0 1px 0 rgba(255,226,186,.24),
+    inset 0 0 0 1px rgba(255,220,180,.08),
+    inset 0 -3px 5px rgba(0,0,0,.5),
+    0 22px 44px -12px rgba(0,0,0,.75),
+    0 0 0 1px #1c0f04,
+    0 0 0 4px rgba(168,144,60,.45);
 }
 
-/* Scattered face-down card backs */
-.cb{
-  position:absolute;width:40px;height:56px;border-radius:5px;z-index:1;
-  background:linear-gradient(135deg,#1a3a8b 0%,#102068 100%);
-  border:1.5px solid rgba(255,255,255,.15);
-  box-shadow:2px 3px 8px rgba(0,0,0,.55),inset 0 0 0 3px rgba(255,255,255,.05);
-}
-.cb::after{
-  content:"";position:absolute;inset:4px;border-radius:2px;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M0 4L4 0L8 4L4 8Z' fill='none' stroke='rgba(255,255,255,0.1)' stroke-width='0.8'/%3E%3C/svg%3E");
-  background-size:8px 8px;
-}
-.cb1{top:24px;left:-12px;transform:rotate(-18deg);opacity:.65}
-.cb2{top:48px;left:-4px;transform:rotate(-10deg);opacity:.45}
-.cb3{top:20px;right:-8px;transform:rotate(16deg);opacity:.6}
-.cb4{top:48px;right:-2px;transform:rotate(8deg);opacity:.42}
-.cb5{bottom:80px;left:-6px;transform:rotate(22deg);opacity:.38}
-.cb6{bottom:100px;right:-10px;transform:rotate(-19deg);opacity:.42}
-
-.felt-content{
-  position:relative;z-index:5;
-  padding:32px 24px 28px;
+/* Green felt interior */
+.hs-felt{
+  position:relative;border-radius:17px;padding:30px 28px 30px;overflow:hidden;
+  background:radial-gradient(130% 90% at 50% 30%,#246444 0%,#1c4e36 45%,#153828 100%);
+  box-shadow:inset 0 0 60px rgba(0,0,0,.5),inset 0 2px 0 rgba(0,0,0,.3);
   display:flex;flex-direction:column;align-items:center;
 }
-
-.felt-title{
-  font-family:"Fraunces",serif;font-style:normal;font-weight:700;
-  font-size:clamp(28px,10vw,52px);letter-spacing:.12em;line-height:1;margin-bottom:6px;
-  color:#122e1d;
-  text-shadow:0 1px 0 rgba(255,255,255,.07),0 -1px 0 rgba(0,0,0,.6),0 2px 5px rgba(0,0,0,.35);
+/* Felt grain overlay */
+.hs-felt::before{
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size:170px;opacity:.06;mix-blend-mode:overlay;
 }
-.felt-sub{
-  font-size:10.5px;font-weight:400;letter-spacing:.13em;text-transform:uppercase;
-  color:rgba(248,244,232,.28);margin-bottom:20px;
-}
-.felt-rule{
-  width:100%;height:1px;margin-bottom:18px;
-  background:linear-gradient(90deg,transparent,rgba(201,144,30,.25) 20%,rgba(201,144,30,.4) 50%,rgba(201,144,30,.25) 80%,transparent);
+/* Inner vignette */
+.hs-felt::after{
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  box-shadow:inset 0 0 70px rgba(0,0,0,.45);
 }
 
-.felt-label{
-  font-size:9.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;
-  color:#c9901e;margin-bottom:7px;width:100%;
-  display:block;text-align:center;
+/* Hat watermark — sits behind content */
+.hs-wm{
+  position:absolute;pointer-events:none;z-index:0;
+  left:50%;top:150px;transform:translateX(-50%);
+  width:91%;max-width:378px;
+  opacity:.7;
+  filter:saturate(.93) brightness(.97) drop-shadow(0 3px 2px rgba(0,0,0,.4));
 }
-.felt-input{
-  width:100%;background:transparent;border:none;
-  border-bottom:1.5px solid rgba(201,144,30,.38);
-  padding:9px 2px;font-family:"Hanken Grotesk",sans-serif;
-  font-size:15px;color:#f8f4e8;outline:none;margin-bottom:18px;
-  box-shadow:inset 0 2px 5px rgba(0,0,0,.22);
-  transition:border-color .2s;caret-color:#e0a830;
+
+/* All direct children of .hs-felt need z-index above grain/vignette overlays */
+.hs-felt > *{position:relative;z-index:2;}
+
+/* Gold gradient title */
+.hs-title{
+  font-family:"Fraunces",serif;font-weight:700;
+  font-size:clamp(31px,9.2vw,43px);letter-spacing:.1em;line-height:1;margin-top:6px;
+  background:linear-gradient(180deg,#f0dd9a,#d4b85a 44%,#a8903c 72%,#e3cd7c);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  text-shadow:none;text-align:center;
 }
-.felt-input::placeholder{color:rgba(248,244,232,.26)}
-.felt-input:focus{border-bottom-color:#e0a830}
-.felt-input:disabled{opacity:.4}
+
+/* Italic serif subtitle */
+.hs-tag{
+  font-family:"Fraunces",serif;font-style:italic;font-weight:500;
+  color:rgba(200,222,196,.66);font-size:13.5px;margin-top:8px;text-align:center;
+}
+
+/* Double-line ornament */
+.hs-rule{
+  position:relative;height:14px;margin:16px auto 22px;width:60%;
+}
+.hs-rule::before,.hs-rule::after{
+  content:"";position:absolute;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(212,184,90,.55),transparent);
+}
+.hs-rule::before{top:5px}.hs-rule::after{top:9px}
+.hs-rule span{
+  position:absolute;left:50%;top:-1px;transform:translateX(-50%);
+  color:#d4b85a;font-size:13px;padding:0 9px;
+}
+
+/* Labels */
+.hs-lbl{
+  display:block;text-align:center;width:100%;
+  font-family:"Bevan",serif;font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;
+  color:#dcc26a;margin:0 0 10px;text-shadow:0 1px 3px rgba(0,0,0,.5);
+}
+
+/* Input fields */
+.hs-fld{
+  width:100%;background:rgba(7,22,15,.5);border:none;
+  border-bottom:1.5px solid rgba(212,184,90,.45);
+  border-radius:7px 7px 0 0;
+  padding:12px;color:#eef3e6;font-size:16px;font-family:inherit;
+  outline:none;margin:0 auto 22px;text-align:center;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.4);
+  transition:border-color .2s;backdrop-filter:blur(1px);caret-color:#e6cf78;
+}
+.hs-fld:focus{border-bottom-color:#e6cf78}
+.hs-fld::placeholder{color:rgba(220,232,210,.36)}
 
 /* Game card fan */
 .tbl-fan{
@@ -288,6 +296,18 @@ body:has(.felt-table)::before{
     inset 0 0 0 1px rgba(255,255,255,.6),0 0 0 2px rgba(201,144,30,.7) !important;
 }
 .tbl-card:focus,.tbl-card:focus-visible{outline:none;transform:none}
+
+/* Home screen CTA */
+.hs-cta{
+  width:100%;padding:15px;border:none;border-radius:9px;cursor:pointer;
+  font-family:"Fraunces",serif;font-style:italic;font-weight:600;font-size:18px;
+  color:#241704;
+  background:linear-gradient(180deg,#ecd680,#d4b85a 38%,#a8903c 64%,#c2a64e);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -2px 0 rgba(0,0,0,.25),
+    0 4px 0 #6f5e22,0 9px 18px rgba(0,0,0,.5);
+  transition:transform .1s,box-shadow .1s;
+}
+.hs-cta:active{transform:translateY(3px)}
 
 .felt-toggle{
   display:flex;align-items:center;gap:8px;width:100%;
@@ -2299,26 +2319,14 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     min-height:100dvh; /* in browser mode, fill viewport so selfwrap:bottom:0 anchors to viewport */
   }
 
-  /* ---- Home screen: center a sane-width form column ---------- */
-  /* (.felt-table is the home screen only; lobby uses .table) */
-  .felt-table{
-    display:flex; align-items:center; justify-content:center;
-  }
-  .felt-table .felt-content{
-    max-width:400px; width:100%;
-    margin-inline:auto;
-    padding:40px 28px 36px;
-  }
-  /* Use the freed space: larger wordmark + a bit more air */
-  .felt-table .felt-title{ font-size:60px; margin-bottom:10px; }
-  .felt-table .felt-rule{ margin-bottom:24px; }
-  .felt-table .felt-label{ font-size:11px; margin-bottom:9px; }
-  .felt-table .felt-input{ font-size:17px; padding:11px 4px; margin-bottom:22px; }
-  .felt-table .felt-cta{ font-size:19px; padding:16px 24px; }
-  /* Bigger game-card fan (cards are absolutely positioned via JS,
-     so scale the inner wrapper rather than touching coordinates) */
-  .felt-table .tbl-fan{ height:178px; margin-bottom:26px; }
-  .felt-table .tbl-fan-inner{ transform:scale(1.18); transform-origin:center center; }
+  /* ---- Home screen: center rail, slightly larger type ---------- */
+  .hs-rail{ margin:40px auto; }
+  .hs-title{ font-size:52px; }
+  .hs-lbl{ font-size:11px; margin-bottom:9px; }
+  .hs-fld{ font-size:17px; padding:13px; margin-bottom:24px; }
+  .hs-cta{ font-size:19px; padding:16px; }
+  .hs-felt .tbl-fan{ height:178px; margin-bottom:26px; }
+  .hs-felt .tbl-fan-inner{ transform:scale(1.18); transform-origin:center center; }
 
   /* ---- Play table: cap width, then center ---------- */
   .table .felt-frame{
