@@ -344,7 +344,7 @@ body:has(.table){
     0 1px 0 #7a5010,0 3px 8px rgba(0,0,0,.4);
 }
 
-.felt-theme-row{margin-top:18px;width:100%}
+.felt-theme-row{margin-top:8px;width:100%}
 .felt-theme-row .theme-picker{justify-content:center}
 
 /* ============================================================
@@ -1164,21 +1164,21 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 }
 /* top-centre */
 .pod-slot.pos-top{
-  top:18px;left:50%;transform:translateX(-50%);
+  top:8px;left:50%;transform:translateX(-50%);
 }
 /* top-left quadrant */
 .pod-slot.pos-top.pos-tl{
-  top:18px;left:8%;transform:none;
+  top:8px;left:8%;transform:none;
 }
 .pod-slot.pos-top.pos-tl2{
-  top:18px;left:28%;transform:none;
+  top:8px;left:28%;transform:none;
 }
 /* top-right quadrant */
 .pod-slot.pos-top.pos-tr{
-  top:18px;left:auto;right:8%;transform:none;
+  top:8px;left:auto;right:8%;transform:none;
 }
 .pod-slot.pos-top.pos-tr2{
-  top:18px;left:auto;right:28%;transform:none;
+  top:8px;left:auto;right:28%;transform:none;
 }
 /* left side — vertically centered */
 .pod-slot.pos-left{
