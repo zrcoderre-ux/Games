@@ -764,7 +764,7 @@ function renderStart() {
 
         <div class="hs-wm-wrap"><img class="hs-wm" src="/joker-hat.png" alt=""></div>
 
-        <label class="hs-lbl">Choose a Game</label>
+        <label class="hs-lbl hs-lbl-game">Choose a Game</label>
         <div class="tbl-fan">
           <input type="hidden" id="f-game" value="${esc(g)}" />
           <div class="tbl-fan-inner">${gameCards}</div>
