@@ -2325,8 +2325,8 @@ function renderHearts(v) {
     : v.heartsBroken
     ? `<span class="trump-watermark hearts-broken red">♥</span>`
     : `<span class="trump-watermark hearts-unbroken">♥</span>`;
-  const heartsCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
-    `<span class="felt-corner-suit ${i===1||i===2?'red':''} ${['tl','tr','br','bl'][i]}">${s}</span>`
+  const heartsCornerSuits = ['tl','tr','br','bl'].map((pos) =>
+    `<span class="felt-corner-suit ${v.heartsBroken ? 'red' : ''} ${pos}">♥</span>`
   ).join("");
 
   // End-of-hand result modal (Hearts).
