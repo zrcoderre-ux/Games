@@ -815,6 +815,7 @@ function renderLobby(v) {
   const isHost = v.you !== null && v.you === v.hostSeat;
   const isPJ = S.party === "pegs-and-jokers";
   const isHLJ = S.party === "high-low-jack";
+  const isHearts = S.party === "hearts";
   const isTeamGame = isHLJ || isPJ;
   const counts = isPJ ? [4] : GAMES[S.party].players;
   const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
@@ -848,8 +849,8 @@ function renderLobby(v) {
       removeBtn = `<button class="lby-pod-remove" data-action="clearseat" data-seat="${i}">✕</button>`;
     }
 
-    // Team games and Rummy use outlined box-style seats
-    if (isTeamGame || isRummyLobby) {
+    // Team games, Rummy, and Hearts use outlined box-style seats
+    if (isTeamGame || isRummyLobby || isHearts) {
       const isEmptyUnreserved = isEmpty && !reserved;
       const boxLabel = reserved ? name.toUpperCase().substring(0, 8)
         : isEmpty ? "OPEN"
@@ -888,11 +889,7 @@ function renderLobby(v) {
          <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
     : isHLJ
     ? ""
-    : chipRow("setcount", counts, v.players) +
-      (S.party !== "rummy500"
-        ? `<div class="lby-cfg-row"><span class="lby-cfg-label">Play to</span>
-             <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" /></div>`
-        : "");
+    : chipRow("setcount", counts, v.players);
 
   const hasHotseats = Object.keys(S.hotseats).length > 0;
   let shareRow = "";
@@ -918,7 +915,7 @@ function renderLobby(v) {
       </div>`
     : `<div class="lby-center-status">${seatedCount} of ${n} seated</div>`;
 
-  const center = (isHLJ || isRummyLobby)
+  const center = (isHLJ || isRummyLobby || isHearts)
     ? ""
     : `<div class="lby-center">
         <div class="lby-center-title">${esc(GAMES[S.party].label)}</div>
@@ -930,9 +927,7 @@ function renderLobby(v) {
   const feltTop = "";
   const feltHeader = "";
 
-  const feltChips = isHLJ && isHost
-    ? `<div class="lby-felt-chips"><span class="lby-fc-players">PLAYERS</span><div class="lby-fc-row">${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div></div>`
-    : isRummyLobby && isHost
+  const feltChips = (isHLJ || isRummyLobby || isHearts) && isHost
     ? `<div class="lby-felt-chips">
         <span class="lby-fc-players">PLAYERS</span>
         <div class="lby-fc-row">${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>
@@ -978,7 +973,7 @@ function renderLobby(v) {
                 ${[1, 3, 5].map(nn => `<button class="${nn === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${nn}">${nn === 1 ? "1 game" : `${nn} games`}</button>`).join("")}
               </div>
             </div>` : ""}
-            ${isRummyLobby ? `<div class="lby-set-row">
+            ${(isRummyLobby || isHearts) ? `<div class="lby-set-row">
               <span class="lby-set-label">Play to</span>
               <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" />
             </div>
