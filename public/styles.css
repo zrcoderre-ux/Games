@@ -2377,6 +2377,9 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .hlj-felt-bid .hlj-chip,
   .hlj-felt-bid .hlj-pass-btn{ transform:scale(1.2); }
   .hlj-felt-bid .hlj-chip:hover:not(:disabled){ transform:scale(1.2) translateY(-3px); }
+  /* Larger trick and hand cards on desktop — match each other at 78px */
+  .trick.positioned .card:not(.mini),
+  .hand .card:not(.mini){ --w:78px; }
 }
 
 /* Wide screens: there's room in the side margins (the felt is capped & centered)

@@ -2270,6 +2270,11 @@ function renderHearts(v) {
       for (const id of ids) if (!S.heartsOrder.includes(id)) S.heartsOrder.push(id);
     }
   }
+  // Once the first card of the trick is played, received-cards preview is no longer needed.
+  if (v.currentTrick?.length > 0 && S.heartsReceivedCards.length > 0) {
+    S.heartsReceivedCards = [];
+    if (S.heartsReceivedTimer) { clearTimeout(S.heartsReceivedTimer); S.heartsReceivedTimer = null; }
+  }
   const heartsHand = S.heartsOrder.map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
 
   // Hand: in passing, selected cards lift into a selrow above the fan (Rummy-style).
@@ -2322,8 +2327,6 @@ function renderHearts(v) {
     : null;
   const heartsFeltOverlay = ledSuit
     ? `<span class="trump-watermark ${RED.has(ledSuit) ? "red" : ""}">${SUIT[ledSuit]}</span>`
-    : v.heartsBroken
-    ? `<span class="trump-watermark hearts-broken red">♥</span>`
     : `<span class="trump-watermark hearts-unbroken">♥</span>`;
   const heartsCornerSuits = ['tl','tr','br','bl'].map((pos) =>
     `<span class="felt-corner-suit ${v.heartsBroken ? 'red' : ''} ${pos}">♥</span>`
