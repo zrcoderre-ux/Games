@@ -71,6 +71,7 @@ const S = {
   hljBidHold: null,   // frozen bid overlay shown briefly after bidding ends
   hljBidHoldTimer: null,
   hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
+  heartsLastTrickOpen: false, // same, for Hearts
   hljSignalTimer: null,    // unused, kept for wire-compat
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
@@ -2201,19 +2202,39 @@ function renderHearts(v) {
       }</div>`;
   } else {
     const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><span class="crest">hand ${v.handNo + 1}</span></div>`;
-    const showLast = v.currentTrick.length === 0 && v.lastTrick;
-    const winSeat = showLast ? v.lastTrick.winner : null;
-    if (v.currentTrick.length) {
-      const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-      heartsTrick = trickHTML(plays, v.you, v.seats.length, { mini: false });
-    } else if (showLast) {
-      const plays = v.lastTrick.cards.map((p) => ({ ...p, name: seatName(v, p.seat) }));
-      heartsTrick = trickHTML(plays, v.you, v.seats.length, { mini: false, winSeat, faded: true });
+    if (v.phase === "trickComplete") {
+      // Trick-gate: show the completed trick with a tap-to-continue overlay.
+      const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+      const winName = v.trickWinner != null ? esc(seatName(v, v.trickWinner)) : null;
+      const trickEl = trickHTML(trickPlays, v.you, v.seats.length, { mini: false, winSeat: v.trickWinner });
+      heartsTrick = `<div class="trick-gate" data-action="advance-trick">${trickEl}`
+        + `<div class="trick-gate-hint">${winName ? `Won by ${winName} &middot; ` : ""}Tap to continue</div></div>`;
+      center = crests;
+    } else {
+      const showLast = v.currentTrick.length === 0 && v.lastTrick;
+      const winSeat = showLast ? v.lastTrick.winner : null;
+      if (v.currentTrick.length) {
+        const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+        heartsTrick = trickHTML(plays, v.you, v.seats.length, { mini: false });
+      } else if (showLast && !S.heartsLastTrickOpen) {
+        // Collapsed last-trick fan.
+        const ltCards = v.lastTrick.cards.map((p) => p.card);
+        const total = ltCards.length;
+        const fanCards = v.lastTrick.cards.map((p, i) => {
+          const angle = total <= 1 ? 0 : ((i / (total - 1)) - 0.5) * 40;
+          const isWin = p.seat === winSeat;
+          return `<div class="lt-fan-card" style="--fan-angle:${angle}deg;--fan-i:${i};z-index:${isWin ? total + 1 : i}">${cardHTML(p.card, { win: isWin })}</div>`;
+        }).join("");
+        heartsTrick = `<div class="lasttrick" data-action="toggle-last-trick"><div class="lt-fan">${fanCards}</div><div class="lt-label">Last trick — won by ${esc(seatName(v, v.lastTrick.winner))} ▼</div></div>`;
+      } else if (showLast && S.heartsLastTrickOpen) {
+        const expanded = `<div class="fan-inner lt-expanded-fan">${fanHand(v.lastTrick.cards.map(p => p.card), () => ({}))}</div>`;
+        heartsTrick = `<div class="lasttrick open" data-action="toggle-last-trick"><div class="lt-label">Last trick — won by ${esc(seatName(v, v.lastTrick.winner))} ▲</div>${expanded}</div>`;
+      }
+      const note = showLast
+        ? ""
+        : !v.currentTrick.length ? `<div class="callout">Lead a card to open the trick.</div>` : "";
+      center = `${crests}${note}`;
     }
-    const note = showLast
-      ? `<div class="callout" style="font-size:13px">Trick to ${esc(seatName(v, v.lastTrick.winner))}.</div>`
-      : !v.currentTrick.length ? `<div class="callout">Lead a card to open the trick.</div>` : "";
-    center = `${crests}${note}`;
   }
 
   // Reconcile hearts sort order with live hand
@@ -2609,7 +2630,7 @@ app.addEventListener("click", (e) => {
     }
     case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
-    case "toggle-last-trick": S.hljLastTrickOpen = !S.hljLastTrickOpen; return render();
+    case "toggle-last-trick": if (S.party === "hearts") S.heartsLastTrickOpen = !S.heartsLastTrickOpen; else S.hljLastTrickOpen = !S.hljLastTrickOpen; return render();
     case "advance-trick": return send({ t: "advance" });
     case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
     case "setcount": {

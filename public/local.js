@@ -2446,6 +2446,7 @@ function createGame3(config, seed) {
     leader: 0,
     currentTrick: [],
     lastTrick: null,
+    trickWinner: null,
     heartsBroken: false,
     trickNo: 0,
     points: Array(config.players).fill(0),
@@ -2484,7 +2485,7 @@ function legalPlays(state, seat) {
   return candidates;
 }
 var seatToAct2 = (s) => {
-  if (s.phase === "gameOver") return null;
+  if (s.phase === "gameOver" || s.phase === "trickComplete") return null;
   if (s.phase === "passing") {
     const idx = s.selected.findIndex((sel) => sel === null);
     return idx === -1 ? null : idx;
@@ -2494,6 +2495,7 @@ var seatToAct2 = (s) => {
 var isOver2 = (s) => s.phase === "gameOver";
 function isLegal2(state, move) {
   if (state.phase === "gameOver") return false;
+  if (move.type === "advance") return state.phase === "trickComplete";
   if (seatToAct2(state) !== move.seat) return false;
   if (move.type === "pass") {
     if (state.phase !== "passing" || state.passOffset === 0) return false;
@@ -2528,6 +2530,40 @@ function endHand(state) {
 }
 function applyMove2(state, move) {
   if (state.phase === "gameOver") throw new Error("Game is over");
+  if (move.type === "advance") {
+    if (state.phase !== "trickComplete") throw new Error("Not in trickComplete phase");
+    const winner2 = state.trickWinner;
+    const won2 = state.currentTrick.reduce((a, p) => a + cardPoints(p.card), 0);
+    const points = state.points.map((v, s) => s === winner2 ? v + won2 : v);
+    const trickNo = state.trickNo + 1;
+    const ns2 = {
+      ...state,
+      currentTrick: [],
+      lastTrick: { cards: state.currentTrick, winner: winner2 },
+      leader: winner2,
+      trickNo,
+      points,
+      phase: "playing",
+      trickWinner: null
+    };
+    if (trickNo !== handSize2(state.players)) return attach2(ns2, state, []);
+    const scored = endHand(ns2);
+    const scoreEnt = [];
+    const moon = ns2.points.findIndex((p) => p === 26);
+    if (moon >= 0) {
+      scoreEnt.push({ seat: moon, msg: "shoots the moon! \u2014 everyone else +26" });
+    } else {
+      const delta = scored.lastHand ? scored.lastHand.delta : ns2.points;
+      for (let s = 0; s < ns2.players; s++) if (delta[s] > 0) scoreEnt.push({ seat: s, msg: `+${delta[s]} this hand` });
+    }
+    scoreEnt.push({ seat: null, msg: `scores: ${scored.scores.join(" / ")}` });
+    if (scored.phase === "gameOver" && scored.winner !== null) {
+      scoreEnt.push({ seat: scored.winner, msg: "wins the game \u2014 lowest score!" });
+    } else {
+      scoreEnt.push({ seat: null, msg: `next hand \u2014 ${passDirLabel(scored.passOffset, scored.players)}` });
+    }
+    return attach2(scored, state, scoreEnt);
+  }
   if (seatToAct2(state) !== move.seat) throw new Error("Not this seat's turn");
   if (!isLegal2(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
   const ent = [];
@@ -2565,35 +2601,16 @@ function applyMove2(state, move) {
   }
   const winner = trickWinner2(currentTrick);
   const won = currentTrick.reduce((a, p) => a + cardPoints(p.card), 0);
-  const points = state.points.map((v, s) => s === winner ? v + won : v);
-  const trickNo = state.trickNo + 1;
   ent.push({ seat: winner, msg: "takes the trick", tail: won > 0 ? `+${won}` : void 0 });
   const ns = {
     ...state,
     hands,
     heartsBroken,
-    currentTrick: [],
-    lastTrick: { cards: currentTrick, winner },
-    leader: winner,
-    trickNo,
-    points
+    currentTrick,
+    phase: "trickComplete",
+    trickWinner: winner
   };
-  if (trickNo !== handSize2(state.players)) return attach2(ns, state, ent);
-  const scored = endHand(ns);
-  const moon = ns.points.findIndex((p) => p === 26);
-  if (moon >= 0) {
-    ent.push({ seat: moon, msg: "shoots the moon! \u2014 everyone else +26" });
-  } else {
-    const delta = scored.lastHand ? scored.lastHand.delta : ns.points;
-    for (let s = 0; s < ns.players; s++) if (delta[s] > 0) ent.push({ seat: s, msg: `+${delta[s]} this hand` });
-  }
-  ent.push({ seat: null, msg: `scores: ${scored.scores.join(" / ")}` });
-  if (scored.phase === "gameOver" && scored.winner !== null) {
-    ent.push({ seat: scored.winner, msg: "wins the game \u2014 lowest score!" });
-  } else {
-    ent.push({ seat: null, msg: `next hand \u2014 ${passDirLabel(scored.passOffset, scored.players)}` });
-  }
-  return attach2(scored, state, ent);
+  return attach2(ns, state, ent);
 }
 function legalMoves3(state) {
   if (state.phase !== "playing") return [];
@@ -2626,6 +2643,7 @@ function redact3(state, seat, meta) {
     leader: state.leader,
     currentTrick: state.currentTrick,
     lastTrick: state.lastTrick,
+    trickWinner: state.trickWinner,
     heartsBroken: state.heartsBroken,
     trickNo: state.trickNo,
     points: state.points,
@@ -2641,6 +2659,8 @@ function lobbyView2(config, seat, meta) {
     target: config.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     scores: Array(config.players).fill(0),
     winner: null,
     handNo: 0,
@@ -2654,6 +2674,7 @@ function lobbyView2(config, seat, meta) {
     leader: 0,
     currentTrick: [],
     lastTrick: null,
+    trickWinner: null,
     heartsBroken: false,
     trickNo: 0,
     points: Array(config.players).fill(0),
@@ -2697,6 +2718,11 @@ function aiMove3(state, seat) {
   if (seatToAct2(state) !== seat) throw new Error(`not seat ${seat}'s turn`);
   return state.phase === "passing" ? aiPass(state, seat) : aiPlay(state, seat);
 }
+function pacing(s) {
+  if (s.phase !== "trickComplete") return null;
+  const isLastTrick = s.trickNo + 1 >= Math.floor(buildDeck3(s.players).length / s.players);
+  return { kind: "wait", ms: isLastTrick ? 2600 : 1500, move: { type: "advance", seat: s.trickWinner } };
+}
 var heartsModule = {
   meta: { id: "hearts", name: "Hearts", supportedPlayerCounts: [3, 4, 5] },
   botStepMs: (s) => Math.round(1600 * 4 / s.players),
@@ -2709,7 +2735,8 @@ var heartsModule = {
   isOver: isOver2,
   redact: redact3,
   lobbyView: lobbyView2,
-  aiMove: aiMove3
+  aiMove: aiMove3,
+  pacing
   // no `aux`: Hearts has no non-turn side actions
 };
 
