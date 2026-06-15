@@ -122,7 +122,7 @@ export type HeartsState = {
   players: number;
   target: number; // points that ends the game (lowest total wins)
   seed: number;
-  phase: "passing" | "playing" | "gameOver";
+  phase: "passing" | "playing" | "trickComplete" | "gameOver";
 
   handNo: number; // 0-based; drives the pass direction
   passOffset: number; // pass to (seat + passOffset) % players; 0 = hold (no pass)
@@ -136,6 +136,7 @@ export type HeartsState = {
   leader: number; // seat that leads the current trick
   currentTrick: TrickPlay[]; // cards played to the trick in progress
   lastTrick: CompletedTrick | null; // the just-finished trick, kept for display
+  trickWinner: number | null; // winner of currentTrick during trickComplete gate
   heartsBroken: boolean;
   trickNo: number; // 0-based trick index within the hand
   points: number[]; // point cards captured THIS hand, per seat
@@ -151,14 +152,15 @@ export type HeartsState = {
 
 export type HeartsMove =
   | { type: "pass"; seat: number; cards: number[] } // exactly 3 card ids from your hand
-  | { type: "play"; seat: number; card: number }; // one card id to the current trick
+  | { type: "play"; seat: number; card: number } // one card id to the current trick
+  | { type: "advance"; seat: number }; // clear the trickComplete gate; seat is the trick winner
 
 export type HeartsConfig = { players: number; target: number };
 
 export type HeartsView = {
   you: number | null;
   players: number;
-  phase: "passing" | "playing" | "gameOver" | "lobby";
+  phase: "passing" | "playing" | "trickComplete" | "gameOver" | "lobby";
   target: number;
   seats: RoomMeta["seats"];
   hostSeat: number | null;
@@ -181,6 +183,7 @@ export type HeartsView = {
   leader: number;
   currentTrick: TrickPlay[]; // public
   lastTrick: CompletedTrick | null; // public
+  trickWinner: number | null; // set during trickComplete gate
   heartsBroken: boolean;
   trickNo: number;
   points: number[]; // points captured this hand, per seat (public)
@@ -255,6 +258,7 @@ function createGame(config: HeartsConfig, seed: number): HeartsState {
     leader: 0,
     currentTrick: [],
     lastTrick: null,
+    trickWinner: null,
     heartsBroken: false,
     trickNo: 0,
     points: Array(config.players).fill(0),
@@ -305,7 +309,7 @@ function legalPlays(state: HeartsState, seat: number): HeartsCard[] {
 }
 
 const seatToAct = (s: HeartsState): number | null => {
-  if (s.phase === "gameOver") return null;
+  if (s.phase === "gameOver" || s.phase === "trickComplete") return null;
   if (s.phase === "passing") {
     const idx = s.selected.findIndex((sel) => sel === null);
     return idx === -1 ? null : idx; // all passed -> resolution happens inside applyMove
@@ -317,6 +321,9 @@ const isOver = (s: HeartsState): boolean => s.phase === "gameOver";
 
 function isLegal(state: HeartsState, move: HeartsMove): boolean {
   if (state.phase === "gameOver") return false;
+
+  if (move.type === "advance") return state.phase === "trickComplete";
+
   if (seatToAct(state) !== move.seat) return false;
 
   if (move.type === "pass") {
@@ -363,6 +370,45 @@ function endHand(state: HeartsState): HeartsState {
 
 function applyMove(state: HeartsState, move: HeartsMove): HeartsState {
   if (state.phase === "gameOver") throw new Error("Game is over");
+
+  // Advance clears the trickComplete gate; it is not seat-gated.
+  if (move.type === "advance") {
+    if (state.phase !== "trickComplete") throw new Error("Not in trickComplete phase");
+    const winner = state.trickWinner!;
+    const won = state.currentTrick.reduce((a, p) => a + cardPoints(p.card), 0);
+    const points = state.points.map((v, s) => (s === winner ? v + won : v));
+    const trickNo = state.trickNo + 1;
+    const ns: HeartsState = {
+      ...state,
+      currentTrick: [],
+      lastTrick: { cards: state.currentTrick, winner },
+      leader: winner,
+      trickNo,
+      points,
+      phase: "playing",
+      trickWinner: null,
+    };
+    if (trickNo !== handSize(state.players)) return attach(ns, state, []);
+
+    // Last trick of the hand — score it and log the outcome.
+    const scored = endHand(ns);
+    const scoreEnt: Omit<LogEntry, "id">[] = [];
+    const moon = ns.points.findIndex((p) => p === 26);
+    if (moon >= 0) {
+      scoreEnt.push({ seat: moon, msg: "shoots the moon! — everyone else +26" });
+    } else {
+      const delta = scored.lastHand ? scored.lastHand.delta : ns.points;
+      for (let s = 0; s < ns.players; s++) if (delta[s] > 0) scoreEnt.push({ seat: s, msg: `+${delta[s]} this hand` });
+    }
+    scoreEnt.push({ seat: null, msg: `scores: ${scored.scores.join(" / ")}` });
+    if (scored.phase === "gameOver" && scored.winner !== null) {
+      scoreEnt.push({ seat: scored.winner, msg: "wins the game — lowest score!" });
+    } else {
+      scoreEnt.push({ seat: null, msg: `next hand — ${passDirLabel(scored.passOffset, scored.players)}` });
+    }
+    return attach(scored, state, scoreEnt);
+  }
+
   if (seatToAct(state) !== move.seat) throw new Error("Not this seat's turn");
   if (!isLegal(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
 
@@ -407,41 +453,19 @@ function applyMove(state: HeartsState, move: HeartsMove): HeartsState {
     return attach({ ...state, hands, currentTrick, heartsBroken }, state, ent);
   }
 
-  // Trick complete — award it, keep it for display, advance.
+ // Trick complete — gate on trickComplete so players can read the cards before they're swept.
   const winner = trickWinner(currentTrick);
   const won = currentTrick.reduce((a, p) => a + cardPoints(p.card), 0);
-  const points = state.points.map((v, s) => (s === winner ? v + won : v));
-  const trickNo = state.trickNo + 1;
   ent.push({ seat: winner, msg: "takes the trick", tail: won > 0 ? `+${won}` : undefined });
   const ns: HeartsState = {
     ...state,
     hands,
     heartsBroken,
-    currentTrick: [],
-    lastTrick: { cards: currentTrick, winner },
-    leader: winner,
-    trickNo,
-    points,
+    currentTrick,
+    phase: "trickComplete",
+    trickWinner: winner,
   };
-
-  if (trickNo !== handSize(state.players)) return attach(ns, state, ent); // mid-hand
-
-  // Last trick of the hand — score it and log the outcome.
-  const scored = endHand(ns);
-  const moon = ns.points.findIndex((p) => p === 26);
-  if (moon >= 0) {
-    ent.push({ seat: moon, msg: "shoots the moon! \u2014 everyone else +26" });
-  } else {
-    const delta = scored.lastHand ? scored.lastHand.delta : ns.points;
-    for (let s = 0; s < ns.players; s++) if (delta[s] > 0) ent.push({ seat: s, msg: `+${delta[s]} this hand` });
-  }
-  ent.push({ seat: null, msg: `scores: ${scored.scores.join(" / ")}` });
-  if (scored.phase === "gameOver" && scored.winner !== null) {
-    ent.push({ seat: scored.winner, msg: "wins the game \u2014 lowest score!" });
-  } else {
-    ent.push({ seat: null, msg: `next hand \u2014 ${passDirLabel(scored.passOffset, scored.players)}` });
-  }
-  return attach(scored, state, ent);
+  return attach(ns, state, ent);
 }
 
 // ---------- legal-move enumeration (for UI / simple bots) ----------
@@ -482,6 +506,7 @@ function redact(state: HeartsState, seat: number | null, meta: RoomMeta): Hearts
     leader: state.leader,
     currentTrick: state.currentTrick,
     lastTrick: state.lastTrick,
+    trickWinner: state.trickWinner,
     heartsBroken: state.heartsBroken,
     trickNo: state.trickNo,
     points: state.points,
@@ -498,6 +523,8 @@ function lobbyView(config: HeartsConfig, seat: number | null, meta: RoomMeta): H
     target: config.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement,
+    disconnectedSeats: meta.disconnectedSeats,
     scores: Array(config.players).fill(0),
     winner: null,
     handNo: 0,
@@ -511,6 +538,7 @@ function lobbyView(config: HeartsConfig, seat: number | null, meta: RoomMeta): H
     leader: 0,
     currentTrick: [],
     lastTrick: null,
+    trickWinner: null,
     heartsBroken: false,
     trickNo: 0,
     points: Array(config.players).fill(0),
@@ -577,6 +605,15 @@ function aiMove(state: HeartsState, seat: number): HeartsMove {
   return state.phase === "passing" ? aiPass(state, seat) : aiPlay(state, seat);
 }
 
+// ---------- pacing ----------
+
+function pacing(s: HeartsState): { kind: "auto" | "wait"; ms: number; move: HeartsMove } | null {
+  if (s.phase !== "trickComplete") return null;
+  // Last trick of the hand lingers a bit longer; any trick lingers for bot-only games too.
+  const isLastTrick = s.trickNo + 1 >= Math.floor(buildDeck(s.players).length / s.players);
+  return { kind: "wait", ms: isLastTrick ? 2600 : 1500, move: { type: "advance", seat: s.trickWinner! } };
+}
+
 // ---------- the module ----------
 
 export const heartsModule: Game<HeartsState, HeartsMove, HeartsConfig, HeartsView> = {
@@ -592,6 +629,7 @@ export const heartsModule: Game<HeartsState, HeartsMove, HeartsConfig, HeartsVie
   redact,
   lobbyView,
   aiMove,
+  pacing,
   // no `aux`: Hearts has no non-turn side actions
 };
 
