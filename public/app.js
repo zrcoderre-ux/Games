@@ -756,15 +756,15 @@ function renderStart() {
   app.__set = `
     <div class="hs-rail">
       <div class="hs-felt">
-        <img class="hs-wm" src="/joker-hat.png" alt="">
-
         <h1 class="hs-title">BONHOMME</h1>
 
         <label class="hs-lbl" style="margin-top:6px">Room Code</label>
         <input class="hs-fld" id="f-room" value="${esc(S.room || "")}"
           placeholder="blank = new room" autocomplete="off" />
 
-        <label class="hs-lbl" style="margin-top:120px">Choose a Game</label>
+        <img class="hs-wm" src="/joker-hat.png" alt="">
+
+        <label class="hs-lbl">Choose a Game</label>
         <div class="tbl-fan">
           <input type="hidden" id="f-game" value="${esc(g)}" />
           <div class="tbl-fan-inner">${gameCards}</div>

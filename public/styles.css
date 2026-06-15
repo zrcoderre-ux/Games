@@ -202,11 +202,11 @@ body:has(.table){
 
 /* Hat watermark — sits behind content */
 .hs-wm{
-  position:absolute;pointer-events:none;z-index:0;
-  left:50%;top:180px;transform:translateX(-50%);
-  width:91%;max-width:378px;
-  opacity:.7;
-  filter:saturate(.93) brightness(.97) drop-shadow(0 3px 2px rgba(0,0,0,.4));
+  display:block;pointer-events:none;
+  width:80%;max-width:300px;
+  margin:8px auto 12px;
+  opacity:.85;
+  filter:saturate(.93) brightness(.97) drop-shadow(0 3px 6px rgba(0,0,0,.5));
 }
 
 /* All direct children of .hs-felt need z-index above grain/vignette overlays */
