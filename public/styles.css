@@ -154,6 +154,9 @@ body:has(.hs-rail){
   background:radial-gradient(125% 95% at 50% 50%,#1d4d36 0%,#102b1d 50%,#08180f 100%);
   background-attachment:fixed;
 }
+#app:has(.hs-rail){
+  padding-top:max(4px,env(safe-area-inset-top));
+}
 /* Deep-green room behind the game/lobby table */
 body:has(.table){
   background:radial-gradient(120% 80% at 50% 42%,#143a2a 0%,#0d2419 60%,#08160f 100%);
@@ -162,7 +165,7 @@ body:has(.table){
 
 /* Wood rail wrapping the felt card */
 .hs-rail{
-  width:100%;max-width:428px;margin:26px auto;border-radius:24px;padding:7px;
+  width:100%;max-width:428px;margin:8px auto 26px;border-radius:24px;padding:7px;
   background:
     repeating-linear-gradient(89deg,rgba(18,9,3,.20) 0 1px,transparent 1px 8px),
     repeating-linear-gradient(89deg,rgba(150,100,55,.10) 0 1px,transparent 1px 4px),
