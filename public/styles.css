@@ -157,7 +157,7 @@ body:has(.hs-rail){
 #app:has(.hs-rail){
   padding:0;
   justify-content:flex-end;
-  min-height:100dvh;overflow-y:auto;
+  min-height:100svh;overflow-y:auto;
 }
 /* Deep-green room behind the game/lobby table */
 body:has(.table){
