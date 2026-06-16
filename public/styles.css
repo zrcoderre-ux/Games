@@ -167,7 +167,7 @@ body:has(.table){
 
 /* Wood rail wrapping the felt card */
 .hs-rail{
-  width:100%;max-width:428px;margin:0 auto -70px;border-radius:0 0 24px 24px;padding:7px 7px 7px;
+  width:100%;max-width:428px;margin:0 auto;border-radius:0 0 24px 24px;padding:7px 7px 7px;
   background:
     repeating-linear-gradient(89deg,rgba(18,9,3,.20) 0 1px,transparent 1px 8px),
     repeating-linear-gradient(89deg,rgba(150,100,55,.10) 0 1px,transparent 1px 4px),
@@ -431,7 +431,9 @@ button{font-family:inherit}
   }
   #app:has(.hs-rail){
     height:100dvh;min-height:unset;overflow:hidden;
+    justify-content:flex-start;
   }
+  .hs-rail{ margin-bottom:-70px; }
   /* .table prefix needed: these must out-rank the later base rules */
   .table .felt-frame{
     flex:1;height:auto;margin:0 5px 12px;
