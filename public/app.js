@@ -732,7 +732,7 @@ function renderStart() {
   const g = S.pickGame;
   // HLJ first (longest name, should be visible), then the rest
   // Pegs & Jokers hidden until ready for prime time
-  const gameIds = ["high-low-jack", "rummy500", "hearts"];
+  const gameIds = ["rummy500", "high-low-jack", "hearts"];
 
   // Spread three cards with a slight fan
   const positions = [
