@@ -207,7 +207,7 @@ body:has(.table){
 .hs-wm-wrap{
   width:123.9%;max-width:468px;
   height:clamp(230px, 39vh, 332px);overflow:hidden;
-  margin:clamp(-5px, -0.6vh, -3px) -44px clamp(8px, 2.6vh, 16px) 0;
+  margin:clamp(-5px, -0.6vh, -3px) -55px clamp(8px, 2.6vh, 16px) 0;
   align-self:flex-end;
 }
 /* Hat watermark */
