@@ -381,6 +381,13 @@ body:has(.table){
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 html.is-standalone,html.is-standalone body{height:100%;overflow:hidden}
+/* Browser-mode rubber-band overscroll can reveal the page past its content
+   bounds — paint the same background on <html> and stop the bounce itself,
+   so it never shows raw white at the top/bottom on scroll. */
+html{
+  background:radial-gradient(140% 80% at 50% -5%, #1a2848 0%, var(--wood-1) 40%, var(--wood-0) 100%);
+  overscroll-behavior-y:none;
+}
 body{
   margin:0;
   font-family:"Hanken Grotesk",system-ui,sans-serif;
@@ -389,6 +396,7 @@ body{
     radial-gradient(140% 80% at 50% -5%, #1a2848 0%, var(--wood-1) 40%, var(--wood-0) 100%);
   background-attachment:fixed;
   overflow-x:hidden;
+  overscroll-behavior-y:none;
   -webkit-font-smoothing:antialiased;
 }
 /* subtle grid texture */
