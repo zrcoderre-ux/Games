@@ -184,7 +184,7 @@ body:has(.table){
 
 /* Green felt interior */
 .hs-felt{
-  position:relative;border-radius:0 0 17px 17px;padding:max(6px,env(safe-area-inset-top)) 28px max(4px,env(safe-area-inset-bottom));overflow:hidden;
+  position:relative;border-radius:0 0 17px 17px;padding:max(6px,env(safe-area-inset-top)) 28px 4px;overflow:hidden;
   background:radial-gradient(135% 110% at 50% 48%,#246444 0%,#1f5639 50%,#1a4631 100%);
   box-shadow:inset 0 0 60px rgba(0,0,0,.5),inset 0 2px 0 rgba(0,0,0,.3);
   display:flex;flex-direction:column;align-items:center;
