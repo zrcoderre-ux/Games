@@ -230,7 +230,7 @@ body:has(.table){
   font-size:clamp(31px,9.2vw,43px);letter-spacing:.1em;line-height:1;margin-top:0;
   color:#6a23b8;
   -webkit-text-stroke:1.5px #d4af37;
-  text-shadow:0 1px 0 #d4af37,0 -1px 0 #d4af37,1px 0 0 #d4af37,-1px 0 0 #d4af37,0 3px 8px rgba(0,0,0,.55);
+  text-shadow:0 1px 0 #d4af37,0 -1px 0 #d4af37,1px 0 0 #d4af37,-1px 0 0 #d4af37;
   text-align:center;
 }
 
