@@ -202,9 +202,9 @@ body:has(.table){
 
 /* Hat wrapper — clips transparent PNG edges, keeps full hat visible */
 .hs-wm-wrap{
-  width:95%;max-width:360px;
+  width:95%;max-width:396px;
   height:290px;overflow:hidden;
-  margin:-30px auto 0;
+  margin:0 auto;
 }
 /* Hat watermark */
 .hs-wm{
