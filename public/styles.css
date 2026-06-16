@@ -200,17 +200,20 @@ body:has(.table){
   box-shadow:inset 0 0 70px rgba(0,0,0,.32);
 }
 
-/* Hat wrapper — clips transparent PNG edges, keeps full hat visible */
+/* Hat wrapper — clips transparent PNG edges, keeps full hat visible.
+   Sized with clamp()/vh so it shrinks to fit short viewports (e.g. installed
+   app mode, which locks #app to 100dvh with no scroll) instead of overflowing.
+   Upper bounds preserve the current full-size positioning/proportions. */
 .hs-wm-wrap{
-  width:115.2%;max-width:437px;
-  height:315px;overflow:hidden;
-  margin:-5px auto 24px;
+  width:121.8%;max-width:460px;
+  height:clamp(230px, 39vh, 332px);overflow:hidden;
+  margin:clamp(-5px, -0.6vh, -3px) auto clamp(8px, 2.6vh, 16px);
 }
 /* Hat watermark */
 .hs-wm{
   display:block;pointer-events:none;
   width:100%;
-  margin-top:-55px;
+  margin-top:clamp(-58px, -7vh, -55px);
   opacity:1;
   mix-blend-mode:multiply;
   filter:saturate(.9) brightness(1.02) contrast(.96);
