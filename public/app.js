@@ -796,13 +796,22 @@ function positionHatWatermark() {
   const rail = document.querySelector(".hs-rail");
   const spacer = document.querySelector(".hs-wm-spacer");
   const wrap = document.querySelector(".hs-wm-wrap");
-  if (!rail || !spacer || !wrap) return;
+  const img = wrap && wrap.querySelector(".hs-wm");
+  if (!rail || !spacer || !wrap || !img) return;
   const r = rail.getBoundingClientRect();
   const s = spacer.getBoundingClientRect();
   const width = Math.min(s.width * 1.276, 482);
+  // The crop (how much of the hat's height shows through the wrap) needs to
+  // scale with the hat's own rendered width, not with viewport height — a
+  // vh-based crop stays fixed while a wider hat (bigger phones) renders
+  // proportionally taller, clipping more of it (e.g. the lowest-hanging
+  // bell). These ratios reproduce the original 390px-wide crop exactly, just
+  // scaled, so the look is unchanged but nothing gets cut off at any width.
   wrap.style.width = width + "px";
+  wrap.style.height = width * 0.6822 + "px";
   wrap.style.top = (s.top - r.top) + "px";
   wrap.style.right = (r.right - s.right - 70) + "px";
+  img.style.marginTop = -(width * 0.1421) + "px";
 }
 window.addEventListener("resize", () => positionHatWatermark());
 // Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
