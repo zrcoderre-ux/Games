@@ -205,7 +205,7 @@ body:has(.table){
    app mode, which locks #app to 100dvh with no scroll) instead of overflowing.
    Upper bounds preserve the current full-size positioning/proportions. */
 .hs-wm-wrap{
-  width:123.9%;max-width:468px;
+  width:127.6%;max-width:482px;
   height:clamp(230px, 39vh, 332px);overflow:hidden;
   margin:clamp(-5px, -0.6vh, -3px) -60px clamp(8px, 2.6vh, 16px) 0;
   align-self:flex-end;
