@@ -766,7 +766,7 @@ function renderStart() {
         <input class="hs-fld" id="f-room" value="${esc(S.room || "")}"
           placeholder="blank = new room" autocomplete="off" />
 
-        <div class="hs-wm-wrap"><img class="hs-wm" src="/joker-hat.png" alt=""></div>
+        <div class="hs-wm-spacer"></div>
 
         <label class="hs-lbl hs-lbl-game">Choose a Game</label>
         <div class="tbl-fan">
@@ -781,9 +781,30 @@ function renderStart() {
         <button class="hs-cta" data-action="connect">Take a Seat</button>
 
       </div>
+      <div class="hs-wm-wrap"><img class="hs-wm" src="/joker-hat.png" alt=""></div>
     </div>`;
-  requestAnimationFrame(() => { if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur(); });
+  requestAnimationFrame(() => {
+    if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
+    positionHatWatermark();
+  });
 }
+// The hat watermark lives outside .hs-felt (which clips overflow for its
+// rounded corners) so it can bleed onto the wood rail without being cut off.
+// Its position is measured from the invisible .hs-wm-spacer left in its old
+// flow position, so it lines up exactly where it used to render in-flow.
+function positionHatWatermark() {
+  const rail = document.querySelector(".hs-rail");
+  const spacer = document.querySelector(".hs-wm-spacer");
+  const wrap = document.querySelector(".hs-wm-wrap");
+  if (!rail || !spacer || !wrap) return;
+  const r = rail.getBoundingClientRect();
+  const s = spacer.getBoundingClientRect();
+  const width = Math.min(s.width * 1.276, 482);
+  wrap.style.width = width + "px";
+  wrap.style.top = (s.top - r.top) + "px";
+  wrap.style.right = (r.right - s.right - 70) + "px";
+}
+window.addEventListener("resize", () => positionHatWatermark());
 // Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
 // scores=null → lobby (ghost rings). scores=[a,b] → gameplay (filled numbers).
 // highBid={seat,amount} → shows winning bid in that team's BID cell.
