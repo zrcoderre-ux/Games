@@ -760,7 +760,7 @@ function renderStart() {
   app.__set = `
     <div class="hs-rail">
       <div class="hs-felt">
-        <h1 class="hs-title">BONHOMME</h1>
+        <h1 class="hs-title">BONHOMME!</h1>
 
         <label class="hs-lbl" style="margin-top:16px">Room Code</label>
         <input class="hs-fld" id="f-room" value="${esc(S.room || "")}"
