@@ -296,7 +296,7 @@ body:has(.table){
   position:relative;z-index:1;
 }
 .tbl-card-corner{
-  position:absolute;font-size:9px;font-family:"Bevan",serif;font-weight:400;line-height:1;
+  position:absolute;font-size:27px;font-family:"Bevan",serif;font-weight:400;line-height:1;
   color:#1a1a2e;z-index:1;
 }
 .tbl-card.red .tbl-card-corner{color:#8b1a1a}
