@@ -791,7 +791,12 @@ function renderStart() {
     </div>`;
   requestAnimationFrame(() => {
     if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
-    positionHatWatermark();
+    // The morph preserves .hs-wm-wrap's inline style across re-renders (see
+    // morphNode), so it only needs positioning once on first mount — not on
+    // every re-render (e.g. picking a game), which on some devices recomputes
+    // to a slightly different value mid-interaction and causes a visible jump.
+    const wrap = document.querySelector(".hs-wm-wrap");
+    if (wrap && !wrap.style.width) positionHatWatermark();
   });
 }
 // The hat watermark lives outside .hs-felt (which clips overflow for its
