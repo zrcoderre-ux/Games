@@ -431,9 +431,12 @@ button{font-family:inherit}
   }
   #app:has(.hs-rail){
     height:100dvh;min-height:unset;overflow:hidden;
-    justify-content:flex-start;
   }
-  .hs-rail{ margin-bottom:-70px; }
+  .hs-rail{
+    flex:1;min-height:0;margin:0 auto;
+    display:flex;flex-direction:column;
+  }
+  .hs-felt{ flex:1;min-height:0;justify-content:flex-end; }
   /* .table prefix needed: these must out-rank the later base rules */
   .table .felt-frame{
     flex:1;height:auto;margin:0 5px 12px;
