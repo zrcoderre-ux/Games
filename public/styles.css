@@ -370,6 +370,7 @@ body:has(.table){
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
+html.is-standalone,html.is-standalone body{height:100%;overflow:hidden}
 body{
   margin:0;
   font-family:"Hanken Grotesk",system-ui,sans-serif;
