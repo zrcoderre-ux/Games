@@ -116,8 +116,14 @@ function morphNode(a, b) {
     if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue;
     return;
   }
+  // .hs-wm-wrap/.hs-wm get their "style" set imperatively by positionHatWatermark,
+  // never in the rendered template — preserve it across morphs so re-rendering
+  // for unrelated state changes (e.g. picking a game) doesn't strip it for a
+  // frame and cause a visible jump before the next rAF reapplies it.
+  const keepStyle = a.classList && (a.classList.contains("hs-wm-wrap") || a.classList.contains("hs-wm"));
   for (let i = a.attributes.length - 1; i >= 0; i--) {
     const n = a.attributes[i].name;
+    if (keepStyle && n === "style") continue;
     if (!b.hasAttribute(n)) a.removeAttribute(n);
   }
   for (const at of b.attributes) {
