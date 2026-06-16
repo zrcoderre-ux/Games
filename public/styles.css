@@ -206,8 +206,8 @@ body:has(.table){
    Upper bounds preserve the current full-size positioning/proportions. */
 .hs-wm-wrap{
   width:127.6%;max-width:482px;
-  height:clamp(230px, 39vh, 332px);overflow:hidden;
-  margin:clamp(-5px, -0.6vh, -3px) -70px 0 0;
+  height:clamp(196px, 33vh, 284px);overflow:hidden;
+  margin:clamp(-5px, -0.6vh, -3px) -26px 0 0;
   align-self:flex-end;
 }
 /* Hat watermark */
@@ -227,8 +227,10 @@ body:has(.table){
 .hs-title{
   font-family:"Fraunces",serif;font-weight:700;
   font-size:clamp(31px,9.2vw,43px);letter-spacing:.1em;line-height:1;margin-top:0;
-  color:#6a23b8;
-  text-shadow:none;text-align:center;
+  color:#9d5fe8;
+  -webkit-text-stroke:1.5px #2a0d4a;
+  text-shadow:0 1px 0 #2a0d4a,0 -1px 0 #2a0d4a,1px 0 0 #2a0d4a,-1px 0 0 #2a0d4a,0 3px 8px rgba(0,0,0,.55);
+  text-align:center;
 }
 
 /* Italic serif subtitle */
