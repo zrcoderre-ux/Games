@@ -441,7 +441,7 @@ button{font-family:inherit}
     display:flex;flex-direction:column;
   }
   .hs-felt{ flex:1;min-height:0; }
-  .hs-cta{ margin-top:auto; }
+  .hs-lbl-name{ margin-top:auto; }
   /* .table prefix needed: these must out-rank the later base rules */
   .table .felt-frame{
     flex:1;height:auto;margin:0 5px 12px;
@@ -458,7 +458,7 @@ html.is-standalone #app:has(.lby-wrap){ height:100dvh;min-height:unset;overflow:
 html.is-standalone #app:has(.hs-rail){ height:100dvh;min-height:unset;overflow:hidden; }
 html.is-standalone .hs-rail{ flex:1;min-height:0;margin:0 auto;display:flex;flex-direction:column; }
 html.is-standalone .hs-felt{ flex:1;min-height:0; }
-html.is-standalone .hs-cta{ margin-top:auto; }
+html.is-standalone .hs-lbl-name{ margin-top:auto; }
 html.is-standalone .table .felt-frame{ flex:1;height:auto;margin:0 5px 12px; }
 html.is-standalone .table .selfwrap-spacer{ height:215px; }
 

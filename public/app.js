@@ -774,7 +774,7 @@ function renderStart() {
           <div class="tbl-fan-inner">${gameCards}</div>
         </div>
 
-        <label class="hs-lbl">Your Name</label>
+        <label class="hs-lbl hs-lbl-name">Your Name</label>
         <input class="hs-fld" id="f-name" value="${esc(S.name || "")}"
           placeholder="e.g. Alex" autocomplete="off" />
 
