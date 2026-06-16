@@ -214,6 +214,8 @@ body:has(.table){
   opacity:.7;
   mix-blend-mode:multiply;
   filter:saturate(.9) brightness(1.02) contrast(.96);
+  transform:scale(1.1);
+  transform-origin:center top;
 }
 
 /* All direct children of .hs-felt need z-index above grain/vignette overlays */
