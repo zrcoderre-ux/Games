@@ -251,10 +251,10 @@ body:has(.table){
 /* Labels */
 .hs-lbl{
   display:block;text-align:center;width:100%;
-  font-family:"Bevan",serif;font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;
+  font-family:"Bevan",serif;font-size:15.2px;letter-spacing:.22em;text-transform:uppercase;
   color:#dcc26a;margin:0 0 6px;text-shadow:0 1px 3px rgba(0,0,0,.5);
 }
-.hs-lbl-game{font-size:13px;letter-spacing:.2em;margin-bottom:22px;}
+.hs-lbl-game{font-size:20.8px;letter-spacing:.2em;margin-bottom:22px;}
 
 /* Input fields */
 .hs-fld{
@@ -2335,7 +2335,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* ---- Home screen: center rail, slightly larger type ---------- */
   .hs-rail{ margin:40px auto; }
   .hs-title{ font-size:52px; }
-  .hs-lbl{ font-size:11px; margin-bottom:9px; }
+  .hs-lbl{ font-size:17.6px; margin-bottom:9px; }
   .hs-fld{ font-size:17px; padding:13px; margin-bottom:24px; }
   .hs-cta{ font-size:19px; padding:16px; }
   .hs-felt .tbl-fan{ height:178px; margin-bottom:26px; padding-top:22px; }
