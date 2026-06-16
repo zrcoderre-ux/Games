@@ -223,12 +223,11 @@ body:has(.table){
 /* All direct children of .hs-felt need z-index above grain/vignette overlays */
 .hs-felt > *{position:relative;z-index:2;}
 
-/* Gold gradient title */
+/* Purple title, matching the hat */
 .hs-title{
   font-family:"Fraunces",serif;font-weight:700;
   font-size:clamp(31px,9.2vw,43px);letter-spacing:.1em;line-height:1;margin-top:0;
-  background:linear-gradient(180deg,#f0dd9a,#d4b85a 44%,#a8903c 72%,#e3cd7c);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
+  color:#6a23b8;
   text-shadow:none;text-align:center;
 }
 
