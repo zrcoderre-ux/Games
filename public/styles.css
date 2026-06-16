@@ -226,7 +226,7 @@ body:has(.table){
 
 /* Purple title, matching the hat */
 .hs-title{
-  font-family:"Fraunces",serif;font-weight:700;
+  font-family:"Bevan",serif;font-weight:700;
   font-size:clamp(31px,9.2vw,43px);letter-spacing:.1em;line-height:1;margin-top:0;
   color:#6a23b8;
   -webkit-text-stroke:1.5px #d4af37;
