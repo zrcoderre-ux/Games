@@ -288,7 +288,7 @@ body:has(.table){
   padding:8px 6px;user-select:none;appearance:none;
 }
 .tbl-card-name{
-  font-family:"Fraunces",serif;font-size:15px;font-weight:600;
+  font-family:"Bevan",serif;font-size:15px;font-weight:400;
   text-align:center;line-height:1.3;color:#2a1a08;
   position:relative;z-index:1;
 }
