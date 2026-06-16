@@ -808,7 +808,7 @@ function positionHatWatermark() {
   // viewport height), so every bell is always visible at any screen size.
   wrap.style.width = width + "px";
   wrap.style.height = width * 1.5 * ((1527 - 59) / 1536) + "px";
-  wrap.style.top = (s.top - r.top) + "px";
+  wrap.style.top = (s.top - r.top - 28) + "px";
   wrap.style.right = (r.right - s.right - 70) + "px";
   img.style.marginTop = -(width * 1.5 * (59 / 1536)) + "px";
 }
