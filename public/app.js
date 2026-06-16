@@ -801,17 +801,16 @@ function positionHatWatermark() {
   const r = rail.getBoundingClientRect();
   const s = spacer.getBoundingClientRect();
   const width = Math.min(s.width * 1.276, 482);
-  // The crop (how much of the hat's height shows through the wrap) needs to
-  // scale with the hat's own rendered width, not with viewport height — a
-  // vh-based crop stays fixed while a wider hat (bigger phones) renders
-  // proportionally taller, clipping more of it (e.g. the lowest-hanging
-  // bell). These ratios reproduce the original 390px-wide crop exactly, just
-  // scaled, so the look is unchanged but nothing gets cut off at any width.
+  // joker-hat.png is 1024x1536 with its opaque artwork spanning y=59..1527 —
+  // there's a third, forward-hanging point (with two of the three bells)
+  // that reaches almost the full height of the image. Crop tight to that
+  // actual content box, scaled to the hat's own rendered width (not
+  // viewport height), so every bell is always visible at any screen size.
   wrap.style.width = width + "px";
-  wrap.style.height = width * 0.6822 + "px";
+  wrap.style.height = width * 1.5 * ((1527 - 59) / 1536) + "px";
   wrap.style.top = (s.top - r.top) + "px";
   wrap.style.right = (r.right - s.right - 70) + "px";
-  img.style.marginTop = -(width * 0.1421) + "px";
+  img.style.marginTop = -(width * 1.5 * (59 / 1536)) + "px";
 }
 window.addEventListener("resize", () => positionHatWatermark());
 // Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
