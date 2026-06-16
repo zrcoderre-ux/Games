@@ -297,8 +297,8 @@ body:has(.table){
   color:#1a1a2e;z-index:1;
 }
 .tbl-card.red .tbl-card-corner{color:#8b1a1a}
-.tbl-card-corner.tl{top:-7px;left:2px}
-.tbl-card-corner.br{bottom:-7px;right:2px;transform:rotate(180deg)}
+.tbl-card-corner.tl{top:-8px;left:2px}
+.tbl-card-corner.br{bottom:-8px;right:2px;transform:rotate(180deg)}
 .tbl-card.selected{
   transform:translateY(-14px) scale(1.04) rotate(0deg) !important;
   z-index:10 !important;
