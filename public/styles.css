@@ -2516,3 +2516,39 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   font-family:"Fraunces",serif; font-style:italic;
   font-size:11.5px; color:var(--ink-soft); pointer-events:none;
 }
+
+/* ============================================================
+   Mobile landscape — hide player bar, peek hand at bottom
+   ============================================================ */
+@media (max-height:500px) and (orientation:landscape){
+  /* Hide the player info bar; keep the hand */
+  .selfbar{ display:none !important; }
+
+  /* Spacer: only tall enough for 2/3 of a card to peek (~56px) */
+  .selfwrap-spacer{ height:56px !important; }
+  html.is-standalone .table .selfwrap-spacer{ height:56px !important; }
+  #app:not(:has(.lby-outer)) .table .selfwrap-spacer{ height:56px !important; }
+
+  /* Shift selfwrap down so the bottom third of the fan is off-screen */
+  .selfwrap{
+    bottom:-28px !important;
+    padding:0 6px !important;
+  }
+  #app:not(:has(.lby-outer)) .table .selfwrap{
+    position:fixed !important;
+    bottom:-28px !important;
+    padding:0 6px !important;
+  }
+
+  /* Felt fills the extra space */
+  .table .felt-frame{
+    flex:1 !important;
+    height:auto !important;
+    margin-bottom:0 !important;
+  }
+  html.is-standalone .table .felt-frame{
+    flex:1 !important;
+    height:auto !important;
+    margin-bottom:0 !important;
+  }
+}
