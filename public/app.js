@@ -638,12 +638,12 @@ function tableShell(v, parts) {
         if (oppIdx < leftCount) {
           side = "left"; x = 0;
           const fy = leftCount === 1 ? 0.5 : 1 - oppIdx / (leftCount - 1);
-          y = 20 + 60 * fy;
+          y = 10 + 80 * fy;
         } else {
           side = "right"; x = 100;
           const rIdx = oppIdx - leftCount;
           const fy = rightCount === 1 ? 0.5 : rIdx / (rightCount - 1);
-          y = 20 + 60 * fy;
+          y = 10 + 80 * fy;
         }
       } else {
         ({ x, y, side } = wallPerimPos(off, n, podBounds));
