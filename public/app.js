@@ -622,11 +622,32 @@ function tableShell(v, parts) {
     const podY1 = n === 6 || n === 7 ? 36 : 28;
     const podY2 = n >= 8 ? 55 : n >= 6 ? 74 : n >= 5 ? 68 : 82;
     const podBounds = { x1: 12, x2: 88, y1: podY1, y2: podY2, wideY1: 22, wideY2: Math.max(podY2, 72), topY: 9 };
+    // In mobile landscape, force all pods to left/right walls only.
+    const isLandscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
     const infos = podItems.map(({ seat, html }) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
-      const { x, y, side } = wallPerimPos(off, n, podBounds);
+      let x, y, side;
+      if (isLandscape) {
+        // Distribute all opponents evenly across left/right walls.
+        const opponents = n - 1;
+        const oppIdx = off - 1; // 0-based among opponents
+        const leftCount = Math.ceil(opponents / 2);
+        const rightCount = opponents - leftCount;
+        if (oppIdx < leftCount) {
+          side = "left"; x = 0;
+          const fy = leftCount === 1 ? 0.5 : 1 - oppIdx / (leftCount - 1);
+          y = 20 + 60 * fy;
+        } else {
+          side = "right"; x = 100;
+          const rIdx = oppIdx - leftCount;
+          const fy = rightCount === 1 ? 0.5 : rIdx / (rightCount - 1);
+          y = 20 + 60 * fy;
+        }
+      } else {
+        ({ x, y, side } = wallPerimPos(off, n, podBounds));
+      }
       return { html, x, y, side: `pos-${side}` };
     });
     const slots = infos.length
