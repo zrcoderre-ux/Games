@@ -598,6 +598,7 @@ function logSheet() {
 
 // shared table frame: pods distributed around the felt, center play area, your rail at the bottom
 function tableShell(v, parts) {
+  const isLandscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
   // pods can be [{seat,html},...] for compass layout, or legacy string[] for special cases
   const podItems = parts.pods;
   let feltPods;
@@ -622,8 +623,6 @@ function tableShell(v, parts) {
     const podY1 = n === 6 || n === 7 ? 36 : 28;
     const podY2 = n >= 8 ? 55 : n >= 6 ? 74 : n >= 5 ? 68 : 82;
     const podBounds = { x1: 12, x2: 88, y1: podY1, y2: podY2, wideY1: 22, wideY2: Math.max(podY2, 72), topY: 9 };
-    // In mobile landscape, force all pods to left/right walls only.
-    const isLandscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
     const infos = podItems.map(({ seat, html }) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
