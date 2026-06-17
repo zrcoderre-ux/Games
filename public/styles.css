@@ -2537,7 +2537,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     margin-top:0 !important;
   }
 
-  /* Felt fills the full viewport — edge to edge, top to bottom */
+  /* Felt: same look as portrait but fills full viewport height.
+     Keep side margins + border-radius; no top/bottom margin. */
   .table .felt-frame,
   html.is-standalone .table .felt-frame{
     flex:1 !important;
@@ -2545,6 +2546,12 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     margin:0 !important;
     border-radius:0 !important;
   }
+
+  /* Rotate watermarks 90° to suit the landscape orientation (no resize) */
+  .trump-watermark{ transform:rotate(90deg) !important; }
+  .trump-watermark.joker-placeholder{ transform:rotate(90deg) !important; }
+  .lby-felt-watermark{ transform:translate(-50%,-50%) rotate(90deg) !important; }
+  .felt-corners{ transform:rotate(90deg) !important; }
 
   /* Hide the player info bar; keep the hand */
   .selfbar{ display:none !important; }
