@@ -1577,16 +1577,19 @@ function endRound(state, outSeat) {
   const delta = state.scores.map((_, s) => meldedPts[s] - heldPts[s]);
   const heldCards = state.hands.map((h) => [...h]);
   const scores = state.scores.map((v, s) => v + delta[s]);
-  const lastRound = { delta, outSeat, meldedPts, heldPts, heldCards };
+  const lastMelds = state.melds.map((m) => ({ ...m, owner: state.cardOwner[m.cards[0]?.id] ?? -1 }));
+  const lastRound = { delta, outSeat, meldedPts, heldPts, heldCards, lastMelds };
   const max = Math.max(...scores);
   if (max >= state.target) {
     return { ...state, scores, phase: "gameOver", winner: scores.indexOf(max), lastRound };
   }
-  return dealRound({ ...state, scores, lastRound, dealerSeat: (state.dealerSeat + 1) % state.players });
+  const nextDealer = (state.dealerSeat + 1) % state.players;
+  return { ...state, scores, phase: "handComplete", dealerSeat: nextDealer, lastRound };
 }
-var seatToAct = (s) => s.phase === "gameOver" ? null : s.turn;
+var seatToAct = (s) => s.phase === "gameOver" || s.phase === "handComplete" ? null : s.turn;
 var isOver = (s) => s.phase === "gameOver";
 function isLegal(state, move) {
+  if (move.type === "advance") return state.phase === "handComplete";
   if (state.phase !== "playing" || move.seat !== state.turn) return false;
   const hand = state.hands[move.seat];
   switch (move.type) {
@@ -1655,9 +1658,13 @@ function isLegal(state, move) {
   return false;
 }
 function applyMoveCore(state, move) {
-  if (state.phase !== "playing") throw new Error("Game is over");
-  if (seatToAct(state) !== move.seat) throw new Error("Not this seat's turn");
+  if (state.phase === "gameOver") throw new Error("Game is over");
   if (!isLegal(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
+  if (move.type === "advance") {
+    if (state.phase !== "handComplete") throw new Error("Not in handComplete");
+    return dealRound({ ...state });
+  }
+  if (seatToAct(state) !== move.seat) throw new Error("Not this seat's turn");
   const seat = move.seat;
   const handsWith = (h) => state.hands.map((x, s) => s === seat ? h : x);
   const clears = (ids) => state.mustMeldCardId != null && ids.includes(state.mustMeldCardId) ? null : state.mustMeldCardId;
@@ -1760,8 +1767,8 @@ function legalMoves2(state) {
   return moves;
 }
 function redact2(state, seat, meta) {
-  const toAct = state.phase === "gameOver" ? null : state.turn;
-  const yours = seat !== null && toAct === seat;
+  const toAct = state.phase === "gameOver" || state.phase === "handComplete" ? null : state.turn;
+  const yours = seat !== null && state.phase === "playing" && toAct === seat;
   return {
     you: seat,
     players: state.players,
@@ -1776,8 +1783,8 @@ function redact2(state, seat, meta) {
     dealerSeat: state.dealerSeat,
     toAct,
     turnPhase: state.turnPhase,
-    yourTurn: yours,
-    legalMoves: yours ? legalMoves2(state) : [],
+    yourTurn: yours && state.phase === "playing",
+    legalMoves: yours && state.phase === "playing" ? legalMoves2(state) : [],
     yourHand: seat !== null && state.hands[seat] ? state.hands[seat] : [],
     handCounts: state.hands.map((h) => h.length),
     stockCount: state.stock.length,
@@ -2320,6 +2327,10 @@ function aiMove2(state, seat) {
   const chosen = maybeMisplay(discardRanked, rng, personality.misplayRate);
   return { type: "discard", seat, cardId: chosen.card.id };
 }
+function pacing(s) {
+  if (s.phase !== "handComplete") return null;
+  return { kind: "wait", ms: 3e4, move: { type: "advance", seat: s.turn } };
+}
 var rummy500Module = {
   meta: { id: "rummy-500", name: "Rummy 500", supportedPlayerCounts: [2, 3, 4, 5, 6, 7, 8] },
   botStepMs: 900,
@@ -2332,7 +2343,8 @@ var rummy500Module = {
   isOver,
   redact: redact2,
   lobbyView,
-  aiMove: aiMove2
+  aiMove: aiMove2,
+  pacing
   // no `aux`: Rummy has no non-turn side actions
 };
 
@@ -2721,7 +2733,7 @@ function aiMove3(state, seat) {
   if (seatToAct2(state) !== seat) throw new Error(`not seat ${seat}'s turn`);
   return state.phase === "passing" ? aiPass(state, seat) : aiPlay(state, seat);
 }
-function pacing(s) {
+function pacing2(s) {
   if (s.phase !== "trickComplete") return null;
   const isLastTrick = s.trickNo + 1 >= Math.floor(buildDeck3(s.players).length / s.players);
   return { kind: "auto", ms: isLastTrick ? 5e3 : 5e3, move: { type: "advance", seat: s.trickWinner } };
@@ -2739,7 +2751,7 @@ var heartsModule = {
   redact: redact3,
   lobbyView: lobbyView2,
   aiMove: aiMove3,
-  pacing
+  pacing: pacing2
   // no `aux`: Hearts has no non-turn side actions
 };
 
