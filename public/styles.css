@@ -2521,29 +2521,26 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
    Mobile landscape — hide player bar, peek hand at bottom
    ============================================================ */
 @media (max-height:500px) and (orientation:landscape){
-  /* Toolbar floats above the table */
-  .appbar{
-    position:fixed !important;
-    top:0; left:0; right:0;
-    z-index:200 !important;
-    background:rgba(0,0,0,.55) !important;
-    backdrop-filter:blur(6px) !important;
-    -webkit-backdrop-filter:blur(6px) !important;
-  }
+  /* Appbar stays in normal document flow — no overlay */
 
-  /* Remove the top gap that reserves space for the appbar */
-  #app:not(:has(.lby-outer)) .table{
+  /* Table is a flex column filling the full viewport */
+  #app:not(:has(.lby-outer)) .table,
+  html.is-standalone .table{
+    height:100dvh !important;
+    display:flex !important;
+    flex-direction:column !important;
     padding-top:0 !important;
     margin-top:0 !important;
+    overflow:hidden !important;
   }
 
-  /* Felt: same look as portrait but fills full viewport height.
-     Keep side margins + border-radius; no top/bottom margin. */
+  /* Felt fills remaining height below appbar, side margins + no bottom margin */
   .table .felt-frame,
   html.is-standalone .table .felt-frame{
     flex:1 !important;
-    height:100dvh !important;
-    margin:0 !important;
+    height:auto !important;
+    min-height:0 !important;
+    margin:0 5px 0 !important;
   }
 
   /* Rotate watermarks 90° to suit the landscape orientation (no resize) */
