@@ -185,7 +185,7 @@ export type RummyState = {
   players: number;
   target: number; // points to win, e.g. 500
   seed: number;
-  phase: "playing" | "gameOver";
+  phase: "playing" | "gameOver" | "handComplete";
   dealerSeat: number;
   turn: number; // seat to act (whole turn)
   turnPhase: "draw" | "play";
@@ -199,7 +199,7 @@ export type RummyState = {
 
   scores: number[]; // running totals per seat
   winner: number | null;
-  lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][] } | null;
+  lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][]; lastMelds: { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] }[] } | null;
 
   requireDiscard: boolean; // must discard a card (not meld/layoff) to go out
   // Per-seat bot difficulty: 0=Easy, 1=Medium, 2=Hard, 3=Expert. Default 2 (Hard/Aggressive).
@@ -215,7 +215,8 @@ export type RummyMove =
   | { type: "drawDiscard"; seat: number; cardId: number } // take this card + everything above it
   | { type: "meld"; seat: number; cards: number[] } // card ids from hand forming a new set/run
   | { type: "layoff"; seat: number; meldId: number; cards: number[] } // card ids onto an existing meld
-  | { type: "discard"; seat: number; cardId: number }; // ends the turn
+  | { type: "discard"; seat: number; cardId: number } // ends the turn
+  | { type: "advance"; seat: number }; // advance from handComplete to next deal
 
 export type RummyConfig = {
   players: number;
@@ -228,7 +229,7 @@ export type RummyConfig = {
 export type RummyView = {
   you: number | null;
   players: number;
-  phase: "playing" | "gameOver" | "lobby";
+  phase: "playing" | "gameOver" | "lobby" | "handComplete";
   target: number;
   seats: RoomMeta["seats"];
   hostSeat: number | null;
@@ -247,7 +248,7 @@ export type RummyView = {
   discard: RummyCard[]; // public
   melds: { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] }[];
   mustMeldCardId: number | null; // meaningful only on your own turn
-  lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][] } | null;
+  lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][]; lastMelds: { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] }[] } | null;
   requireDiscard: boolean;
   botDifficulty: number[]; // per-seat difficulty (public, for lobby display)
   log: LogEntry[]; // authoritative move log (public)
@@ -383,20 +384,24 @@ function endRound(state: RummyState, outSeat: number | null): RummyState {
   const delta = state.scores.map((_, s) => meldedPts[s] - heldPts[s]);
   const heldCards = state.hands.map((h) => [...h]);
   const scores = state.scores.map((v, s) => v + delta[s]);
-  const lastRound = { delta, outSeat, meldedPts, heldPts, heldCards };
+  const lastMelds = state.melds.map((m) => ({ ...m, owner: state.cardOwner[m.cards[0]?.id] ?? -1 }));
+  const lastRound = { delta, outSeat, meldedPts, heldPts, heldCards, lastMelds };
   const max = Math.max(...scores);
   if (max >= state.target) {
     return { ...state, scores, phase: "gameOver", winner: scores.indexOf(max), lastRound };
   }
-  return dealRound({ ...state, scores, lastRound, dealerSeat: (state.dealerSeat + 1) % state.players });
+  const nextDealer = (state.dealerSeat + 1) % state.players;
+  return { ...state, scores, phase: "handComplete", dealerSeat: nextDealer, lastRound };
 }
 
 // ---------- core interface functions ----------
 
-const seatToAct = (s: RummyState): number | null => (s.phase === "gameOver" ? null : s.turn);
+const seatToAct = (s: RummyState): number | null =>
+  (s.phase === "gameOver" || s.phase === "handComplete") ? null : s.turn;
 const isOver = (s: RummyState): boolean => s.phase === "gameOver";
 
 function isLegal(state: RummyState, move: RummyMove): boolean {
+  if (move.type === "advance") return state.phase === "handComplete";
   if (state.phase !== "playing" || move.seat !== state.turn) return false;
   const hand = state.hands[move.seat];
   switch (move.type) {
@@ -481,9 +486,15 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
 }
 
 function applyMoveCore(state: RummyState, move: RummyMove): RummyState {
-  if (state.phase !== "playing") throw new Error("Game is over");
-  if (seatToAct(state) !== move.seat) throw new Error("Not this seat's turn");
+  if (state.phase === "gameOver") throw new Error("Game is over");
   if (!isLegal(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
+
+  if (move.type === "advance") {
+    if (state.phase !== "handComplete") throw new Error("Not in handComplete");
+    return dealRound({ ...state });
+  }
+
+  if (seatToAct(state) !== move.seat) throw new Error("Not this seat's turn");
 
   const seat = move.seat;
   const handsWith = (h: RummyCard[]): RummyCard[][] => state.hands.map((x, s) => (s === seat ? h : x));
@@ -605,8 +616,8 @@ function legalMoves(state: RummyState): RummyMove[] {
 // ---------- redaction ----------
 
 function redact(state: RummyState, seat: number | null, meta: RoomMeta): RummyView {
-  const toAct = state.phase === "gameOver" ? null : state.turn;
-  const yours = seat !== null && toAct === seat;
+  const toAct = (state.phase === "gameOver" || state.phase === "handComplete") ? null : state.turn;
+  const yours = seat !== null && state.phase === "playing" && toAct === seat;
   return {
     you: seat,
     players: state.players,
@@ -621,8 +632,8 @@ function redact(state: RummyState, seat: number | null, meta: RoomMeta): RummyVi
     dealerSeat: state.dealerSeat,
     toAct,
     turnPhase: state.turnPhase,
-    yourTurn: yours,
-    legalMoves: yours ? legalMoves(state) : [],
+    yourTurn: yours && state.phase === "playing",
+    legalMoves: yours && state.phase === "playing" ? legalMoves(state) : [],
     yourHand: seat !== null && state.hands[seat] ? state.hands[seat] : [],
     handCounts: state.hands.map((h) => h.length),
     stockCount: state.stock.length,
@@ -1463,6 +1474,13 @@ function aiMove(state: RummyState, seat: number): RummyMove {
   return { type: "discard", seat, cardId: chosen.card.id };
 }
 
+// ---------- pacing ----------
+
+function pacing(s: RummyState): { kind: "auto" | "wait"; ms: number; move: RummyMove } | null {
+  if (s.phase !== "handComplete") return null;
+  return { kind: "wait", ms: 30000, move: { type: "advance", seat: s.turn } };
+}
+
 // ---------- the module ----------
 
 export const rummy500Module: Game<RummyState, RummyMove, RummyConfig, RummyView> = {
@@ -1478,6 +1496,7 @@ export const rummy500Module: Game<RummyState, RummyMove, RummyConfig, RummyView>
   redact,
   lobbyView,
   aiMove,
+  pacing,
   // no `aux`: Rummy has no non-turn side actions
 };
 
