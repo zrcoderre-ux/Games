@@ -616,9 +616,9 @@ function tableShell(v, parts) {
     //   n=5: 1 per side, 2 at top
     //   n=6,7: 2 per side → spread y1→y2 (n=7 has 2 top pods too)
     //   n=8: 3 per side → wideY extension handles overflow
-    const podY1 = n === 6 || n === 7 ? 30 : 21;
-    const podY2 = n >= 8 ? 50 : n >= 6 ? 70 : n >= 5 ? 65 : 79;
-    const podBounds = { x1: 12, x2: 88, y1: podY1, y2: podY2, wideY1: 16, wideY2: Math.max(podY2, 68), topY: 9 };
+    const podY1 = n === 6 || n === 7 ? 36 : 28;
+    const podY2 = n >= 8 ? 55 : n >= 6 ? 74 : n >= 5 ? 68 : 82;
+    const podBounds = { x1: 12, x2: 88, y1: podY1, y2: podY2, wideY1: 22, wideY2: Math.max(podY2, 72), topY: 9 };
     const infos = podItems.map(({ seat, html }) => {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
@@ -1182,7 +1182,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     const off = (seat - you + n) % n;
     let x, y;
     if (mini) {
-      ({ x, y } = wallPerimPos(off, n, { x1: 18, x2: 82, y1: 10, y2: 88 }));
+      ({ x, y } = wallPerimPos(off, n, { x1: 18, x2: 82, y1: 18, y2: 88 }));
     } else {
       ({ x, y } = ovalPos(off, n, { cx: 50, cy: 53, rx: 24, ry: 26 }));
     }
