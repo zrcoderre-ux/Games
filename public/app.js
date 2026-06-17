@@ -79,6 +79,9 @@ const S = {
   hljSignalTimer: null,    // unused, kept for wire-compat
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
   rummySort: "suit", // last sort mode used; next click alternates
+  rummyDrawnCard: null, // card just drawn from stock (shown as preview above hand)
+  rummyDrawnTimer: null, // auto-dismiss timer for drawn card preview
+  rummyPrevHandIds: new Set(), // hand ids from previous render (for new-card detection)
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
 
   discardOpen: false, // discard-pile popup open?
@@ -1870,6 +1873,27 @@ function renderRummy(v) {
   const handIds = new Set(v.yourHand.map((c) => c.id));
   for (const id of [...S.rummySel]) if (!handIds.has(id)) S.rummySel.delete(id);
 
+  if (v.phase === "handComplete") {
+    return void (app.__set = rummyHandCompleteScreen(v));
+  }
+
+  // Detect newly drawn card (stock draw)
+  const currentHandIds = new Set(v.yourHand.map((c) => c.id));
+  if (v.yourTurn && v.turnPhase === "play" && S.rummyPrevHandIds.size > 0 && S.rummyDrawnCard === null) {
+    const newCards = v.yourHand.filter((c) => !S.rummyPrevHandIds.has(c.id));
+    if (newCards.length === 1) {
+      S.rummyDrawnCard = newCards[0];
+      clearTimeout(S.rummyDrawnTimer);
+      S.rummyDrawnTimer = setTimeout(() => {
+        S.rummyDrawnCard = null;
+        S.rummyDrawnTimer = null;
+        render();
+      }, 5000);
+    }
+  }
+  // Update prev hand ids (but not while preview is showing, to avoid clearing it)
+  if (S.rummyDrawnCard === null) S.rummyPrevHandIds = currentHandIds;
+
   if (v.phase === "gameOver") {
     const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
     return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
@@ -1977,13 +2001,22 @@ function renderRummy(v) {
   // Cards incompatible with the current selection are dimmed.
   const ordered = rummyOrdered(v.yourHand);
   const selCards = ordered.filter((c) => S.rummySel.has(c.id));
-  const fanCards = ordered.filter((c) => !S.rummySel.has(c.id));
+  // Exclude the drawn-card-preview card from the fan (it's shown in the preview instead)
+  const fanCards = ordered.filter((c) => !S.rummySel.has(c.id) && c.id !== S.rummyDrawnCard?.id);
   const layMeld = v.melds.find((m) => m.id === S.rummyLayoff);
 
   // Determine which unselected cards are compatible with the current selection
   const compatibleIds = inPlay && selCards.length
     ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld)).map((c) => c.id))
     : null; // null = no filtering
+
+  // Drawn card preview (shown above fan after drawing from stock)
+  const drawnPreview = S.rummyDrawnCard
+    ? `<div class="rummy-drawn-preview" data-action="dismiss-drawn">
+        ${cardHTML(S.rummyDrawnCard, {})}
+        <div class="rummy-drawn-label">You drew this</div>
+      </div>`
+    : "";
 
   const selRow = selCards.length
     ? `<div class="selrow">${selCards.map((c) => cardHTML(c, {
@@ -2002,7 +2035,19 @@ function renderRummy(v) {
       dim: incompatible,
     };
   });
-  const hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
+
+  // Dynamic hand sizing: shrink card width when many cards exceed the available space
+  const handN = fanCards.length;
+  const handAvail = Math.min(360, (window.innerWidth || 360) - 30);
+  const naturalCardW = 64;
+  const minStepPx = 20;
+  const maxAtNormal = handN > 1 ? Math.floor((handAvail - naturalCardW) / minStepPx) + 1 : 999;
+  const cardWpx = handN > maxAtNormal && handN > 1
+    ? Math.max(36, handAvail - (handN - 1) * minStepPx)
+    : naturalCardW;
+  const handSizeStyle = cardWpx < naturalCardW ? `style="--w:${cardWpx}px"` : "";
+
+  const hand = drawnPreview + selRow + (fan ? `<div class="fan-inner" ${handSizeStyle}>${fan}</div>` : "");
   const canMeld = selCards.length >= 3 && rValidMeld(selCards);
   const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards);
   const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;
@@ -2065,65 +2110,65 @@ function renderRummy(v) {
   app.__set = tableShell(v, { pods, center, feltBottom: melds, feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
 }
 
-// Round-end summary popup: shown after a round finishes, auto-dismisses after 20s.
+// Round-end summary popup: no longer used for handComplete (replaced by rummyHandCompleteScreen).
+// Kept as empty stub for gameOver case (which is handled by renderGameOver separately).
 function rummyRoundModal(v) {
-  if (!v.lastRound || v.phase === "gameOver") return "";
+  return "";
+}
+
+// Full-screen hand-complete overlay shown when phase === "handComplete".
+function rummyHandCompleteScreen(v) {
   const lr = v.lastRound;
-  const roundKey = JSON.stringify(v.scores); // unique per round result
-  if (S.rummyRoundAcked === roundKey) return "";
+  if (!lr) return "";
 
-  // Brief pause before showing the summary so players can see the final state.
-  if (!S.rummyRoundVisible) {
-    if (S.rummyRoundTimer === null) {
-      S.rummyRoundTimer = setTimeout(() => {
-        S.rummyRoundVisible = true;
-        S.rummyRoundTimer = null;
-        render();
-      }, 1800);
-    }
-    return ""; // modal not visible yet during the pause
-  }
+  const heading = lr.outSeat != null
+    ? `${esc(seatName(v, lr.outSeat))} went out`
+    : "Stock exhausted";
 
-  // Start the 20s auto-dismiss timer once per round popup.
-  if (S.rummyRoundTimer === null) {
-    S.rummyRoundTimer = setTimeout(() => {
-      S.rummyRoundAcked = roundKey;
-      S.rummyRoundVisible = false;
-      S.rummyRoundTimer = null;
-      render();
-    }, 20000);
-  }
-
-  const rows = v.seats.map((_, i) => {
+  const playerSections = v.seats.map((_, i) => {
     const name = esc(seatName(v, i));
-    const melded = lr.meldedPts[i] ?? 0;
-    const held = lr.heldPts[i] ?? 0;
     const net = lr.delta[i] ?? 0;
+    const netStr = net >= 0 ? `+${net}` : `${net}`;
     const total = v.scores[i];
     const wentOut = i === lr.outSeat;
-    const mathStr = wentOut
-      ? `${melded > 0 ? `+${melded}` : melded}`
-      : `${melded > 0 ? `+${melded}` : melded} − ${held}`;
-    const netStr = net >= 0 ? `+${net}` : `${net}`;
-    const heldHand = lr.heldCards?.[i] ?? [];
-    const heldCardEls = !wentOut && heldHand.length
-      ? `<div class="rr-held">${heldHand.map((c) => cardHTML(c, { mini: true })).join("")}</div>`
+
+    // Held cards (red border)
+    const heldCards = lr.heldCards?.[i] ?? [];
+    const heldEl = heldCards.length
+      ? `<div class="rhc-cards rhc-held">${heldCards.map((c) => cardHTML(c, { mini: true })).join("")}</div>`
       : "";
-    return `<div class="rr-row${wentOut ? " rr-out" : ""}">
-      <div class="rr-name">${name}${wentOut ? " <span class='rr-badge'>went out</span>" : ""}</div>
-      <div class="rr-math">${mathStr} = <b>${netStr}</b></div>
-      <div class="rr-total">Total: ${total}</div>
-      ${heldCardEls}
+
+    // This player's melds (green border), grouped
+    const playerMelds = (lr.lastMelds ?? []).filter((m) => m.owner === i);
+    const meldsEl = playerMelds.length
+      ? playerMelds.map((m) => {
+          const jokerRes = resolveJokers(m);
+          const meldCards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined })).join("");
+          return `<div class="rhc-meld">${meldCards}</div>`;
+        }).join("")
+      : "";
+
+    return `<div class="rhc-player${wentOut ? " rhc-went-out" : ""}">
+      <div class="rhc-player-hdr">
+        <span class="rhc-player-name">${name}${wentOut ? ` <span class='rr-badge'>went out</span>` : ""}</span>
+        <span class="rhc-delta ${net >= 0 ? "pos" : "neg"}">${netStr}</span>
+        <span class="rhc-total">/ ${total}</span>
+      </div>
+      ${heldEl}
+      ${meldsEl ? `<div class="rhc-melds">${meldsEl}</div>` : ""}
     </div>`;
   }).join("");
 
-  return `<div class="modal-back" data-action="ack-round">
-    <div class="modal" data-stop="1">
-      <div class="modalhead"><span>Round over</span></div>
-      <div class="modalbody rr-body">${rows}</div>
-      <div style="padding:8px 14px 4px;text-align:right">
-        <button class="btn" data-action="ack-round">Next hand</button>
-      </div>
+  const canAdvance = v.you != null;
+  const nextBtn = canAdvance
+    ? `<button class="btn" data-action="advance-round">Next hand →</button>`
+    : "";
+
+  return `<div class="rhc-wrap">
+    <div class="rhc-modal">
+      <div class="rhc-head">${heading}</div>
+      <div class="rhc-body">${playerSections}</div>
+      <div class="rhc-foot">${nextBtn}</div>
     </div>
   </div>`;
 }
@@ -2828,6 +2873,13 @@ app.addEventListener("click", (e) => {
       S.rummyRoundVisible = false;
       return render();
     }
+    case "advance-round":
+      return send({ t: "move", move: { type: "advance", seat: v.you } });
+    case "dismiss-drawn":
+      S.rummyDrawnCard = null;
+      clearTimeout(S.rummyDrawnTimer);
+      S.rummyDrawnTimer = null;
+      return render();
     case "open-meld": {
       const meldId = +t.dataset.meldid;
       const selNow = [...S.rummySel].map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);

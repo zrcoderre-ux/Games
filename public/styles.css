@@ -2447,3 +2447,71 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .table .appbar .roomtag{ order:-1; }
   .table .appbar .spacer{ order:0; }
 }
+
+/* ---- Rummy hand-complete screen ---- */
+.rhc-wrap {
+  position: absolute; inset: 0; z-index: 30;
+  background: rgba(5,18,10,.92);
+  display: flex; align-items: center; justify-content: center;
+  padding: 12px;
+}
+.rhc-modal {
+  background: linear-gradient(160deg,#1a2e1f,#0f1e13);
+  border: 1px solid rgba(201,144,30,.3);
+  border-radius: 16px;
+  width: 100%; max-width: 440px;
+  max-height: 90dvh; display: flex; flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+}
+.rhc-head {
+  font-family: "Bevan", serif; font-size: 16px; letter-spacing: .1em;
+  color: #e6cf78; text-align: center; padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(201,144,30,.2);
+}
+.rhc-body {
+  overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 12px;
+  flex: 1; min-height: 0;
+}
+.rhc-foot {
+  padding: 10px 14px; text-align: right;
+  border-top: 1px solid rgba(201,144,30,.2);
+}
+.rhc-player {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px; padding: 10px;
+  background: rgba(0,0,0,.25);
+}
+.rhc-player.rhc-went-out { border-color: rgba(201,144,30,.5); }
+.rhc-player-hdr {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;
+}
+.rhc-player-name { font-family:"Fraunces",serif; font-size:14px; color:#ddd; flex:1; }
+.rhc-delta { font-family:"Bevan",serif; font-size:16px; }
+.rhc-delta.pos { color: #6dcf8e; }
+.rhc-delta.neg { color: #e06060; }
+.rhc-total { font-size: 12px; color: rgba(248,244,232,.45); }
+/* Held cards — red border each */
+.rhc-held {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;
+}
+.rhc-held .card { box-shadow: 0 0 0 2px #c03030, 0 2px 6px rgba(0,0,0,.5); }
+/* Melds row — green border per meld group */
+.rhc-melds {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.rhc-meld {
+  display: flex; flex-wrap: wrap; gap: 2px;
+  padding: 4px; border-radius: 6px;
+  box-shadow: 0 0 0 2px #3a9e5a;
+  background: rgba(0,0,0,.2);
+}
+
+/* ---- Drawn card preview ---- */
+.rummy-drawn-preview {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 0 4px; cursor: pointer;
+}
+.rummy-drawn-label {
+  font-family:"Fraunces",serif; font-style:italic;
+  font-size:11.5px; color:var(--ink-soft); pointer-events:none;
+}
