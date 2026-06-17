@@ -666,21 +666,36 @@ function tableShell(v, parts) {
   }
 
   let self;
+  let appbarExtra = "";
   if (v.you != null) {
     const myName = seatName(v, v.you);
-    self = `<div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
-      <div class="selfbar">
+    const selfNameHtml = parts.selfName ? parts.selfName : `<span class="name">${esc(myName)}</span>`;
+    if (isLandscape) {
+      // In landscape the bottom rail moves into the appbar; selfwrap keeps only the hand.
+      const lsActions = parts.actions !== null
+        ? `<div class="ls-actions">${parts.actions || `<span class="hint">Watching…</span>`}</div>`
+        : "";
+      appbarExtra = `<div class="ls-self">
         ${avatarHTML(myName, { host: v.you === v.hostSeat })}
-        <div class="selfbar-name-block">${parts.selfName ? parts.selfName : `<span class="name">${esc(myName)}</span>`}<span class="me-pts">${parts.selfMeta || ""}</span></div>
-        ${parts.selfTurn || ""}
-      </div>
-      ${parts.selfExtra ? `<div class="self-extra">${parts.selfExtra}</div>` : ""}
-      ${parts.actions !== null ? `<div class="actions">${parts.actions || `<span class="hint">Watching the table…</span>`}</div>` : ""}`;
+        <div class="ls-self-info">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>
+        ${parts.selfTurn ? `<div class="ls-self-turn">${parts.selfTurn}</div>` : ""}
+      </div>${lsActions}`;
+      self = `<div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>`;
+    } else {
+      self = `<div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
+        <div class="selfbar">
+          ${avatarHTML(myName, { host: v.you === v.hostSeat })}
+          <div class="selfbar-name-block">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>
+          ${parts.selfTurn || ""}
+        </div>
+        ${parts.selfExtra ? `<div class="self-extra">${parts.selfExtra}</div>` : ""}
+        ${parts.actions !== null ? `<div class="actions">${parts.actions || `<span class="hint">Watching the table…</span>`}</div>` : ""}`;
+    }
   } else {
     self = `<div class="selfbar"><div class="name">Spectating</div><div class="me-pts">${parts.selfMeta || ""}</div></div>`;
   }
   return `<div class="table">
-    ${appbar(v, { log: true, leftContent: parts.appbarLeft || "" })}
+    ${appbar(v, { log: true, leftContent: (appbarExtra || "") + (parts.appbarLeft || "") })}
     <div class="felt-frame${parts.feltHeader ? ' has-frame-title' : ''}">
     ${parts.feltHeader ? `<div class="frame-title">${parts.feltHeader}</div>` : ""}
     ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
