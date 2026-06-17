@@ -1182,7 +1182,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     const off = (seat - you + n) % n;
     let x, y;
     if (mini) {
-      ({ x, y } = wallPerimPos(off, n, { x1: 18, x2: 82, y1: 10, y2: 88, topY: 22 }));
+      ({ x, y } = wallPerimPos(off, n, { x1: 18, x2: 82, y1: 10, y2: 88 }));
     } else {
       ({ x, y } = ovalPos(off, n, { cx: 50, cy: 53, rx: 24, ry: 26 }));
     }
