@@ -1893,10 +1893,10 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .hcd-suit.cl{top:50%;left:-18%;transform:translateY(-50%)}
 
 /* Corner suit watermarks */
-.felt-corners{position:absolute;inset:0;pointer-events:none;user-select:none;z-index:0}
+.felt-corners{position:absolute;inset:0;pointer-events:none;user-select:none;z-index:1}
 .felt-corner-suit{
   position:absolute;font-size:clamp(36px,7vw,52px);line-height:1;
-  color:rgba(255,255,255,.14);
+  color:rgba(255,255,255,.22);
 }
 .felt-corner-suit.red{color:rgba(255,255,255,.14)}
 .felt-corner-suit.tl{top:8px;left:10px}
@@ -2517,6 +2517,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   font-size:11.5px; color:var(--ink-soft); pointer-events:none;
 }
 
+/* ls-self / ls-actions always in DOM — hidden outside landscape, shown inside */
+.ls-self{ display:none; }
+.ls-actions{ display:none; }
+
 /* ============================================================
    Mobile landscape — hide player bar, peek hand at bottom
    ============================================================ */
@@ -2552,32 +2556,27 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     transform:translate(-50%,-50%) !important;
     width:min(44dvh,36dvw) !important;
   }
-  /* Corner suits: rotate container so suits follow the landscape corners */
-  .felt-corners{ transform:rotate(90deg) !important; }
+  /* Corner suits: rotate each suit 90° in place (not the container, which would
+     shift them outside the felt on a rectangular viewport) */
+  .felt-corner-suit{ transform:rotate(90deg) !important; }
 
   /* ---- Landscape appbar player strip ---- */
   .appbar{ flex-wrap:nowrap; gap:4px; padding:4px 6px; }
-  .ls-self{
-    display:flex; align-items:center; gap:5px; flex-shrink:1; min-width:0;
-  }
+  .ls-self{ display:flex; align-items:center; gap:5px; flex-shrink:1; min-width:0; }
   .ls-self .avatar{ width:26px; height:26px; font-size:10px; flex-shrink:0; }
-  .ls-self-info{
-    display:flex; flex-direction:column; gap:0; min-width:0; line-height:1.1;
-  }
+  .ls-self-info{ display:flex; flex-direction:column; gap:0; min-width:0; line-height:1.1; }
   .ls-self-info .name,
   .ls-self-info .lby-name-row{ font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; }
   .ls-self-info .lby-name-input{ font-size:11px; width:60px; padding:1px 3px; }
   .ls-self-info .me-pts{ font-size:10px; }
   .ls-self-turn{ display:flex; align-items:center; }
-  .ls-actions{
-    display:flex; align-items:center; gap:4px; flex-shrink:1;
-  }
+  .ls-actions{ display:flex; align-items:center; gap:4px; flex-shrink:1; }
   /* Shrink action buttons to fit */
   .ls-actions .btn,
   .ls-actions button{ font-size:11px !important; padding:3px 7px !important; }
   .ls-actions .lby-deal-btn{ font-size:11px !important; padding:3px 10px !important; }
   .ls-actions .lby-count-chip{ width:24px; height:24px; font-size:11px; }
-  /* Hide selfbar — it's now in the appbar */
+  /* Hide selfbar/actions — they're now in the appbar */
   .selfbar{ display:none !important; }
   .self-extra{ display:none !important; }
   .actions{ display:none !important; }
