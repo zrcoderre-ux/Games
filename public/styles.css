@@ -2544,7 +2544,6 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     flex:1 !important;
     height:100dvh !important;
     margin:0 !important;
-    border-radius:0 !important;
   }
 
   /* Rotate watermarks 90° to suit the landscape orientation (no resize) */
