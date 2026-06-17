@@ -51,6 +51,7 @@ const S = {
   room: null,
   ws: null,
   offline: false, // playing locally vs bots (no server)
+  tutorial: false, // single-player guided practice hand armed in the lobby
   hotseat: false, // 2+ local humans sharing the device (pass-and-play)
   revealedSeat: null, // which human seat's hand is currently unlocked on screen
   awaitingPass: false, // showing the privacy hand-off screen
@@ -389,6 +390,12 @@ function onFrame(e) {
     }
     maybePromptPass();
     render();
+    // Tutorial: arm on the lobby->game transition (single human only), then feed each frame.
+    if (S.tutorial && S.offline && prev?.phase === "lobby" && S.view && S.view.phase !== "lobby"
+        && S.view.seats && S.view.seats.filter((s) => s.kind === "human").length === 1) {
+      window.Tutorial?.start(S.party);
+    }
+    window.Tutorial?.onView?.(S.view);
     maybeAutoPlay(msg.view);
   }
   else if (msg.t === "error") { toast(msg.message); }
@@ -1029,8 +1036,13 @@ function renderLobby(v) {
   const shareBtn = !S.offline
     ? `<button class="btn lby-share-btn" data-action="share-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Invite Players</button>`
     : "";
+  // Tutorial: single-player offline only (one human vs bots), sits between Invite and Deal.
+  const singlePlayer = S.offline && !hasHotseats && v.seats.filter((s) => s.kind === "human").length <= 1;
+  const tutorialBtn = (isHost && singlePlayer)
+    ? `<button class="btn lby-tutorial-btn" data-action="toggle-tutorial" aria-pressed="${S.tutorial ? "true" : "false"}" title="Play a guided practice hand"${S.tutorial ? ` style="background:linear-gradient(180deg,#ecd680,#c9a94e);color:#241704;border-color:#b1973e"` : ""}>${S.tutorial ? "Tutorial ✓" : "Tutorial"}</button>`
+    : "";
   const dealAction = isHost
-    ? `<div class="lby-action-row">${shareBtn}<button class="btn lby-deal-btn" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button></div>`
+    ? `<div class="lby-action-row">${shareBtn}${tutorialBtn}<button class="btn lby-deal-btn" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button></div>`
     : `<div class="lby-action-row">${shareBtn}${shareBtn ? "" : ""}<span class="hint">Waiting for the host to deal…</span></div>`;
 
   // My team badge for selfMeta
@@ -2698,6 +2710,7 @@ function shareLink() {
 }
 
 function doLeave() {
+  window.Tutorial?.stop();
   S.intentionalClose = true;
   if (!S.offline) send({ t: "leave" });
   try { S.ws?.close(); } catch {}
@@ -2837,6 +2850,7 @@ app.addEventListener("click", (e) => {
       return send({ t: "setConfig", config: { players: v.players, target: v.target, bestOf: n } });
     }
     case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
+    case "toggle-tutorial": S.tutorial = !S.tutorial; return render();
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
     case "toggle-last-trick": if (S.party === "hearts") S.heartsLastTrickOpen = !S.heartsLastTrickOpen; else S.hljLastTrickOpen = !S.hljLastTrickOpen; return render();
     case "advance-trick": return send({ t: "advance" });
