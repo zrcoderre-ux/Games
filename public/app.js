@@ -2947,8 +2947,8 @@ app.addEventListener("click", (e) => {
       if (selNow.length >= 1 && S.rummyLayoff === null && meldTarget && rCanLayoff(meldTarget, selNow)) {
         S.rummyLayoff = meldId;
         return doLayoff();
-        S.rummyMeldOpen = meldId;
       }
+      S.rummyMeldOpen = meldId;
       return render();
     }
     case "close-meld": S.rummyMeldOpen = null; return render();
