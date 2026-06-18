@@ -2391,10 +2391,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
    ============================================================ */
 @media (min-width:768px) and (min-height:600px){
 
-  /* Shared cap. On desktop use a generous width; on iPad/tablet tie to height
-     so the felt doesn't become a wide letterbox. */
+  /* Shared cap. Landscape: take the larger of the height-based and 82%-of-width
+     values so iPad landscape uses most of the screen instead of a narrow column.
+     Portrait: height is large so dvh term dominates, capped at 1000px either way. */
   .table{
-    --lg-table-max: min(1000px, calc(100dvh - 60px));
+    --lg-table-max: min(1000px, max(calc(100dvh - 60px), calc(100dvw * 0.82)));
     min-height:100dvh; /* in browser mode, fill viewport so selfwrap:bottom:0 anchors to viewport */
   }
 
@@ -2428,7 +2429,13 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      standalone (215px) and browser-game (165px) base rules. */
   #app:not(:has(.lby-outer)) .table .selfwrap-spacer{ height:150px; }
   .hlj-felt-bid{ bottom:4%; }
-  /* All table UI elements 20% larger than base on desktop */
+}
+
+/* Scale-up: landscape tablet/desktop only. Portrait iPad uses the sizing above
+   but keeps normal pod/card scale so it doesn't look zoomed in. Phone landscape
+   (height<600px) is excluded by min-height:600px so phones are unaffected. */
+@media (min-width:768px) and (min-height:600px) and (orientation:landscape){
+  /* All table UI elements 20% larger than base on desktop/landscape-tablet */
   .table .pod-slot .pod,
   .table .pod-slot .lby-seat-box,
   .table .pod-slot .lby-pod{ transform:scale(1.2); transform-origin:center top; }
