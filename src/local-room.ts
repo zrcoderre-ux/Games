@@ -194,7 +194,8 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     }
     this.config = config;
     this.seats = seats;
-    this.state = this.game.createGame(config, (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0);
+    const seed = (config as any).seed !== undefined ? (config as any).seed : (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
+    this.state = this.game.createGame(config, seed);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
