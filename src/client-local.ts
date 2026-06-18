@@ -18,7 +18,7 @@ import { pegsAndJokersModule } from "./pj-module.ts";
 // default the worker's Durable Object subclass uses.
 const REGISTRY: Record<string, { game: Game<any, any, any, any>; config: any }> = {
   rummy500: { game: rummy500Module, config: { players: 4, target: 500 } },
-  "high-low-jack": { game: hljModule, config: { players: 6, target: 21, dealerSeat: -2 } },
+  "high-low-jack": { game: hljModule, config: { players: 6, target: 21, dealerSeat: -2, ensureAce: true } },
   hearts: { game: heartsModule, config: { players: 4, target: 100 } },
   "pegs-and-jokers": { game: pegsAndJokersModule, config: { players: 4, marbles: 5 } },
 };

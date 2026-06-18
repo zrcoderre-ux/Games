@@ -203,6 +203,16 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
         ? (config as any).seed
         : (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
     this.state = this.game.createGame(config, seed);
+    // ensureAce: re-deal (preserving dealer) until seat 0 holds at least one ace.
+    if ((config as any).ensureAce) {
+      let s = seed;
+      for (let i = 0; i < 200; i++) {
+        const hands = (this.state as any).hands as Array<Array<Record<string, unknown>>>;
+        if (hands?.[0]?.some(c => !("joker" in c) && c["rank"] === 14)) break;
+        s += n;
+        this.state = this.game.createGame(config, s);
+      }
+    }
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
