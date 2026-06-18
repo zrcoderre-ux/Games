@@ -246,7 +246,10 @@ function initials(name) {
 }
 function avatarHTML(name, o = {}) {
   const [a, b] = AV[avHash(name) % AV.length];
-  return `<div class="avatar${o.big ? " big" : ""}" style="--av-1:${a};--av-2:${b}">${esc(initials(name))}${o.host ? `<span class="crown">\u265B</span>` : ""}</div>`;
+  const teamCls = o.team ? ` t${o.team}` : "";
+  const style = o.team ? "" : ` style="--av-1:${a};--av-2:${b}"`;
+  const label = o.team ? o.team : esc(initials(name));
+  return `<div class="avatar${o.big ? " big" : ""}${teamCls}"${style}>${label}${o.host ? `<span class="crown">\u265B</span>` : ""}</div>`;
 }
 
 // opponent pod
@@ -682,14 +685,14 @@ function tableShell(v, parts) {
       ? `<div class="ls-actions">${parts.actions || `<span class="hint">Watching…</span>`}</div>`
       : "";
     appbarExtra = `<div class="ls-self">
-      ${avatarHTML(myName, { host: v.you === v.hostSeat })}
+      ${avatarHTML(myName, { host: v.you === v.hostSeat, team: parts.selfTeam })}
       <div class="ls-self-info">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>
       ${parts.selfTurn ? `<div class="ls-self-turn">${parts.selfTurn}</div>` : ""}
     </div>${lsActions}`;
     // selfwrap always has the full rail; CSS hides selfbar+actions in landscape.
     self = `<div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
       <div class="selfbar">
-        ${avatarHTML(myName, { host: v.you === v.hostSeat })}
+        ${avatarHTML(myName, { host: v.you === v.hostSeat, team: parts.selfTeam })}
         <div class="selfbar-name-block">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>
         ${parts.selfTurn || ""}
       </div>
@@ -1052,11 +1055,10 @@ function renderLobby(v) {
     ? `<div class="lby-action-row">${shareBtn}${tutorialBtn}<button class="btn lby-deal-btn" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal the Cards"}</button></div>`
     : `<div class="lby-action-row">${shareBtn}${shareBtn ? "" : ""}<span class="hint">Waiting for the host to deal…</span></div>`;
 
-  // My team badge for selfMeta
   const myTc = you != null && isTeamGame ? (you % 2 === 0 ? "A" : "B") : null;
-  const selfMeta = myTc
-    ? `<span class="teambadge t${myTc}">Team ${myTc}</span>`
-    : you != null && v.seats[you] ? `<span class="lby-pod-role">${v.seats[you].kind === "human" ? (you === v.hostSeat ? "host" : "player") : ""}</span>` : "";
+  const selfMeta = you != null && v.seats[you]
+    ? `<span class="lby-pod-role">${v.seats[you].kind === "human" ? (you === v.hostSeat ? "host" : "player") : ""}</span>`
+    : "";
 
   // Settings modal
   const winsNeeded = v.winsNeeded ?? 1;
@@ -1125,6 +1127,7 @@ function renderLobby(v) {
     hand: "",
     selfName: nameInput,
     selfMeta,
+    selfTeam: myTc,
     selfTurn: settingsBtn,
     selfExtra,
     actions: dealAction,
@@ -1651,13 +1654,13 @@ function renderHLJ(v) {
   const selfExtra = `${trumpControl}${playHint}`;
 
   const isYouDealer = you != null && you === v.dealerSeat;
+  const selfTeam = you != null ? (you % 2 === 0 ? "A" : "B") : null;
   const selfMeta = you != null
-    ? `<span class="teambadge t${you % 2 === 0 ? "A" : "B"}">Team ${you % 2 === 0 ? "A" : "B"}</span>${
-        v.phase === "bidding" && v.highBid?.seat === you && curSignal
-          ? ` <span class="pod-dealer-badge signal"><img src="${SIGNAL_SRCS[curSignal]}" alt="${SIGNAL_LABELS[curSignal]}" class="signal-img"></span>`
-          : v.phase === "playing" && v.highBid?.seat === you
-          ? ` <span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>`
-          : isYouDealer ? ` <span class="pod-dealer-badge">D</span>` : ""}`
+    ? (v.phase === "bidding" && v.highBid?.seat === you && curSignal
+        ? `<span class="pod-dealer-badge signal"><img src="${SIGNAL_SRCS[curSignal]}" alt="${SIGNAL_LABELS[curSignal]}" class="signal-img"></span>`
+        : v.phase === "playing" && v.highBid?.seat === you
+        ? `<span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>`
+        : isYouDealer ? `<span class="pod-dealer-badge">D</span>` : "")
     : `play to ${v.target}`;
   const selfTurn = handResultPending
     ? ""
@@ -1801,7 +1804,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTurn, selfExtra, appbarLeft: teamScores });
+  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTeam, selfTurn, selfExtra, appbarLeft: teamScores });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
@@ -2683,13 +2686,14 @@ function renderPJ(v) {
 
   const perTeam = (v.players / 2) * v.marbles;
   const homeMine = v.you != null ? v.homeCounts.reduce((a, c, p) => a + (p % 2 === v.you % 2 ? c : 0), 0) : 0;
-  const selfMeta = v.you != null ? `Team ${v.you % 2 === 0 ? "A" : "B"} \u00b7 ${homeMine}/${perTeam} home \u00b7 first team all-home wins` : `first team all-home wins`;
+  const selfTeam = v.you != null ? (v.you % 2 === 0 ? "A" : "B") : null;
+  const selfMeta = v.you != null ? `${homeMine}/${perTeam} home \u00b7 first team all-home wins` : `first team all-home wins`;
   const playingPartner = yours && v.playingFor.length && v.playingFor[0] !== v.you;
   const selfTurn = yours
     ? `<span class="turnflag">Your turn${playingPartner ? " \u2014 playing teammate" : ""}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
 
-  app.__set = tableShell(v, { pods, center, centerFull: true, hand, actions: acts.join(""), selfMeta, selfTurn });
+  app.__set = tableShell(v, { pods, center, centerFull: true, hand, actions: acts.join(""), selfMeta, selfTeam, selfTurn });
 }
 
 function doConnect() {
