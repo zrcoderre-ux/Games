@@ -1911,13 +1911,18 @@ function rCompatible(sel, c, layMeld) {
   const setRank = naturals[0].rank;
   if (naturals.every((s) => s.rank === setRank) && c.rank === setRank && !sel.some((s) => s.suit === c.suit))
     return true;
-  // Run: same suit, rank fits in range with available jokers as gap-fill
+  // Run: same suit, rank fits in range with available jokers as gap-fill.
+  // Try both ace interpretations (low=1, high=14) to match rIsRun.
   const runSuit = naturals[0].suit;
   if (naturals.every((s) => s.suit === runSuit) && c.suit === runSuit) {
-    const allRanks = [...naturals.map((s) => s.rank), c.rank].sort((a, b) => a - b);
-    const lo = allRanks[0], hi = allRanks[allRanks.length - 1];
-    const gaps = hi - lo + 1 - allRanks.length;
-    if (gaps >= 0 && gaps <= jokerCount) return true;
+    const hasAce = naturals.some((s) => s.rank === 14) || c.rank === 14;
+    for (const aceRank of hasAce ? [1, 14] : [14]) {
+      const allRanks = [...naturals.map((s) => s.rank === 14 ? aceRank : s.rank), c.rank === 14 ? aceRank : c.rank].sort((a, b) => a - b);
+      if (new Set(allRanks).size !== allRanks.length) continue;
+      const lo = allRanks[0], hi = allRanks[allRanks.length - 1];
+      const gaps = hi - lo + 1 - allRanks.length;
+      if (gaps >= 0 && gaps <= jokerCount) return true;
+    }
   }
   return false;
 }
