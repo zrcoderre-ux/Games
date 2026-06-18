@@ -1049,7 +1049,7 @@ function renderLobby(v) {
   // them on deal), so we gate on a lone human seat rather than the offline flag.
   const singlePlayer = !hasHotseats && v.seats.filter((s) => s.kind === "human").length === 1;
   const tutorialBtn = (isHost && singlePlayer)
-    ? `<button class="btn lby-tutorial-btn" data-action="toggle-tutorial" aria-pressed="${S.tutorial ? "true" : "false"}" title="Play a guided practice hand" style="${S.tutorial ? "background:linear-gradient(180deg,#7c2fd0,#5a1fa0);border-color:#4a1888;color:#fff;" : "background:linear-gradient(180deg,#7c2fd0,#5a1fa0);border-color:#4a1888;color:#fff;opacity:.85;"}">${S.tutorial ? "Tutorial ✓" : "Tutorial"}</button>`
+    ? `<button class="btn ghost lby-tutorial-btn${S.tutorial ? " active" : ""}" data-action="toggle-tutorial" aria-pressed="${S.tutorial ? "true" : "false"}" title="Play a guided practice hand">${S.tutorial ? "Tutorial ✓" : "Tutorial"}</button>`
     : "";
   const dealAction = isHost
     ? `<div class="lby-action-row">${shareBtn}${tutorialBtn}<button class="btn lby-deal-btn" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal"}</button></div>`
