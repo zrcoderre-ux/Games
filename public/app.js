@@ -858,7 +858,7 @@ function positionHatWatermark() {
   const r = rail.getBoundingClientRect();
   const s = spacer.getBoundingClientRect();
   const isStandalone = document.documentElement.classList.contains("is-standalone");
-  const width = Math.min(s.width * (isStandalone ? 1.276 : 1.18), 482);
+  const width = Math.min(s.width * (isStandalone ? 1.276 : 1.18), 800);
   // joker-hat.png is 1024x1536 with its opaque artwork spanning y=59..1527 —
   // there's a third, forward-hanging point (with two of the three bells)
   // that reaches almost the full height of the image. Crop tight to that

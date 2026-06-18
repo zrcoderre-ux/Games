@@ -2400,7 +2400,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   }
 
   /* ---- Home screen: center rail, slightly larger type ---------- */
-  .hs-rail{ margin:40px auto; }
+  .hs-rail{ margin:40px auto; max-width:min(80vw,680px); }
+  .hs-wm-wrap{ max-width:min(85vw,760px); }
   .hs-title{ font-size:52px; }
   .hs-lbl{ font-size:17.6px; margin-bottom:9px; }
   .hs-fld{ font-size:17px; padding:13px; margin-bottom:24px; }
