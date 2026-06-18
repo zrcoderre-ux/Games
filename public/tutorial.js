@@ -269,6 +269,13 @@
     if (v.phase === "playing") c.playStarted = true;
     // Rummy 500: remember once meld/layoff intro has been shown so we skip it next round
     if (T.party === "rummy500" && Array.isArray(v.melds) && v.melds.length > 0) c.meldShown = true;
+    // Hearts: track one-shot steps
+    if (T.party === "hearts") {
+      if (!c.firstPlayDone && v.phase === "playing" && !v.yourTurn && v.trickNo > 0) c.firstPlayDone = true;
+      if (v.heartsBroken) c.heartsShown = true;
+      if (v.phase === "trickComplete") c.trickShown = true;
+      if (v.trickNo >= 6) c.moonShown = true;
+    }
   }
 
   window.addEventListener("resize", () => Tutorial.reflow());
@@ -509,7 +516,107 @@
         gate: "tap", cta: "Finish",
       },
     ],
-    // hearts / pegs-and-jokers scripts follow the same shape.
+    hearts: [
+      {
+        id: "welcome",
+        when: (v) => v.phase === "passing" || v.phase === "playing",
+        title: "Welcome to Hearts",
+        body: "Hearts is a trick-avoidance game — <b>lowest score wins</b>. Each heart is worth 1 point, and the <b>Queen of Spades is worth 13</b>. You want to capture as few of these as possible. First player to reach the target score ends the game; whoever has the fewest points wins.",
+        gate: "tap", cta: "Show me",
+      },
+      {
+        id: "your-hand",
+        when: () => true,
+        anchor: ".fan-inner",
+        place: "above",
+        title: "Your hand",
+        body: "These are your cards for this hand. You'll play one card per trick. <b>High cards are dangerous</b> — they win tricks that might carry hearts or the Queen of Spades. Low cards are generally safer.",
+        gate: "tap",
+      },
+      {
+        id: "passing",
+        when: (v) => v.phase === "passing" && v.passOffset !== 0 && !v.youPassed,
+        skipWhen: (v) => v.phase !== "passing" || v.passOffset === 0,
+        anchor: ".fan-inner",
+        place: "above",
+        title: "Passing cards",
+        body: "Before play begins, pass <b>3 cards</b> to your neighbor. The direction rotates each hand — left, across, right, then a <b>hold hand</b> with no pass. Tap 3 cards to select them, then tap <b>Pass</b>. Dump your highest hearts or the Ace/King of Spades — anything that might land you points.",
+        hint: "Select 3 cards and tap Pass.",
+        gate: "action",
+        done: (v) => v.youPassed || v.phase !== "passing",
+      },
+      {
+        id: "hold-hand",
+        when: (v) => v.phase === "playing" && v.passOffset === 0 && v.trickNo === 0,
+        skipWhen: (v) => v.phase !== "playing" || v.passOffset !== 0,
+        title: "Hold hand — no pass",
+        body: "Every fourth hand is a <b>hold hand</b>: no passing. You play exactly what you were dealt. Hold hands reward players who've built safe hands — and punish those who rely on passing away danger.",
+        gate: "tap",
+      },
+      {
+        id: "first-trick",
+        when: (v) => v.phase === "playing" && v.trickNo === 0,
+        skipWhen: (v) => v.phase !== "playing" || v.trickNo !== 0,
+        anchor: ".fan-inner",
+        place: "above",
+        title: "The first trick",
+        body: "The player holding the <b>lowest club</b> leads it. Everyone must follow suit if they can — the highest card of the led suit wins the trick. <b>No point cards</b> (hearts or Queen of Spades) may be played on the first trick unless you have no clubs at all.",
+        gate: "tap",
+      },
+      {
+        id: "play-card",
+        when: (v) => v.phase === "playing" && v.yourTurn,
+        skipWhen: (v, c) => v.phase !== "playing" || c.firstPlayDone,
+        anchor: ".fan-inner",
+        place: "above",
+        title: "Play a card",
+        body: "Tap a card to play it. You <b>must follow the led suit</b> if you can. If you can't follow, you may throw any card — that's your chance to dump a heart or the Queen of Spades on someone else's trick.",
+        hint: "Tap a card to play it.",
+        gate: "action",
+        done: (v) => !v.yourTurn,
+      },
+      {
+        id: "bleeding-hearts",
+        when: (v) => v.phase === "playing" && !v.heartsBroken,
+        skipWhen: (v, c) => v.phase !== "playing" || v.heartsBroken || c.heartsShown,
+        anchor: ".trump-watermark",
+        title: "Hearts aren't broken yet",
+        body: "You <b>cannot lead hearts</b> until a heart has been played to a trick — that's called breaking hearts. Once broken, hearts are fair game to lead. Until then, if you can only lead hearts, you may lead one anyway.",
+        gate: "tap",
+      },
+      {
+        id: "trick-complete",
+        when: (v) => v.phase === "trickComplete",
+        skipWhen: (v, c) => v.phase !== "trickComplete" || c.trickShown,
+        anchor: ".trick-gate",
+        title: "Trick won",
+        body: "The cards stay on screen so everyone can see who took what. Tap the trick (or wait) to sweep it and continue. Points in the pile go to the winner — watch for red cards and the Queen of Spades.",
+        gate: "tap",
+      },
+      {
+        id: "shoot-the-moon",
+        when: (v) => v.phase === "playing" && v.trickNo >= 3,
+        skipWhen: (v, c) => c.moonShown || v.phase !== "playing",
+        title: "Shooting the moon",
+        body: "Here's the wild card: if one player captures <b>all 26 points</b> in a hand — every heart and the Queen of Spades — that's <b>shooting the moon</b>. They score 0 and <b>everyone else gets 26</b>. It's a high-risk comeback move; watch out for opponents loading up on hearts.",
+        gate: "tap",
+      },
+      {
+        id: "scoring",
+        when: (v) => !!(v.lastHand),
+        title: "End of hand",
+        body: "After all 13 tricks the hand is scored. Check the <b>scorecard</b>: each player's hearts and Q♠ are totalled. If someone shot the moon, everyone else takes 26. The running totals update and a new hand deals. Game ends when anyone reaches the target — lowest total wins.",
+        gate: "tap",
+      },
+      {
+        id: "wrap",
+        when: (v) => !!(v.lastHand) || v.phase === "gameOver",
+        title: "You've got it",
+        body: "That's Hearts. Pass away your danger cards, follow suit, dump points when you can't, and keep an eye out for a moon shot. The game keeps going from here — this guide steps out now. Good luck!",
+        gate: "tap", cta: "Finish",
+      },
+    ],
+    // pegs-and-jokers script follows the same shape.
   };
 
   window.Tutorial = Tutorial;
