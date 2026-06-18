@@ -1071,7 +1071,7 @@ function renderLobby(v) {
             ${isHLJ ? `<div class="lby-set-row">
               <span class="lby-set-label">Best of</span>
               <div class="seg">
-                ${[1, 3, 5].map(nn => `<button class="${nn === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${nn}">${nn === 1 ? "1 game" : `${nn} games`}</button>`).join("")}
+                ${[1, 3].map(nn => `<button class="${nn === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${nn}">${nn === 1 ? "1 game" : `${nn} games`}</button>`).join("")}
               </div>
             </div>` : ""}
             ${(isRummyLobby || isHearts) ? `<div class="lby-set-row">
