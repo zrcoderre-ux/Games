@@ -153,13 +153,15 @@
 body:has(.hs-rail){
   background:radial-gradient(125% 95% at 50% 50%,#1d4d36 0%,#102b1d 50%,#08180f 100%);
   background-attachment:fixed;
-  overflow:hidden; /* prevent body-level horizontal scroll and overscroll */
+  overflow-x:hidden; /* block horizontal scroll at body level */
 }
 #app:has(.hs-rail){
   padding:0;
   justify-content:flex-end;
   min-height:100svh;overflow-y:auto;
-  overscroll-behavior:none; /* no rubber-band past content boundaries */
+  overflow-x:hidden;
+  overscroll-behavior-x:none; /* no horizontal bounce; vertical overscroll still works */
+  touch-action:pan-y; /* prevent horizontal touch-drag */
 }
 /* Deep-green room behind the game/lobby table */
 body:has(.table){
