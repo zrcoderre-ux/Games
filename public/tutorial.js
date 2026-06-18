@@ -154,10 +154,15 @@
       card.style.left = left + "px";
       card.style.top = top + "px";
     } else {
-      // Centered card, no ring.
-      card.style.left = "50%";
-      card.style.top = "50%";
-      card.style.transform = "translate(-50%,-50%)";
+      // Centered card, no ring. Position with pixel left/top rather than a
+      // translate(-50%,-50%) transform: .tut-card's `animation:tutIn both` ends on
+      // `transform:none`, and that final keyframe overrides any inline transform
+      // (animations outrank inline styles), which would leave the card pinned by
+      // its top-left corner at screen center and overflow off-screen.
+      const cw = card.offsetWidth || 300;
+      const ch = card.offsetHeight || 150;
+      card.style.left = Math.max(12, (window.innerWidth - cw) / 2) + "px";
+      card.style.top = Math.max(12, (window.innerHeight - ch) / 2) + "px";
     }
   }
 
