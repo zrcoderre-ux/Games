@@ -194,6 +194,15 @@ var LocalRoom = class {
     const rawDealer = config.dealerSeat;
     const seed = rawDealer !== void 0 ? (rawDealer < 0 ? n + rawDealer : rawDealer) % n : config.seed !== void 0 ? config.seed : (Date.now() ^ Math.random() * 4294967295) >>> 0;
     this.state = this.game.createGame(config, seed);
+    if (config.ensureAce) {
+      let s = seed;
+      for (let i = 0; i < 200; i++) {
+        const hands = this.state.hands;
+        if (hands?.[0]?.some((c) => !("joker" in c) && c["rank"] === 14)) break;
+        s += n;
+        this.state = this.game.createGame(config, s);
+      }
+    }
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
@@ -3262,7 +3271,7 @@ var pegsAndJokersModule = {
 // src/client-local.ts
 var REGISTRY = {
   rummy500: { game: rummy500Module, config: { players: 4, target: 500 } },
-  "high-low-jack": { game: hljModule, config: { players: 6, target: 21, dealerSeat: -2 } },
+  "high-low-jack": { game: hljModule, config: { players: 6, target: 21, dealerSeat: -2, ensureAce: true } },
   hearts: { game: heartsModule, config: { players: 4, target: 100 } },
   "pegs-and-jokers": { game: pegsAndJokersModule, config: { players: 4, marbles: 5 } }
 };

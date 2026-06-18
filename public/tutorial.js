@@ -321,7 +321,7 @@
         anchor: ".hlj-bid-overlay",
         place: "above",
         title: "Dealer's privilege",
-        body: "The <b>dealer gets one special power</b>: they can <b>take</b> the highest bid without going higher. If everyone else passed at 2, the dealer can claim the bid for 2 rather than having to bid 3. This makes the dealer seat valuable — they always get the last word.",
+        body: "The <b>dealer gets one special power</b>: they can <b>take</b> the highest bid without going higher. If everyone else passed at 2, the dealer can claim the bid for 2 rather than having to bid 3. And if <b>everyone passes</b>, the dealer <b>must</b> take it for 2 — someone always has to play the hand. This makes the dealer seat valuable — they always get the last word.",
         gate: "tap",
       },
       {
