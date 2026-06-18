@@ -262,10 +262,13 @@
 
   function updateCtx(v) {
     const c = T.ctx;
+    // HLJ
     c.youBid = Array.isArray(v.bidHistory) && v.you != null
       ? v.bidHistory.some((b) => b.seat === v.you) : c.youBid;
     if (v.trump) c.trumpSeen = true;
     if (v.phase === "playing") c.playStarted = true;
+    // Rummy 500: remember once meld/layoff intro has been shown so we skip it next round
+    if (T.party === "rummy500" && Array.isArray(v.melds) && v.melds.length > 0) c.meldShown = true;
   }
 
   window.addEventListener("resize", () => Tutorial.reflow());
@@ -407,7 +410,106 @@
         gate: "tap", cta: "Finish",
       },
     ],
-    // rummy500 / hearts / pegs-and-jokers scripts follow the same shape.
+    rummy500: [
+      {
+        id: "welcome",
+        when: (v) => v.phase === "playing",
+        title: "Welcome to Rummy 500",
+        body: "Everyone plays for themselves — no teams. Each round you draw, meld cards onto the table, and discard. Cards you meld score <b>for you</b>; cards left in your hand score <b>against you</b>. First to <b>500 points</b> wins.",
+        gate: "tap", cta: "Show me",
+      },
+      {
+        id: "your-hand",
+        when: () => true,
+        anchor: ".fan-inner",
+        place: "above",
+        title: "Your hand",
+        body: "These are your cards — only you can see them. Card values: <b>A = 15 pts, face cards = 10 pts, 2–9 = pip value</b>. Jokers are wild and worth 15 pts. Your goal is to get high-value cards onto the table before the round ends.",
+        gate: "tap",
+      },
+      {
+        id: "the-piles",
+        when: () => true,
+        anchor: ".piles",
+        title: "Stock & discard",
+        body: "The <b>face-down stack</b> is the stock — draw blindly from here. The <b>face-up pile</b> is the discard — you can see every card in it and pick any of them up. Smart discard reads are the heart of Rummy.",
+        gate: "tap",
+      },
+      {
+        id: "draw",
+        when: (v) => v.phase === "playing" && v.yourTurn && v.turnPhase === "draw",
+        skipWhen: (v) => v.phase !== "playing" || (v.yourTurn && v.turnPhase !== "draw"),
+        anchor: ".piles",
+        title: "Draw a card",
+        body: "Every turn starts with a draw. <b>Tap the stock</b> to draw blind, or <b>tap the discard pile</b> to browse and pick a card. If you grab a card that isn't on top, you take every card above it too — and you must immediately meld or lay off the target card.",
+        hint: "Draw from the stock or tap the discard pile.",
+        gate: "action",
+        done: (v) => !(v.yourTurn && v.turnPhase === "draw"),
+      },
+      {
+        id: "meld-intro",
+        when: (v) => v.phase === "playing" && v.yourTurn && v.turnPhase === "play",
+        skipWhen: (v, c) => c.meldShown || (v.phase === "playing" && v.yourTurn && v.turnPhase === "draw"),
+        anchor: ".fan-inner",
+        place: "above",
+        title: "Melding",
+        body: "Now select cards and play them to the table. A valid <b>meld</b> is either a <b>set</b> (3–4 cards of the same rank, different suits) or a <b>run</b> (3+ consecutive ranks in the same suit). Tap cards to select them, then tap <b>Play meld</b>. Jokers are wild.",
+        gate: "tap",
+      },
+      {
+        id: "layoff-intro",
+        when: (v, c) => v.phase === "playing" && v.yourTurn && v.turnPhase === "play" && !c.meldShown,
+        skipWhen: (v, c) => c.meldShown || v.phase !== "playing",
+        anchor: ".rummy-melds-scroll",
+        title: "Laying off",
+        body: "You can also <b>lay off</b> — add cards to a meld already on the table (yours or anyone else's). Tap a card, then tap the meld you want to extend. You score the points for whatever you lay off, even on someone else's meld.",
+        gate: "tap",
+      },
+      {
+        id: "discard",
+        when: (v) => v.phase === "playing" && v.yourTurn && v.turnPhase === "play",
+        skipWhen: (v) => v.phase !== "playing" || !v.yourTurn || v.turnPhase !== "play",
+        anchor: ".fan-inner",
+        place: "above",
+        title: "Discard to end your turn",
+        body: "When you're done melding, select one card and tap <b>Discard</b>. That card goes face-up on the discard pile and your turn ends. Choose wisely — opponents can pick it up.",
+        hint: "Select a card and tap Discard.",
+        gate: "action",
+        done: (v) => !(v.yourTurn && v.turnPhase === "play"),
+      },
+      {
+        id: "scoring",
+        when: (v) => !!(v.lastRound),
+        anchor: ".selfbar",
+        place: "above",
+        title: "How scoring works",
+        body: "When the round ends, each player's score is <b>melded points minus held points</b>. Cards still in your hand count against you — a hand full of face cards hurts. Negative rounds are possible if you're caught holding big cards.",
+        gate: "tap",
+      },
+      {
+        id: "going-out",
+        when: (v) => !!(v.lastRound),
+        title: "Going out",
+        body: "A round ends when someone <b>goes out</b> (empties their hand) or the <b>stock runs dry</b>. Going out first is powerful — you decide when the round ends, often leaving opponents stuck with unmelded cards. No rush though: staying in to meld more can outscore a fast out.",
+        gate: "tap",
+      },
+      {
+        id: "log-melds",
+        when: (v) => !!(v.lastRound),
+        anchor: "[data-action='toggle-log']",
+        title: "Log & Melds tab",
+        body: "Tap <b>Log</b> any time during a round. Switch to the <b>Melds</b> tab to see everything on the table at once — who owns each meld, what's in it, and where you can lay off.",
+        gate: "tap",
+      },
+      {
+        id: "wrap",
+        when: (v) => !!(v.lastRound) || v.phase === "gameOver",
+        title: "You've got it",
+        body: "That's Rummy 500. Draw smart, meld early, lay off where you can, and don't get caught holding. The game keeps going from here — this guide steps out now. Good luck!",
+        gate: "tap", cta: "Finish",
+      },
+    ],
+    // hearts / pegs-and-jokers scripts follow the same shape.
   };
 
   window.Tutorial = Tutorial;
