@@ -1063,6 +1063,14 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .lby-cta-row .lby-waiting{text-align:center}
 /* Lobby action row: invite + deal on one line */
 .lby-action-row{display:flex;gap:10px;align-items:center;justify-content:center;width:100%}
+
+/* Wider screens: selfbar + lobby buttons on one row */
+@media (min-width:600px) {
+  .selfwrap:has(.lby-action-row){flex-direction:row;align-items:stretch;gap:8px}
+  .selfwrap:has(.lby-action-row) .selfbar{flex:1;margin:0;width:auto}
+  .selfwrap:has(.lby-action-row) .actions{flex:none;padding:0;width:auto;flex-wrap:nowrap}
+  .selfwrap:has(.lby-action-row) .lby-action-row{gap:6px;width:auto}
+}
 .lby-deal-btn{
   flex:1;padding:0 18px;border:none;border-radius:8px;cursor:pointer;
   font-family:"Fraunces",serif;font-size:17px;font-weight:600;font-style:normal;
@@ -2578,6 +2586,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .ls-actions .btn,
   .ls-actions button{ font-size:11px !important; padding:3px 7px !important; }
   .ls-actions .lby-deal-btn{ font-size:11px !important; padding:3px 10px !important; }
+  .ls-actions .lby-share-btn,.ls-actions .lby-tutorial-btn{white-space:nowrap;font-size:11px !important;padding:3px 7px !important}
   .ls-actions .lby-count-chip{ width:24px; height:24px; font-size:11px; }
   /* Hide selfbar/actions — they're now in the appbar */
   .selfbar{ display:none !important; }
