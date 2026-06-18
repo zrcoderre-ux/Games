@@ -2794,6 +2794,8 @@ function doDiscard() {
 
 // ---------- delegated events ----------
 app.addEventListener("click", (e) => {
+  // Suppress the click that fires after a completed drag-to-play gesture.
+  if (DPT.suppress) { DPT.suppress = false; return; }
   const t = e.target.closest("[data-action]");
   if (!t) return;
   // clicks inside the modal shouldn't fall through to the backdrop's close
@@ -3032,6 +3034,131 @@ function endDrag(e) {
 }
 app.addEventListener("drop", endDrag);
 app.addEventListener("dragend", endDrag);
+
+// ---------- drag-to-play (pointer events — touch + mouse) ----------
+// A ghost card follows the pointer; releasing over a valid drop zone sends the move.
+// Separate from the native-drag hand-reorder system above.
+const DPT = {
+  ptId: null,     // tracked pointerId (null = no active gesture)
+  game: null,     // "hlj" | "hearts" | "rummy"
+  ckey: null,     // HLJ: cardKey string
+  cid: null,      // Hearts / Rummy: card id (int)
+  cardEl: null,   // source card element
+  ghost: null,    // floating clone element
+  ox: 0, oy: 0,  // pointer-start coords (for threshold check)
+  started: false, // drag threshold (10 px) crossed?
+  suppress: false,// absorb the click that follows touch-pointerup
+};
+
+app.addEventListener("pointerdown", (e) => {
+  if (DPT.ptId !== null) return; // already tracking a pointer
+  const card = e.target.closest(".card[data-action]");
+  if (!card) return;
+  const a = card.dataset.action;
+  if      (a === "play-card")   { DPT.game = "hlj";    DPT.ckey = card.dataset.key; DPT.cid = null; }
+  else if (a === "play-hearts") { DPT.game = "hearts"; DPT.cid  = +card.dataset.cardid; DPT.ckey = null; }
+  else if (a === "toggle-card") { DPT.game = "rummy";  DPT.cid  = +card.dataset.cardid; DPT.ckey = null; }
+  else return;
+  DPT.ptId    = e.pointerId;
+  DPT.cardEl  = card;
+  DPT.ox      = e.clientX;
+  DPT.oy      = e.clientY;
+  DPT.started = false;
+  DPT.ghost   = null;
+  // Let native drag (Rummy hand reorder) cancel our gesture cleanly.
+  card.addEventListener("dragstart", () => { DPT.ptId = null; DPT.started = false; }, { once: true });
+});
+
+document.addEventListener("pointermove", (e) => {
+  if (e.pointerId !== DPT.ptId) return;
+  if (!DPT.started) {
+    if (Math.hypot(e.clientX - DPT.ox, e.clientY - DPT.oy) < 10) return;
+    DPT.started = true;
+    const r = DPT.cardEl.getBoundingClientRect();
+    const g = DPT.cardEl.cloneNode(true);
+    Object.assign(g.style, {
+      position: "fixed", zIndex: "9999", pointerEvents: "none",
+      opacity: "0.85", transform: "scale(1.1) rotate(-4deg)",
+      width: r.width + "px", height: r.height + "px",
+      left: r.left + "px", top: r.top + "px", transition: "none",
+    });
+    g._ox = e.clientX - r.left;
+    g._oy = e.clientY - r.top;
+    document.body.appendChild(g);
+    DPT.ghost = g;
+    dptHighlight(true);
+  }
+  e.preventDefault();
+  if (DPT.ghost) {
+    DPT.ghost.style.left = (e.clientX - DPT.ghost._ox) + "px";
+    DPT.ghost.style.top  = (e.clientY - DPT.ghost._oy) + "px";
+  }
+}, { passive: false });
+
+function dptEnd(e) {
+  if (e.pointerId !== DPT.ptId) return;
+  DPT.ptId = null;
+  dptHighlight(false);
+  if (DPT.ghost) DPT.ghost.style.display = "none"; // hide so elementFromPoint sees beneath it
+  const target = DPT.started ? document.elementFromPoint(e.clientX, e.clientY) : null;
+  if (DPT.ghost) { DPT.ghost.remove(); DPT.ghost = null; }
+  if (DPT.started) {
+    DPT.suppress = true;
+    setTimeout(() => { DPT.suppress = false; }, 300);
+    dptExecute(target);
+  }
+  DPT.started = false;
+}
+document.addEventListener("pointerup",     dptEnd);
+document.addEventListener("pointercancel", (e) => {
+  if (e.pointerId !== DPT.ptId) return;
+  DPT.ptId = null; DPT.started = false;
+  dptHighlight(false);
+  if (DPT.ghost) { DPT.ghost.remove(); DPT.ghost = null; }
+});
+
+function dptHighlight(on) {
+  if (DPT.game === "hlj" || DPT.game === "hearts") {
+    document.querySelectorAll(".felt").forEach((el) => el.classList.toggle("dpt-target", on));
+  } else if (DPT.game === "rummy") {
+    document.querySelectorAll(".discardstack, .meld").forEach((el) => el.classList.toggle("dpt-target", on));
+  }
+}
+
+function dptExecute(target) {
+  const v = S.view;
+  if (!v || !target) return;
+  if (DPT.game === "hlj") {
+    // Drop anywhere on the center felt plays the card.
+    if (target.closest(".felt-frame")) {
+      const c = v.yourHand.find((x) => cardKey(x) === DPT.ckey);
+      if (c) send({ t: "move", move: { type: "play", seat: v.you, card: c } });
+    }
+  } else if (DPT.game === "hearts") {
+    if (target.closest(".felt-frame")) {
+      send({ t: "move", move: { type: "play", seat: v.you, card: DPT.cid } });
+    }
+  } else if (DPT.game === "rummy") {
+    if (!v.yourTurn || v.turnPhase !== "play") return;
+    // Drop on a meld → lay off.
+    const meldEl = target.closest("[data-meldid]");
+    if (meldEl) {
+      const meldId = +meldEl.dataset.meldid;
+      const meld   = v.melds.find((m) => m.id === meldId);
+      const card   = v.yourHand.find((c) => c.id === DPT.cid);
+      if (meld && card && rCanLayoff(meld, [card])) {
+        send({ t: "move", move: { type: "layoff", seat: v.you, meldId, cards: [DPT.cid] } });
+      } else {
+        toast("That card can’t be laid off there.");
+      }
+      return;
+    }
+    // Drop on the discard pile → discard.
+    if (target.closest(".discardstack")) {
+      send({ t: "move", move: { type: "discard", seat: v.you, cardId: DPT.cid } });
+    }
+  }
+}
 
 // keep the host's "play to" value in the shared lobby config (so re-renders don't lose it)
 app.addEventListener("change", (e) => {
