@@ -1939,6 +1939,7 @@ function renderRummy(v) {
       S.rummyDrawnCard = newCards[0];
       clearTimeout(S.rummyDrawnTimer);
       S.rummyDrawnTimer = setTimeout(() => {
+        if (S.rummyDrawnCard) S.rummyPrevHandIds = new Set([...S.rummyPrevHandIds, S.rummyDrawnCard.id]);
         S.rummyDrawnCard = null;
         S.rummyDrawnTimer = null;
         render();
@@ -2933,6 +2934,7 @@ app.addEventListener("click", (e) => {
     case "advance-round":
       return send({ t: "move", move: { type: "advance", seat: v.you } });
     case "dismiss-drawn":
+      if (S.rummyDrawnCard) S.rummyPrevHandIds = new Set([...S.rummyPrevHandIds, S.rummyDrawnCard.id]);
       S.rummyDrawnCard = null;
       clearTimeout(S.rummyDrawnTimer);
       S.rummyDrawnTimer = null;
