@@ -111,58 +111,75 @@
     [...T.root.querySelectorAll(".tut-ring,.tut-card")].forEach((n) => n.remove());
   }
 
-  // Position the spotlight ring + card relative to an anchor (or center).
-  function place(step) {
-    clearPopup();
-    const r = ensureRoot();
-    const anchorEl = step.anchor ? document.querySelector(step.anchor) : null;
-
-    const card = el("tut-card");
-    card.style.pointerEvents = "auto";
-    const total = T.script.length;
-    card.innerHTML =
-      `<h4>${step.title}</h4><p>${step.body}</p>` +
-      (step.gate === "action"
-        ? `<div class="tut-hint">${step.hint || "Your move — do it on the table to continue."}</div>`
-        : `<div class="tut-foot"><span class="tut-progress">${T.idx + 1} / ${total}</span>` +
-          `<button class="tut-next">${step.cta || (T.idx + 1 >= total ? "Finish" : "Next")}</button></div>`);
-    r.appendChild(card);
-
-    if (step.gate !== "action") {
-      card.querySelector(".tut-next").onclick = () => advance();
-    }
-
+  // Compute card + ring geometry for a given anchor element (or null for centered).
+  function geometry(anchorEl, card) {
     if (anchorEl) {
       const a = anchorEl.getBoundingClientRect();
       const pad = 6;
-      const ring = el("tut-ring");
-      ring.style.left = a.left - pad + "px";
-      ring.style.top = a.top - pad + "px";
-      ring.style.width = a.width + pad * 2 + "px";
-      ring.style.height = a.height + pad * 2 + "px";
-      r.appendChild(ring);
-
-      // Card: below the anchor if there's room, else above; clamp horizontally.
       const ch = card.offsetHeight || 150;
       const cw = card.offsetWidth || 300;
       const below = a.bottom + 12;
-      const wantAbove = step.place === "above" || (below + ch > window.innerHeight - 12 && a.top - 12 - ch > 12);
+      const wantAbove = card._step?.place === "above" ||
+        (below + ch > window.innerHeight - 12 && a.top - 12 - ch > 12);
       let top = wantAbove ? a.top - 12 - ch : below;
       top = Math.max(12, Math.min(top, window.innerHeight - ch - 12));
       let left = a.left + a.width / 2 - cw / 2;
       left = Math.max(12, Math.min(left, window.innerWidth - cw - 12));
-      card.style.left = left + "px";
-      card.style.top = top + "px";
+      return {
+        card: { top, left },
+        ring: { left: a.left - pad, top: a.top - pad, width: a.width + pad * 2, height: a.height + pad * 2 },
+      };
     } else {
-      // Centered card, no ring. Position with pixel left/top rather than a
-      // translate(-50%,-50%) transform: .tut-card's `animation:tutIn both` ends on
-      // `transform:none`, and that final keyframe overrides any inline transform
-      // (animations outrank inline styles), which would leave the card pinned by
-      // its top-left corner at screen center and overflow off-screen.
       const cw = card.offsetWidth || 300;
       const ch = card.offsetHeight || 150;
-      card.style.left = Math.max(12, (window.innerWidth - cw) / 2) + "px";
-      card.style.top = Math.max(12, (window.innerHeight - ch) / 2) + "px";
+      return { card: { top: Math.max(12, (window.innerHeight - ch) / 2), left: Math.max(12, (window.innerWidth - cw) / 2) } };
+    }
+  }
+
+  // Build or update the spotlight ring + card. Pass repin=true to move existing
+  // elements without tearing them down (avoids the tutIn animation flashing).
+  function place(step, repin) {
+    const r = ensureRoot();
+    const anchorEl = step.anchor ? document.querySelector(step.anchor) : null;
+
+    let card = repin ? T.root.querySelector(".tut-card") : null;
+    let ring = repin ? T.root.querySelector(".tut-ring") : null;
+
+    if (!card) {
+      if (!repin) clearPopup();
+      card = el("tut-card");
+      card.style.pointerEvents = "auto";
+      const total = T.script.length;
+      card.innerHTML =
+        `<h4>${step.title}</h4><p>${step.body}</p>` +
+        (step.gate === "action"
+          ? `<div class="tut-hint">${step.hint || "Your move — do it on the table to continue."}</div>`
+          : `<div class="tut-foot"><span class="tut-progress">${T.idx + 1} / ${total}</span>` +
+            `<button class="tut-next">${step.cta || (T.idx + 1 >= total ? "Finish" : "Next")}</button></div>`);
+      card._step = step;
+      r.appendChild(card);
+      if (step.gate !== "action") {
+        card.querySelector(".tut-next").onclick = () => advance();
+      }
+    }
+
+    if (anchorEl && !ring) {
+      ring = el("tut-ring");
+      r.appendChild(ring);
+    } else if (!anchorEl && ring) {
+      ring.remove();
+      ring = null;
+    }
+
+    // Position: update in-place (no style.animation reset needed).
+    const geo = geometry(anchorEl, card);
+    card.style.left = geo.card.left + "px";
+    card.style.top = geo.card.top + "px";
+    if (ring && geo.ring) {
+      ring.style.left = geo.ring.left + "px";
+      ring.style.top = geo.ring.top + "px";
+      ring.style.width = geo.ring.width + "px";
+      ring.style.height = geo.ring.height + "px";
     }
   }
 
@@ -185,14 +202,14 @@
       try {
         if (step.done && step.done(view, T.ctx)) return advance();
       } catch (_) {}
-      // keep the ring/card pinned to the (possibly re-rendered) anchor
-      place(step);
+      // Repin the ring to the (possibly re-rendered) anchor without rebuilding.
+      place(step, true);
       return;
     }
 
-    // Tap-gated step already on screen: just keep it pinned.
+    // Tap-gated step already on screen: just repin without flashing.
     if (T.shown) {
-      place(step);
+      place(step, true);
       return;
     }
 
@@ -240,7 +257,7 @@
     },
 
     // Re-pin on resize/scroll so the ring stays on its control.
-    reflow() { if (T.running && T.shown) place(T.script[T.idx]); },
+    reflow() { if (T.running && T.shown) place(T.script[T.idx], true); },
   };
 
   function updateCtx(v) {
