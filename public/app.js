@@ -2136,7 +2136,7 @@ function renderRummy(v) {
     else if (canMeld) acts.push(`<span class="hint">Tap \u201cPlay meld\u201d to put these ${n} cards down.</span>`);
     else if (canLay) acts.push(`<span class="hint">Tap \u201cLay off\u201d to add these cards to the highlighted meld.</span>`);
     else if (n >= 3) acts.push(`<span class="hint">These cards don\u2019t form a valid meld.</span>`);
-    else acts.push(`<span class="hint">Select cards to meld or lay off, or select one to discard. Tap a meld to target it.</span>`);
+    else acts.push(`<span class="hint">Select cards to meld or lay off, or select one to discard. Tap a meld to lay off onto it.</span>`);
   } else {
     acts.push(sortBar);
   }
@@ -2941,10 +2941,10 @@ app.addEventListener("click", (e) => {
       const meldId = +t.dataset.meldid;
       const selNow = [...S.rummySel].map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
       const meldTarget = v.melds.find((m) => m.id === meldId);
-      // If cards already selected and this meld accepts them, go straight to layoff mode
+      // If cards already selected and this meld accepts them, lay off immediately
       if (selNow.length >= 1 && S.rummyLayoff === null && meldTarget && rCanLayoff(meldTarget, selNow)) {
         S.rummyLayoff = meldId;
-      } else {
+        return doLayoff();
         S.rummyMeldOpen = meldId;
       }
       return render();
