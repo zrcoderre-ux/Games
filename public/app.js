@@ -390,8 +390,9 @@ function onFrame(e) {
     }
     maybePromptPass();
     render();
-    // Tutorial: arm on the lobby->game transition (single human only), then feed each frame.
-    if (S.tutorial && S.offline && prev?.phase === "lobby" && S.view && S.view.phase !== "lobby"
+    // Tutorial: arm on the lobby->game transition (single human only), then feed each
+    // frame. Works online or offline — gated on a lone human seat, not S.offline.
+    if (S.tutorial && prev?.phase === "lobby" && S.view && S.view.phase !== "lobby"
         && S.view.seats && S.view.seats.filter((s) => s.kind === "human").length === 1) {
       window.Tutorial?.start(S.party);
     }
@@ -1036,8 +1037,11 @@ function renderLobby(v) {
   const shareBtn = !S.offline
     ? `<button class="btn lby-share-btn" data-action="share-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Invite Players</button>`
     : "";
-  // Tutorial: single-player offline only (one human vs bots), sits between Invite and Deal.
-  const singlePlayer = S.offline && !hasHotseats && v.seats.filter((s) => s.kind === "human").length <= 1;
+  // Tutorial: single human only (no pass-and-play), sits between Invite and Deal.
+  // Works online or offline — in production a solo "vs bots" game is a normal server
+  // room, not S.offline, and in the lobby the other seats are still empty (bots fill
+  // them on deal), so we gate on a lone human seat rather than the offline flag.
+  const singlePlayer = !hasHotseats && v.seats.filter((s) => s.kind === "human").length === 1;
   const tutorialBtn = (isHost && singlePlayer)
     ? `<button class="btn lby-tutorial-btn" data-action="toggle-tutorial" aria-pressed="${S.tutorial ? "true" : "false"}" title="Play a guided practice hand"${S.tutorial ? ` style="background:linear-gradient(180deg,#ecd680,#c9a94e);color:#241704;border-color:#b1973e"` : ""}>${S.tutorial ? "Tutorial ✓" : "Tutorial"}</button>`
     : "";
@@ -2718,6 +2722,7 @@ function doLeave() {
   S.connected = false;
   S.party = null;
   S.offline = false;
+  S.tutorial = false;
   S.hotseat = false;
   S.hotseats = {};
   S.awaitingPass = false;
