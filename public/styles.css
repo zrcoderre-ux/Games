@@ -2558,9 +2558,9 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     margin:0 5px 0 !important;
   }
 
-  /* Rotate trump/Hearts watermarks 90° to suit landscape orientation */
-  .trump-watermark{ transform:rotate(90deg) !important; }
-  .trump-watermark.joker-placeholder{ transform:rotate(90deg) !important; }
+  /* Rotate trump/Hearts watermarks -90° — device rotated right, content rotates left */
+  .trump-watermark{ transform:rotate(-90deg) !important; }
+  .trump-watermark.joker-placeholder{ transform:rotate(-90deg) !important; }
   /* Hat watermark: centered, shrunk to fit, no rotation (faces the top toolbar) */
   .lby-felt-watermark{
     top:50% !important; left:50% !important;
@@ -2569,7 +2569,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   }
   /* Corner suits: rotate each suit 90° in place (not the container, which would
      shift them outside the felt on a rectangular viewport) */
-  .felt-corner-suit{ transform:rotate(90deg) !important; }
+  .felt-corner-suit{ transform:rotate(-90deg) !important; }
 
   /* ---- Landscape appbar player strip ---- */
   .appbar{ flex-wrap:nowrap; gap:4px; padding:4px 6px; }
