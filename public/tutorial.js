@@ -315,6 +315,16 @@
         gate: "tap",
       },
       {
+        id: "dealer-privilege",
+        when: (v) => v.phase === "bidding",
+        skipWhen: (v) => v.phase !== "bidding",
+        anchor: ".hlj-bid-overlay",
+        place: "above",
+        title: "Dealer's privilege",
+        body: "The <b>dealer gets one special power</b>: they can <b>take</b> the highest bid without going higher. If everyone else passed at 2, the dealer can claim the bid for 2 rather than having to bid 3. This makes the dealer seat valuable — they always get the last word.",
+        gate: "tap",
+      },
+      {
         id: "place-bid",
         when: youTurnBidding,
         skipWhen: (v, c) => v.phase !== "bidding" || c.youBid === true,
