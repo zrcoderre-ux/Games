@@ -1942,7 +1942,7 @@ function renderRummy(v) {
         S.rummyDrawnCard = null;
         S.rummyDrawnTimer = null;
         render();
-      }, 5000);
+      }, 3000);
     }
   }
   // Update prev hand ids (but not while preview is showing, to avoid clearing it)
