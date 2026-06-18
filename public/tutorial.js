@@ -294,7 +294,7 @@
         anchor: ".hlj-bid-overlay",
         place: "above",
         title: "Bidding",
-        body: "A bid is a promise: how many of the hand's points your team will capture (2–6). The <b>highest bidder names trump</b> and must take at least that many points — fall short and you're <b>set back</b> (you lose the bid instead of scoring it).",
+        body: "A bid is a promise: how many of the hand's points your team will capture (2–6). The <b>highest bidder names trump</b> and must take at least that many points — fall short and you're <b>set back</b> (the bid is subtracted from your score instead). Bidding <b>6 is an automatic win</b> — unless your team is in the hole (negative score) going into that hand.",
         gate: "tap",
       },
       {
@@ -362,14 +362,14 @@
         id: "honors",
         when: (v) => v.phase === "playing",
         title: "Where points come from",
-        body: "Each hand has up to five points to win: <b>High</b> (highest trump played), <b>Low</b> (lowest trump played), <b>Jack</b> (the jack of trump), the <b>Joker</b> — our Bonhomme — and <b>Game</b> (most card value: A=4, K=3, Q=2, J=1, 10=10). Capture them in your tricks.",
+        body: "Each hand has up to <b>six</b> points to win: <b>High</b> (highest trump played), <b>Low</b> (lowest trump played), <b>Jack</b> (the jack of trump), <b>Bonhomme</b> (the Joker) — worth <b>2 points</b>, not 1 — and <b>Game</b> (most card value: A=4, K=3, Q=2, J=1, 10=10). Capture them in your tricks.",
         gate: "tap",
       },
       {
         id: "scored",
         when: (v) => !!v.lastHand || v.phase === "gameOver",
         title: "Scoring the hand",
-        body: "The hand is scored: each captured honor is a point. If the bidding team made its bid, those points count; if not, the bid is subtracted (<b>set back</b>). First team to the target score wins the game.",
+        body: "The hand is scored: each captured honor counts (Bonhomme counts for 2). If the bidding team made its bid, those points count; if not, the bid is subtracted (<b>set back</b>). The game is played to <b>21 points</b> — first team there wins.",
         gate: "tap",
       },
       {
