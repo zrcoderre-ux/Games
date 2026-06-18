@@ -249,7 +249,7 @@ function avatarHTML(name, o = {}) {
   const teamCls = o.team ? ` t${o.team}` : "";
   const style = o.team ? "" : ` style="--av-1:${a};--av-2:${b}"`;
   const label = o.team ? o.team : esc(initials(name));
-  return `<div class="avatar${o.big ? " big" : ""}${teamCls}"${style}>${label}${o.host ? `<span class="crown">\u265B</span>` : ""}</div>`;
+  return `<div class="avatar${o.big ? " big" : ""}${teamCls}"${style}>${label}${o.host && !o.team ? `<span class="crown">\u265B</span>` : ""}</div>`;
 }
 
 // opponent pod
