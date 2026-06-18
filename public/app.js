@@ -2939,7 +2939,7 @@ app.addEventListener("click", (e) => {
       return render();
     }
     case "advance-round":
-      return send({ t: "move", move: { type: "advance", seat: v.you } });
+      return send({ t: "advance" });
     case "dismiss-drawn":
       if (S.rummyDrawnCard) S.rummyPrevHandIds = new Set([...S.rummyPrevHandIds, S.rummyDrawnCard.id]);
       S.rummyDrawnCard = null;
