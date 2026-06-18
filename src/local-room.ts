@@ -194,7 +194,14 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     }
     this.config = config;
     this.seats = seats;
-    const seed = (config as any).seed !== undefined ? (config as any).seed : (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
+    // dealerSeat: negative values are relative to seatN (e.g. -2 → n-2, the right-wall
+    // teammate for any even player count). seed is used as-is when provided.
+    const rawDealer = (config as any).dealerSeat;
+    const seed = rawDealer !== undefined
+      ? ((rawDealer < 0 ? n + rawDealer : rawDealer) % n)  // n already declared above
+      : (config as any).seed !== undefined
+        ? (config as any).seed
+        : (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
     this.state = this.game.createGame(config, seed);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
