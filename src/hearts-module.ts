@@ -562,8 +562,32 @@ function danger(c: HeartsCard): number {
 
 function aiPass(state: HeartsState, seat: number): HeartsMove {
   const hand = state.hands[seat];
-  const cards = [...hand].sort((a, b) => danger(b) - danger(a)).slice(0, 3);
-  return { type: "pass", seat, cards: cards.map((c) => c.id) };
+  const chosen: HeartsCard[] = [];
+  // 1. Always shed the Black Lady first if held.
+  const qs = hand.find(isQueenOfSpades);
+  if (qs) chosen.push(qs);
+  // 2. Void the shortest non-heart suit we can fully empty within our remaining passes —
+  //    a void lets us dump hearts / the Queen later. Repeat while slots remain.
+  let progress = true;
+  while (chosen.length < 3 && progress) {
+    progress = false;
+    const slots = 3 - chosen.length;
+    let bestSuit: Suit | null = null, bestLen = Infinity;
+    for (const su of ["S", "D", "C"] as Suit[]) {
+      const rem = hand.filter((c) => c.suit === su && !chosen.includes(c));
+      if (rem.length >= 1 && rem.length <= slots && rem.length < bestLen) { bestLen = rem.length; bestSuit = su; }
+    }
+    if (bestSuit) {
+      for (const c of hand.filter((c) => c.suit === bestSuit && !chosen.includes(c))) chosen.push(c);
+      progress = true;
+    }
+  }
+  // 3. Fill any remaining slots by danger (high spades → high hearts → high cards).
+  if (chosen.length < 3) {
+    const rest = hand.filter((c) => !chosen.includes(c)).sort((a, b) => danger(b) - danger(a));
+    for (const c of rest) { if (chosen.length >= 3) break; chosen.push(c); }
+  }
+  return { type: "pass", seat, cards: chosen.slice(0, 3).map((c) => c.id) };
 }
 
 function aiPlay(state: HeartsState, seat: number): HeartsMove {
@@ -579,6 +603,28 @@ function aiPlay(state: HeartsState, seat: number): HeartsMove {
     const nonHearts = legal.filter((c) => !isHeart(c));
     const pool = nonHearts.length ? nonHearts : legal;
     return play(lowestBy(pool, (c) => c.rank));
+  }
+
+  // Moon defense: if one opponent already holds the Queen (>=13 pts) and ALL points so far, and
+  // we're following a points-carrying trick they're currently winning, overtake as cheaply as we
+  // can to grab the points and break the moon — far better than letting them collect all 26.
+  {
+    const pts = state.points;
+    const others = pts.map((p, i) => ({ i, p })).filter((o) => o.i !== seat);
+    const shooter = others.reduce((a, b) => (b.p > a.p ? b : a), others[0]);
+    const threat = shooter.p >= 13 && pts[seat] === 0
+      && !others.some((o) => o.i !== shooter.i && o.p > 0)
+      && pts.reduce((a, b) => a + b, 0) < 26;
+    if (threat) {
+      const ledSuit = state.currentTrick[0].card.suit;
+      const inLed = state.currentTrick.filter((tp) => tp.card.suit === ledSuit);
+      const curWin = inLed.reduce((hi, tp) => (tp.card.rank > hi.card.rank ? tp : hi), inLed[0]);
+      const trickPts = state.currentTrick.reduce((a, tp) => a + cardPoints(tp.card), 0);
+      const winners = legal.filter((c) => c.suit === ledSuit && c.rank > curWin.card.rank);
+      if (trickPts > 0 && curWin.seat === shooter.i && winners.length) {
+        return play(winners.reduce((lo, c) => (c.rank < lo.rank ? c : lo), winners[0]));
+      }
+    }
   }
 
   const ledSuit = state.currentTrick[0].card.suit;
