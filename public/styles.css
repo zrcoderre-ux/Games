@@ -485,6 +485,8 @@ html.is-standalone .hs-felt{ flex:1;min-height:0; }
 html.is-standalone .hs-lbl-game{ margin-top:auto; }
 html.is-standalone .table .felt-frame{ flex:1;height:auto;margin:0 5px 12px; }
 html.is-standalone .table .selfwrap-spacer{ height:215px; }
+/* Collapse the spacer in standalone lobby — no hand cards to overlap the felt */
+html.is-standalone .table:has(.lby-action-row) .selfwrap-spacer{ height:0; }
 
 /* Browser (non-standalone): two sub-cases — lobby vs active game. */
 @media not (display-mode: standalone){
@@ -2424,12 +2426,19 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     margin-inline:auto;
     margin-top:8px;
   }
-  /* Keep the bottom hand/score bar aligned with the centered felt */
+  /* Keep the bottom hand/score bar aligned with the centered felt.
+     Use explicit left/right calc instead of margin:auto — Safari doesn't
+     honour margin-inline:auto on position:fixed elements. Match the
+     specificity of the browser-mode rule (line ~500) so the later declaration
+     (this media block) wins for left/right. */
+  #app:not(:has(.lby-outer)) .table .selfwrap,
+  html.is-standalone .table .selfwrap,
   .table .selfwrap{
-    width:100%;
-    max-width:var(--lg-table-max);
-    left:0; right:0;
-    margin-inline:auto;
+    left: max(0px, calc((100dvw - var(--lg-table-max)) / 2));
+    right: max(0px, calc((100dvw - var(--lg-table-max)) / 2));
+    width: auto;
+    max-width: none;
+    margin-inline: 0;
   }
   /* The felt is flex:1, so a smaller bottom reserve grows it down until the
      hand overlaps onto it (mobile behavior). Standalone normally reserves
