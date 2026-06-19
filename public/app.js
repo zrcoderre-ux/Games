@@ -858,10 +858,10 @@ function positionHatWatermark() {
   const r = rail.getBoundingClientRect();
   const s = spacer.getBoundingClientRect();
   const isStandalone = document.documentElement.classList.contains("is-standalone");
-  // Tablet/desktop browser: use a smaller footprint so the hat is decorative,
-  // not dominant. Mobile browser and standalone stay at their larger sizes.
+  // Tablet/desktop browser: smaller footprint so the hat is decorative, not dominant.
+  // Standalone capped at 482px so it doesn't overflow on iPad.
   const tabletBrowser = !isStandalone && window.innerWidth > 560;
-  const width = Math.min(s.width * (isStandalone ? 1.276 : tabletBrowser ? 0.55 : 1.18), tabletBrowser ? 320 : 800);
+  const width = Math.min(s.width * (isStandalone ? 1.276 : tabletBrowser ? 0.55 : 1.18), tabletBrowser ? 320 : 482);
   // joker-hat.png is 1024x1536 with its opaque artwork spanning y=59..1527 —
   // there's a third, forward-hanging point (with two of the three bells)
   // that reaches almost the full height of the image. Crop tight to that
