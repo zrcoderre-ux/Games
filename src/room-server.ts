@@ -19,6 +19,8 @@ import type {
 
 export type ConnState = { pid: string; name: string; seat: number | null };
 
+type LogEnv = { GameLog?: DurableObjectNamespace };
+
 type Room<State, Config> = {
   state: State | null; // null while in the lobby
   config: Config; // table size + per-game options
@@ -35,7 +37,7 @@ export abstract class RoomServer<
   Move extends SeatedMove,
   Config,
   View,
-  Env extends Cloudflare.Env = Cloudflare.Env,
+  Env extends Cloudflare.Env & LogEnv = Cloudflare.Env & LogEnv,
 > extends Server<Env> {
   static options = { hibernate: true };
 
@@ -301,6 +303,7 @@ export abstract class RoomServer<
     const afterMove = this.game.applyMove(state, move);
     this.room.state = this.game.openHumanGate?.(afterMove, move) ?? afterMove;
     await this.persist();
+    await this.logHandIfComplete(state, this.room.state);
     await this.resolveBotsAndBroadcast();
   }
 
@@ -316,6 +319,7 @@ export abstract class RoomServer<
     if (!pace || !pace.move) throw new Error("Nothing to advance");
     this.room.state = this.game.applyMove(state, pace.move);
     await this.persist();
+    await this.logHandIfComplete(state, this.room.state);
     await this.resolveBotsAndBroadcast();
   }
 
@@ -443,9 +447,11 @@ export abstract class RoomServer<
           const a = this.game.aux.botAux(ns, seat);
           if (a != null) ns = this.game.aux.apply(ns, seat, a);
         }
+        const prevNs = ns;
         ns = this.game.applyMove(ns, this.game.aiMove(ns, seat));
         this.room.state = ns;
         await this.persist();
+        await this.logHandIfComplete(prevNs, ns);
         this.broadcastViews();
         await this.scheduleNextAlarm();
         return;
@@ -458,6 +464,7 @@ export abstract class RoomServer<
           if (pace.kind === "auto" || !hasHuman) {
             this.room.state = this.game.applyMove(s, pace.move);
             await this.persist();
+            await this.logHandIfComplete(s, this.room.state);
             this.broadcastViews();
             await this.scheduleNextAlarm();
             return;
@@ -502,6 +509,20 @@ export abstract class RoomServer<
 
   private async persist() {
     await this.ctx.storage.put("room", this.room);
+  }
+
+  private async logHandIfComplete(prev: State, next: State) {
+    const rec = this.game.loggableHand?.(prev, next);
+    if (!rec || !this.env.GameLog) return;
+    const enriched = {
+      ...(rec as object),
+      ts: new Date().toISOString(),
+      seatKinds: this.room.seats.map((s) => s.kind), // "human" | "bot" | "empty", no names
+    };
+    try {
+      const stub = this.env.GameLog.get(this.env.GameLog.idFromName("singleton"));
+      await stub.fetch("https://gamelog/append", { method: "POST", body: JSON.stringify(enriched) });
+    } catch { /* logging must never break play */ }
   }
 }
 

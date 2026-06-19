@@ -13,12 +13,16 @@ import type { PlayerView } from "./protocol.ts";
 import { rummy500Module, type RummyConfig, type RummyState, type RummyMove, type RummyView } from "./rummy-module.ts";
 import { heartsModule, type HeartsConfig, type HeartsState, type HeartsMove, type HeartsView } from "./hearts-module.ts";
 import { pegsAndJokersModule, type PJConfig, type PJState, type PJMove, type PJView } from "./pj-module.ts";
+import { GameLogServer } from "./gamelog-server.ts";
+
+export { GameLogServer };
 
 export interface Env {
   HighLowJack: DurableObjectNamespace<HighLowJackServer>;
   Rummy500: DurableObjectNamespace<Rummy500Server>;
   Hearts: DurableObjectNamespace<HeartsServer>;
   PegsAndJokers: DurableObjectNamespace<PegsAndJokersServer>;
+  GameLog: DurableObjectNamespace<GameLogServer>;
 }
 
 export class HighLowJackServer extends RoomServer<GameState, Move, HLJConfig, PlayerView, Env> {
@@ -54,6 +58,11 @@ export class PegsAndJokersServer extends RoomServer<PJState, PJMove, PJConfig, P
 // /parties/hearts/<room>, /parties/pegs-and-jokers/<room>), so this stays identical as you add games.
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === "/gamelog" || url.pathname.startsWith("/gamelog/")) {
+      const stub = env.GameLog.get(env.GameLog.idFromName("singleton"));
+      return stub.fetch(request);
+    }
     return (await routePartykitRequest(request, env)) || new Response("Not Found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;

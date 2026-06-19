@@ -226,4 +226,17 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
       return null;
     },
   },
+
+  loggableHand(prev, next) {
+    if (!next.lastHand || next.lastHand === prev.lastHand) return null;
+    return {
+      game: "high-low-jack",
+      target: next.target,
+      hand: next.lastHand,      // bidderSeat, bid, made, deltaByTeam, detail, dealtHands, kitty, lastTrick
+      bidHistory: prev.bidHistory, // prev still holds the finished hand's auction; next's is reset
+      log: next.log,
+      scores: next.scores,
+      gameOver: next.phase === "gameOver",
+    };
+  },
 };
