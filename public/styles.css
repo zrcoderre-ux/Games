@@ -2421,6 +2421,9 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* Corner pips at 40px look oversized on tablet screens; scale back */
   .tbl-card-corner{ font-size:26px; }
 
+  /* ---- Corner suit watermarks: smaller on tablet so they don't overpower the felt ---- */
+  .felt-corner-suit{ font-size:clamp(28px,3.5vw,38px); }
+
   /* ---- Play table: cap width, then center ---------- */
   .table .felt-frame{
     width:100%;
