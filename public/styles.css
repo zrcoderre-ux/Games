@@ -2418,6 +2418,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .hs-cta{ font-size:19px; padding:16px; }
   .hs-felt .tbl-fan{ height:178px; margin-bottom:26px; padding-top:22px; }
   .hs-felt .tbl-fan-inner{ transform:scale(1.18); transform-origin:center center; }
+  /* Corner pips at 40px look oversized on tablet screens; scale back */
+  .tbl-card-corner{ font-size:26px; }
 
   /* ---- Play table: cap width, then center ---------- */
   .table .felt-frame{
