@@ -144,6 +144,7 @@ export type HeartsState = {
   scores: number[]; // running totals across hands
   winner: number | null;
   lastHand: { delta: number[]; shooter: number | null } | null;
+  dealtHands: HeartsCard[][] | null; // each seat's starting hand this round, revealed post-hand
 
   // authoritative, append-only move log (rides through every { ...state } spread)
   log: LogEntry[];
@@ -226,6 +227,7 @@ function dealHand(prev: HeartsState): HeartsState {
     ...prev,
     seed: nextSeed,
     hands,
+    dealtHands: hands.map((h) => h.slice()),
     passOffset,
     selected: Array.from({ length: prev.players }, () => null),
     currentTrick: [],
@@ -265,6 +267,7 @@ function createGame(config: HeartsConfig, seed: number): HeartsState {
     scores: Array(config.players).fill(0),
     winner: null,
     lastHand: null,
+    dealtHands: null,
     log: [],
     logSeq: 0,
   };
@@ -676,6 +679,18 @@ export const heartsModule: Game<HeartsState, HeartsMove, HeartsConfig, HeartsVie
   lobbyView,
   aiMove,
   pacing,
+  loggableHand(prev, next) {
+    if (!next.lastHand || next.lastHand === prev.lastHand) return null;
+    return {
+      game: "hearts",
+      target: next.target,
+      dealtHands: prev.dealtHands, // prev still holds this hand's deal; next has the new deal
+      lastHand: next.lastHand,     // delta per seat + shooter (if moon)
+      log: next.log,
+      scores: next.scores,
+      gameOver: next.phase === "gameOver",
+    };
+  },
   // no `aux`: Hearts has no non-turn side actions
 };
 
