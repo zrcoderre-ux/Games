@@ -710,7 +710,7 @@ const PERSONALITIES: AiPersonality[] = [
   // 0 · Balanced — reliable execution, moderate risk tolerance
   { pickupThreshold: 6,  earlyDiscount: 0.68, endgameHandSize: 3, dangerWeight: 1.8, misplayRate: 0.03 },
   // 1 · Aggressive — highest pile appetite, sharpest execution, rarely misplays
-  { pickupThreshold: 3,  earlyDiscount: 0.76, endgameHandSize: 2, dangerWeight: 0.8, misplayRate: 0.01 },
+  { pickupThreshold: 3,  earlyDiscount: 0.76, endgameHandSize: 2, dangerWeight: 3,   misplayRate: 0.01 },
   // 2 · Conservative — very selective pickups, strongest danger avoidance, patient
   { pickupThreshold: 9,  earlyDiscount: 0.65, endgameHandSize: 5, dangerWeight: 3.5, misplayRate: 0.02 },
   // 3 · Opportunist — erratic: swings between brilliance and blunder
@@ -1233,7 +1233,7 @@ function bestDiscard(
     const mev = cardMeldEV(state, seat, c);
     let discardScore = -mev;
     const danger = opponentDangerWithModel(state, c, seat, model);
-    discardScore += danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
+    discardScore -= danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
     if (opponentLow) discardScore += Math.max(0, -mev) * 0.5;
     return { card: c, score: discardScore };
   }).sort((a, b) => b.score - a.score);
@@ -1465,7 +1465,7 @@ function aiMove(state: RummyState, seat: number): RummyMove {
     const mev = cardMeldEV(state, seat, c);
     const danger = opponentDangerWithModel(state, c, seat, model);
     let score = -mev;
-    score += danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
+    score -= danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
     if (opponentLow) score += Math.max(0, -mev) * 0.5;
     return { card: c, score };
   }).sort((a, b) => b.score - a.score);
