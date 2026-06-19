@@ -138,6 +138,27 @@ function suitValue(hand: Card[], suit: Suit, players: number): number {
   return score;
 }
 
+const CAPTURE_WEIGHTS: Record<number, number[]> = {
+  4: [1.143, 1.141, -0.161, -0.396, 0.487, -0.063, 0.504, -0.041, -0.264, 0.567, -0.052, 0.013, 0.584],
+  6: [1.552, 1.146, -0.140, -0.383, 0.513, -0.082, 0.078,  0.083, -0.384, 0.405,  0.007, 0.040, 0.622],
+  8: [1.832, 1.071, -0.095, -0.365, 0.575, -0.064, -0.144, 0.123, -0.314, 0.318,  0.025, 0.002, 0.611],
+};
+function expectedCapture(hand: Card[], suit: Suit, players: number): number {
+  const tr = hand.filter((c) => isTrump(c, suit));
+  const has = (r: number) => tr.some((c) => !isJoker(c) && c.rank === r);
+  const hasJoker = tr.some(isJoker);
+  const n = tr.length;
+  const jackProt = has(11) ? [14, 13, 12].filter(has).length + (hasJoker ? 1 : 0) : 0;
+  const tens = hand.filter((c) => !isJoker(c) && c.rank === 10).length;
+  const highCt = tr.filter((c) => !isJoker(c) && c.rank >= 12).length;
+  const low = lowRankFor(players as 4 | 6 | 8);
+  const f = [1, has(14) ? 1 : 0, has(13) ? 1 : 0, has(12) ? 1 : 0, has(11) ? 1 : 0, jackProt,
+    hasJoker ? 1 : 0, hasJoker ? n - 1 : 0, (hasJoker && has(14)) ? 1 : 0, n, tens, has(low) ? 1 : 0, highCt];
+  const w = CAPTURE_WEIGHTS[players] ?? CAPTURE_WEIGHTS[6];
+  let s = 0; for (let i = 0; i < w.length; i++) s += f[i] * w[i];
+  return Math.max(0, Math.min(6, s));
+}
+
 function bestSuit(hand: Card[], players: number): { suit: Suit; score: number } {
   let best = { suit: SUITS[0], score: -Infinity };
   for (const suit of SUITS) {
@@ -380,6 +401,7 @@ const competeProb = (myConf: number, theirConf: number, stretchProb: number): nu
 //   0 = non-critical
 function opponentThreatLevel(state: GameState, opponentSeat: number, bidAmount: number): 0 | 1 | 2 {
   const team = teamOf(opponentSeat);
+  if (bidAmount === 6 && state.scores[team] >= 0) return 2;
   const after = state.scores[team] + bidAmount;
   if (after >= state.target) return 2;
   if (after >= state.target - 2) return 1;
@@ -435,7 +457,7 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
   const desperationBonus = oppGap <= 6 ? (6 - oppGap) * 0.18 : 0;
   const effectiveSafety = Math.max(0, p.bidSafety - desperationBonus);
 
-  const willing = clamp(Math.round(best.score - effectiveSafety), 0, 6);
+  const willing = clamp(Math.round(expectedCapture(hand, best.suit, state.players) - effectiveSafety), 0, 6);
   const myConf = confFromScore(best.score);
 
   const isDealer = seat === state.dealerSeat;
@@ -447,7 +469,40 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
   const needed = highAmt === null ? 2 : isDealer ? highAmt : highAmt + 1;
   if (needed > 6) return { type: "pass", seat };
 
-  if (willing >= needed) return { type: "bid", seat, amount: needed };
+  // 6-bid on hand strength alone: use kitty-risk-aware probability rather than
+  // the scalar score (which can't capture player-count-dependent risk).
+  if (needed <= 6) {
+    const sixProb = estimateSixBidProb(hand, state.players);
+    const myScore = state.scores[myTeam];
+    const myGap   = state.target - myScore;
+
+    // Lower threshold when a missed 6-bid won't send us in the hole.
+    // Each point of cushion above 0 reduces risk — cap at score=12 (a miss lands at 6+).
+    const safeFromHoleBonus = myScore >= 1 ? Math.min(0.10, myScore * 0.008) : 0;
+
+    // Lower threshold when auto-win is available (making 6 ends the game now).
+    const autoWinBonus = myScore >= 0 ? 0.07 : 0;
+
+    // Lower threshold when opponent is dangerously close to winning.
+    const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
+
+    // RAISE threshold when our score is high enough that we don't need a 6-bid.
+    // At myGap ≤ 6 (score ≥ 15) we can win by simply taking the auction at any
+    // amount and scoring 6 naturally — a risky 6-bid adds downside with little upside.
+    // The penalty grows as we get closer to winning without it.
+    // Exception: if opponent is also close (despSixBonus active), urgency overrides.
+    const rawNearWinPenalty = myGap <= 6 ? (6 - myGap) * 0.10 : 0;
+    const nearWinPenalty = rawNearWinPenalty * Math.max(0, 1 - despSixBonus * 5);
+
+    // Base threshold: aggressive=0.70, balanced=0.80, conservative=0.90
+    const sixThresh = clamp(
+      0.65 + p.bidSafety * 0.2 - safeFromHoleBonus - autoWinBonus - despSixBonus + nearWinPenalty,
+      0.48, 0.97,
+    );
+    if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
+  }
+
+  if (willing >= needed) return { type: "bid", seat, amount: Math.min(willing, needed + 1) };
 
   // Evaluate the threat posed by the current bid before deciding whether to stretch.
   if (high !== null) {
@@ -491,39 +546,6 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
     }
   }
 
-  // 6-bid on hand strength alone: use kitty-risk-aware probability rather than
-  // the scalar score (which can't capture player-count-dependent risk).
-  if (needed === 6) {
-    const sixProb = estimateSixBidProb(hand, state.players);
-    const myScore = state.scores[myTeam];
-    const myGap   = state.target - myScore;
-
-    // Lower threshold when a missed 6-bid won't send us in the hole.
-    // Each point of cushion above 0 reduces risk — cap at score=12 (a miss lands at 6+).
-    const safeFromHoleBonus = myScore >= 1 ? Math.min(0.10, myScore * 0.008) : 0;
-
-    // Lower threshold when auto-win is available (making 6 ends the game now).
-    const autoWinBonus = myScore >= 0 ? 0.07 : 0;
-
-    // Lower threshold when opponent is dangerously close to winning.
-    const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
-
-    // RAISE threshold when our score is high enough that we don't need a 6-bid.
-    // At myGap ≤ 6 (score ≥ 15) we can win by simply taking the auction at any
-    // amount and scoring 6 naturally — a risky 6-bid adds downside with little upside.
-    // The penalty grows as we get closer to winning without it.
-    // Exception: if opponent is also close (despSixBonus active), urgency overrides.
-    const rawNearWinPenalty = myGap <= 6 ? (6 - myGap) * 0.10 : 0;
-    const nearWinPenalty = rawNearWinPenalty * Math.max(0, 1 - despSixBonus * 5);
-
-    // Base threshold: aggressive=0.70, balanced=0.80, conservative=0.90
-    const sixThresh = clamp(
-      0.65 + p.bidSafety * 0.2 - safeFromHoleBonus - autoWinBonus - despSixBonus + nearWinPenalty,
-      0.48, 0.97,
-    );
-    if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
-  }
-
   return { type: "pass", seat };
 }
 
@@ -552,9 +574,11 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
   if (state.currentTrick.length === 0) {
     // Heuristic 1: trump pulling.
     // If enough unseen trumps remain (relative to hand size), keep leading trumps.
-    const shouldPullTrumps = myTrumps.length > 0
+    const isDeclarer = state.winningBid?.seat === seat;
+    const earlyDeclarerPull = isDeclarer && state.trickIndex <= 1 && myTrumps.length >= 2;
+    const shouldPullTrumps = earlyDeclarerPull || (myTrumps.length > 0
       && unseenTrumps > 0
-      && unseenTrumps / (remaining * (players - 1)) >= p.trumpPullFrac;
+      && unseenTrumps / (remaining * (players - 1)) >= p.trumpPullFrac);
 
     if (myTrumps.length) {
       const top = pick(myTrumps, (c) => trumpValue(c, trump)!, "max");
