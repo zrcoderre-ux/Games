@@ -7,14 +7,15 @@
   "observability": { "enabled": true },
   "assets": {
     "directory": "./public",
-    "run_worker_first": ["/parties/*"]
+    "run_worker_first": ["/parties/*", "/gamelog*"]
   },
   "durable_objects": {
     "bindings": [
       { "name": "HighLowJack", "class_name": "HighLowJackServer" },
       { "name": "Rummy500", "class_name": "Rummy500Server" },
       { "name": "Hearts", "class_name": "HeartsServer" },
-      { "name": "PegsAndJokers", "class_name": "PegsAndJokersServer" }
+      { "name": "PegsAndJokers", "class_name": "PegsAndJokersServer" },
+      { "name": "GameLog", "class_name": "GameLogServer" }
     ]
   },
   // Migrations are append-only and must match what production has already
@@ -25,6 +26,7 @@
     { "tag": "v1", "new_sqlite_classes": ["HighLowJackServer"] },
     { "tag": "v2", "new_sqlite_classes": ["Rummy500Server"] },
     { "tag": "v3", "new_sqlite_classes": ["HeartsServer"] },
-    { "tag": "v4", "new_sqlite_classes": ["PegsAndJokersServer"] }
+    { "tag": "v4", "new_sqlite_classes": ["PegsAndJokersServer"] },
+    { "tag": "v5", "new_sqlite_classes": ["GameLogServer"] }
   ]
 }

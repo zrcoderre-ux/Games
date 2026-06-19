@@ -107,6 +107,11 @@ export interface Game<State, Move extends SeatedMove, Config, View> {
   // state with the gate open, or null if no gate is needed.
   openHumanGate?(state: State, move: Move): State | null;
 
+  // OPTIONAL: if `next` completes a hand relative to `prev`, return a
+  // serializable record of that finished hand (seats only, no names) for the
+  // append-only game log; otherwise null. Server stays game-agnostic.
+  loggableHand?(prev: State, next: State): unknown | null;
+
   // OPTIONAL: side actions that do NOT advance the turn (Pitch hand signals).
   // Games without them (Rummy) omit this property entirely.
   aux?: {
