@@ -485,8 +485,12 @@ html.is-standalone .hs-felt{ flex:1;min-height:0; }
 html.is-standalone .hs-lbl-game{ margin-top:auto; }
 html.is-standalone .table .felt-frame{ flex:1;height:auto;margin:0 5px 12px; }
 html.is-standalone .table .selfwrap-spacer{ height:215px; }
-/* Collapse the spacer in standalone lobby — no hand cards to overlap the felt */
-html.is-standalone .table:has(.lby-action-row) .selfwrap-spacer{ height:0; }
+/* On tablet+, collapse the spacer in standalone lobby (no hand cards, felt is
+   capped/centered so a gap appears). On mobile, keep a reserve so the lower
+   seat pods don't slide behind the absolute-positioned player bar. */
+@media (min-width:768px) and (min-height:600px){
+  html.is-standalone .table:has(.lby-action-row) .selfwrap-spacer{ height:0; }
+}
 
 /* Browser (non-standalone): two sub-cases — lobby vs active game. */
 @media not (display-mode: standalone){
