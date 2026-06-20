@@ -692,10 +692,12 @@ function tableShell(v, parts) {
       ${parts.selfTurn ? `<div class="ls-self-turn">${parts.selfTurn}</div>` : ""}
     </div>${lsActions}`;
     // selfwrap always has the full rail; CSS hides selfbar+actions in landscape.
+    const avatarEl = avatarHTML(myName, { host: v.you === v.hostSeat, team: parts.selfTeam });
     self = `<div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
-      <div class="selfbar">
-        ${avatarHTML(myName, { host: v.you === v.hostSeat, team: parts.selfTeam })}
-        <div class="selfbar-name-block">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>
+      <div class="selfbar${parts.selfReverse ? " selfbar-reversed" : ""}">
+        ${parts.selfReverse
+          ? `<div class="selfbar-name-block">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>${avatarEl}`
+          : `${avatarEl}<div class="selfbar-name-block">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>`}
         ${parts.selfTurn || ""}
       </div>
       ${parts.selfExtra ? `<div class="self-extra">${parts.selfExtra}</div>` : ""}
@@ -1809,7 +1811,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTeam, selfTurn, selfExtra, appbarLeft: teamScores });
+  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTeam, selfReverse: true, selfTurn, selfExtra, appbarLeft: teamScores });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
