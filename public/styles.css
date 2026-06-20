@@ -2438,16 +2438,17 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     min-height:100dvh; /* in browser mode, fill viewport so selfwrap:bottom:0 anchors to viewport */
   }
 
-  /* ---- Home screen: center rail, slightly larger type ---------- */
-  .hs-rail{ margin:40px auto; max-width:min(80vw,680px); }
-  .hs-wm-wrap{ max-width:min(85vw,760px); }
-  .hs-title{ font-size:52px; }
-  .hs-lbl{ font-size:17.6px; margin-bottom:9px; }
-  .hs-fld{ font-size:17px; padding:13px; margin-bottom:24px; }
-  .hs-cta{ font-size:19px; padding:16px; }
-  .hs-felt .tbl-fan{ height:178px; margin-bottom:26px; padding-top:22px; }
-  .hs-felt .tbl-fan-inner{ transform:scale(1.18); transform-origin:center center; }
-  .tbl-card-corner{ font-size:15px; }
+  /* ---- Home screen: fill iPad screen with bigger everything ---------- */
+  .hs-rail{ margin:40px auto; max-width:min(88vw,860px); }
+  .hs-wm-wrap{ max-width:min(90vw,900px); }
+  .hs-wm-spacer{ height:clamp(260px, 40vh, 400px); margin-top:clamp(-32px,-3.5vh,-28px); }
+  .hs-title{ font-size:68px; }
+  .hs-lbl{ font-size:20px; margin-bottom:10px; }
+  .hs-fld{ font-size:18px; padding:14px; margin-bottom:28px; }
+  .hs-cta{ font-size:22px; padding:18px; }
+  .hs-felt .tbl-fan{ height:240px; margin-bottom:32px; padding-top:28px; }
+  .hs-felt .tbl-fan-inner{ transform:scale(1.5); transform-origin:center center; }
+  .tbl-card-corner{ font-size:14px; }
 
   /* ---- Corner suit watermarks: smaller on tablet so they don't overpower the felt ---- */
   .felt-corner-suit{ font-size:clamp(28px,3.5vw,38px); }

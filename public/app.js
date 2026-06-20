@@ -868,7 +868,8 @@ function positionHatWatermark() {
   // Standalone capped at 482px so it doesn't overflow on iPad.
   const isTablet = window.innerWidth > 560;
   const tabletBrowser = !isStandalone && isTablet;
-  const width = Math.min(s.width * (isStandalone ? 1.276 : tabletBrowser ? 0.55 : 1.18), tabletBrowser ? 320 : 482);
+  const width = Math.min(s.width * (isStandalone && isTablet ? 1.4 : isStandalone ? 1.276 : tabletBrowser ? 0.72 : 1.18),
+    isStandalone && isTablet ? 580 : tabletBrowser ? 480 : 482);
   // joker-hat.png is 1024x1536 with its opaque artwork spanning y=59..1527 —
   // there's a third, forward-hanging point (with two of the three bells)
   // that reaches almost the full height of the image. Crop tight to that
