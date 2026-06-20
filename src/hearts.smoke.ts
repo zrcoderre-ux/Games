@@ -33,12 +33,20 @@ function playGame(players, seed) {
   let moves = 0, hands = 1;
   while (!G.isOver(s)) {
     assert(cardsInPlay(s) === deck, `card conservation (players=${players}, move=${moves}) got ${cardsInPlay(s)}`);
-    const seat = G.seatToAct(s);
-    assert(seat !== null, "seatToAct non-null mid-game");
-    const move = G.aiMove(s, seat);
-    assert(G.isLegal(s, move), `aiMove produced a legal move (${JSON.stringify(move)})`);
     const before = s.handNo;
-    const next = G.applyMove(s, move);
+    let next;
+    if (s.phase === "trickComplete") {
+      // Between tricks the engine pauses on a gate: seatToAct is null and an explicit
+      // advance (seat = trick winner) clears it. The last-trick advance is also what
+      // scores the hand, so it flows through the same scoring check below.
+      next = G.applyMove(s, { type: "advance", seat: s.trickWinner });
+    } else {
+      const seat = G.seatToAct(s);
+      assert(seat !== null, "seatToAct non-null mid-game");
+      const move = G.aiMove(s, seat);
+      assert(G.isLegal(s, move), `aiMove produced a legal move (${JSON.stringify(move)})`);
+      next = G.applyMove(s, move);
+    }
     if (next.handNo !== before || next.phase === "gameOver") {
       // A hand was just scored: validate the delta against Hearts scoring.
       const { delta, shooter } = next.lastHand;
