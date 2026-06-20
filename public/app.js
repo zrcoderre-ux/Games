@@ -532,6 +532,7 @@ function appbar(v, opts = {}) {
     ${S.offline ? `<div class="roomtag">offline · ${S.hotseat ? "pass &amp; play" : "vs bots"}</div>` : `<div class="roomtag">room <b>${esc(S.room)}</b></div>`}
     ${opts.log ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
     ${S.offline ? "" : `<button class="btn sm ghost" data-action="share-link">Share</button>`}
+    ${opts.rightExtra || ""}
     <button class="btn sm ghost" data-action="leave">Leave</button>
   </div>`;
 }
@@ -708,7 +709,7 @@ function tableShell(v, parts) {
     self = `<div class="selfbar"><div class="name">Spectating</div><div class="me-pts">${parts.selfMeta || ""}</div></div>`;
   }
   return `<div class="table">
-    ${appbar(v, { log: true, leftContent: appbarExtra + (parts.appbarLeft || "") })}
+    ${appbar(v, { log: true, leftContent: appbarExtra + (parts.appbarLeft || ""), rightExtra: parts.appbarRight || "" })}
     <div class="felt-frame${parts.feltHeader ? ' has-frame-title' : ''}">
     ${parts.feltHeader ? `<div class="frame-title">${parts.feltHeader}</div>` : ""}
     ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
@@ -1146,9 +1147,11 @@ function renderLobby(v) {
     selfName: nameInput,
     selfMeta,
     selfTeam: myTc,
-    selfTurn: settingsBtn,
+    selfReverse: true,
+    selfTurn: null,
     selfExtra,
     actions: dealAction,
+    appbarRight: settingsBtn,
   }) + settingsModal;
 }
 
