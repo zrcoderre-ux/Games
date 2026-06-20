@@ -285,11 +285,13 @@ function podHTML(v, i, o = {}) {
 }
 
 // fanned hand with per-card rotation + arc, overlap scaled to fit
-function fanHand(cards, optFn) {
+function fanHand(cards, optFn, { scrollable = false } = {}) {
   const n = cards.length;
   if (!n) return "";
   const cardW = 64;
-  const avail = Math.min(360, (window.innerWidth || 360) - 30);
+  const baseAvail = Math.min(360, (window.innerWidth || 360) - 30);
+  // Scrollable fans expand to give each card comfortable room (40px visible per card).
+  const avail = scrollable ? Math.max(baseAvail, n * 40 + cardW) : baseAvail;
   const step = n > 1 ? Math.min(44, Math.max(20, (avail - cardW) / (n - 1))) : 0;
   const overlap = step - cardW; // negative => overlap
   const spread = Math.min(3, 24 / n);
@@ -2436,7 +2438,8 @@ function renderHearts(v) {
       : "";
     const full = S.heartsPass.size >= 3;
     const fan = fanHand(fanCards, (c) => ({ action: full ? "" : "toggle-pass", id: c.id, playable: !full, dim: full }));
-    hand = selRow + (fan ? `<div class="fan-inner">${fan}</div>` : "");
+    const fanHtml = fan ? `<div class="fan-inner">${fan}</div>` : "";
+    hand = selRow + (fanHtml ? `<div class="fan-scroll">${fanHtml}</div>` : "");
   } else if (!passing && receivedSet.size > 0) {
     // Show received cards in selrow for 5s (dim, non-interactive).
     const recCards = heartsHand.filter((c) => receivedSet.has(c.id));
@@ -2444,13 +2447,13 @@ function renderHearts(v) {
     const selRow = recCards.length
       ? `<div class="selrow">${recCards.map((c) => cardHTML(c, { id: c.id, dim: false, sel: true })).join("")}</div>`
       : "";
-    hand = selRow + `<div class="fan-inner">${fanHand(restCards, (c) => ({ id: c.id, dim: true }))}</div>`;
+    hand = selRow + `<div class="fan-scroll"><div class="fan-inner">${fanHand(restCards, (c) => ({ id: c.id, dim: true }), { scrollable: true })}</div></div>`;
   } else {
-    hand = `<div class="fan-inner">${fanHand(heartsHand, (c) => {
+    hand = `<div class="fan-scroll"><div class="fan-inner">${fanHand(heartsHand, (c) => {
       if (passing) return { id: c.id, dim: true };
       const can = plays.has(c.id);
       return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
-    })}</div>`;
+    }, { scrollable: true })}</div></div>`;
   }
 
   // Actions.
