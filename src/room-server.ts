@@ -137,7 +137,7 @@ export abstract class RoomServer<
       // Cancel any scheduled or pending bot replacement for this seat.
       delete this.room.pendingBotSeats[seat];
       delete this.room.disconnectedSeats[seat];
-    } else if (!this.room.state) {
+    } else if (!this.room.state || this.game.isOver(this.room.state)) {
       const empty = this.room.seats.findIndex((s) => s.kind === "empty");
       if (empty !== -1) {
         seat = empty;
