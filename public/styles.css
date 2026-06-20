@@ -402,7 +402,7 @@ body{
   background:
     radial-gradient(140% 80% at 50% -5%, #1a2848 0%, var(--wood-1) 40%, var(--wood-0) 100%);
   background-attachment:fixed;
-  overflow-x:hidden;
+  overflow-x:clip;
   overscroll-behavior-y:none;
   -webkit-font-smoothing:antialiased;
 }
