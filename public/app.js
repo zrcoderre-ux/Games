@@ -288,7 +288,7 @@ function podHTML(v, i, o = {}) {
 function fanHand(cards, optFn, { scrollable = false } = {}) {
   const n = cards.length;
   if (!n) return "";
-  const cardW = 64;
+  const cardW = scrollable ? 68 : 64;
   const baseAvail = Math.min(360, (window.innerWidth || 360) - 30);
   // Scrollable fans expand to give each card comfortable room (40px visible per card).
   const avail = scrollable ? Math.max(baseAvail, n * 40 + cardW) : baseAvail;
