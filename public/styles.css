@@ -2448,9 +2448,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .hs-fld{ font-size:18px; padding:14px; margin-bottom:28px; }
   .hs-cta{ font-size:22px; padding:18px; }
   .hs-lbl-game{ margin-top:90px; }
-  html.is-standalone .hs-lbl-game{ margin-top:50vh; }
+  html.is-standalone .hs-lbl-game{ margin-top:43vh; }
   .hs-felt .tbl-fan{ height:240px; margin-top:52px; margin-bottom:32px; padding-top:28px; }
-  html.is-standalone .hs-felt .tbl-fan{ margin-top:28px; margin-bottom:16px; }
+  html.is-standalone .hs-felt .tbl-fan{ margin-top:16px; margin-bottom:8px; }
+  html.is-standalone .hs-fld{ margin-bottom:16px; }
+  html.is-standalone .hs-cta{ padding:14px; }
   .hs-felt .tbl-fan-inner{ transform:scale(1.5); transform-origin:center center; }
   .tbl-card-corner{ font-size:14px; }
 
