@@ -2442,12 +2442,13 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .hs-rail{ margin:40px auto; max-width:min(88vw,860px); }
   .hs-wm-wrap{ max-width:min(90vw,900px); }
   .hs-wm-spacer{ height:clamp(260px, 40vh, 400px); margin-top:clamp(-56px,-5.5vh,-48px); }
+  html.is-standalone .hs-wm-spacer{ margin-top:-110px; }
   .hs-title{ font-size:68px; }
   .hs-lbl{ font-size:20px; margin-bottom:10px; }
   .hs-fld{ font-size:18px; padding:14px; margin-bottom:28px; }
   .hs-cta{ font-size:22px; padding:18px; }
   .hs-lbl-game{ margin-top:90px; }
-  html.is-standalone .hs-lbl-game{ margin-top:340px; }
+  html.is-standalone .hs-lbl-game{ margin-top:55vh; }
   .hs-felt .tbl-fan{ height:240px; margin-top:52px; margin-bottom:32px; padding-top:28px; }
   .hs-felt .tbl-fan-inner{ transform:scale(1.5); transform-origin:center center; }
   .tbl-card-corner{ font-size:14px; }
