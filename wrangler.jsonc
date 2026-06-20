@@ -7,7 +7,7 @@
   "observability": { "enabled": true },
   "assets": {
     "directory": "./public",
-    "run_worker_first": ["/parties/*", "/gamelog*"]
+    "run_worker_first": ["/parties/*", "/gamelog", "/gamelog/*"]
   },
   "durable_objects": {
     "bindings": [
