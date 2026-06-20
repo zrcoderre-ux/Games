@@ -393,7 +393,7 @@ html.is-standalone,html.is-standalone body{height:100%;overflow:hidden}
 html{
   background:radial-gradient(140% 80% at 50% -5%, #1a2848 0%, var(--wood-1) 40%, var(--wood-0) 100%);
   overscroll-behavior-y:none;
-  overflow-x:hidden;
+  overflow-x:clip;
 }
 body{
   margin:0;
