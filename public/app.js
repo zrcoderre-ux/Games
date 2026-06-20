@@ -294,8 +294,8 @@ function fanHand(cards, optFn, { scrollable = false } = {}) {
   const avail = scrollable ? Math.max(baseAvail, n * 40 + cardW) : baseAvail;
   const step = n > 1 ? Math.min(44, Math.max(20, (avail - cardW) / (n - 1))) : 0;
   const overlap = step - cardW; // negative => overlap
-  const spread = Math.min(3, 24 / n);
-  const arc = n > 2 ? Math.min(13, n * 1.4) : 0;
+  const spread = scrollable ? Math.min(1.2, 12 / n) : Math.min(3, 24 / n);
+  const arc = scrollable ? 0 : (n > 2 ? Math.min(13, n * 1.4) : 0);
   const mid = (n - 1) / 2 || 1;
   return cards
     .map((c, i) => {
