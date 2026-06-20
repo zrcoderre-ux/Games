@@ -3056,16 +3056,23 @@ const DPT = {
   ox: 0, oy: 0,  // pointer-start coords (for threshold check)
   started: false, // drag threshold (10 px) crossed?
   suppress: false,// absorb the click that follows touch-pointerup
+  // Hearts-specific: direction not yet committed — don't block scroll yet
+  _hPending: null, // { ptId, card, cid, ox, oy }
 };
 
 app.addEventListener("pointerdown", (e) => {
-  if (DPT.ptId !== null) return; // already tracking a pointer
+  if (DPT.ptId !== null || DPT._hPending) return; // already tracking
   const card = e.target.closest(".card[data-action]");
   if (!card) return;
   const a = card.dataset.action;
-  if      (a === "play-card")   { DPT.game = "hlj";    DPT.ckey = card.dataset.key; DPT.cid = null; }
-  else if (a === "play-hearts") { DPT.game = "hearts"; DPT.cid  = +card.dataset.cardid; DPT.ckey = null; }
-  else if (a === "toggle-card") { DPT.game = "rummy";  DPT.cid  = +card.dataset.cardid; DPT.ckey = null; }
+  if (a === "play-hearts") {
+    // Don't claim the pointer yet — wait for direction detection so the
+    // {passive:false} global pointermove doesn't block horizontal scroll.
+    DPT._hPending = { ptId: e.pointerId, card, cid: +card.dataset.cardid, ox: e.clientX, oy: e.clientY };
+    return;
+  }
+  if      (a === "play-card")   { DPT.game = "hlj";   DPT.ckey = card.dataset.key; DPT.cid = null; }
+  else if (a === "toggle-card") { DPT.game = "rummy";  DPT.cid = +card.dataset.cardid; DPT.ckey = null; }
   else return;
   DPT.ptId    = e.pointerId;
   DPT.cardEl  = card;
@@ -3107,7 +3114,32 @@ document.addEventListener("pointermove", (e) => {
   }
 }, { passive: false });
 
+// Passive direction-detection for Hearts cards: lets horizontal swipes reach
+// the .fan-scroll container natively; only claims the pointer for vertical drags.
+document.addEventListener("pointermove", (e) => {
+  if (!DPT._hPending || e.pointerId !== DPT._hPending.ptId) return;
+  const { card, cid, ox, oy } = DPT._hPending;
+  const dx = Math.abs(e.clientX - ox);
+  const dy = Math.abs(e.clientY - oy);
+  if (Math.hypot(dx, dy) < 10) return; // wait for intentional movement
+  DPT._hPending = null;
+  if (dx >= dy) return; // horizontal → browser handles scroll, we're done
+  // Vertical drag: claim the pointer so the browser cancels any pending scroll
+  try { card.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  DPT.game    = "hearts";
+  DPT.cid     = cid;
+  DPT.ckey    = null;
+  DPT.ptId    = e.pointerId;
+  DPT.cardEl  = card;
+  DPT.ox      = ox;
+  DPT.oy      = oy;
+  DPT.started = false;
+  DPT.ghost   = null;
+}, { passive: true });
+
 function dptEnd(e) {
+  // Also cancel any pending Hearts direction-detection
+  if (DPT._hPending && e.pointerId === DPT._hPending.ptId) DPT._hPending = null;
   if (e.pointerId !== DPT.ptId) return;
   DPT.ptId = null;
   dptHighlight(false);
