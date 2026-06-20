@@ -2479,7 +2479,7 @@ function renderHearts(v) {
     ? `<span class="trump-watermark ${RED.has(ledSuit) ? "red" : ""}">${SUIT[ledSuit]}</span>`
     : `<span class="trump-watermark hearts-unbroken">♥</span>`;
   const heartsCornerSuits = ['tl','tr','br','bl'].map((pos) =>
-    `<span class="felt-corner-suit ${v.heartsBroken ? 'red' : ''} ${pos}">♥</span>`
+    `<span class="felt-corner-suit ${v.heartsBroken ? 'broken' : ''} ${pos}">♥</span>`
   ).join("");
 
   // End-of-hand result modal (Hearts).
