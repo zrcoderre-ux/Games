@@ -2448,7 +2448,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .hs-fld{ font-size:18px; padding:14px; margin-bottom:28px; }
   .hs-cta{ font-size:22px; padding:18px; }
   .hs-lbl-game{ margin-top:90px; }
-  html.is-standalone .hs-lbl-game{ margin-top:43vh; }
+  html.is-standalone .hs-lbl-game{ margin-top:47vh; }
   .hs-felt .tbl-fan{ height:240px; margin-top:52px; margin-bottom:32px; padding-top:28px; }
   html.is-standalone .hs-felt .tbl-fan{ margin-top:40px; margin-bottom:8px; }
   html.is-standalone .hs-fld{ margin-bottom:16px; }
