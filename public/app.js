@@ -73,6 +73,8 @@ const S = {
   hljBidHoldTimer: null,
   hljLastTrickOpen: false, // client-only: whether last trick is expanded as a hand fan
   heartsLastTrickOpen: false, // same, for Hearts
+  heartsLastTrickKey: null,   // key of last seen lastTrick (for collecting animation trigger)
+  heartsCollecting: null,     // { plays, winSeat, ts } while scatter→fan anim is playing
   heartsHandAcked: null, // JSON key of lastHand already dismissed
   heartsHandTimer: null, // auto-dismiss setTimeout handle
   heartsReceivedCards: [], // card ids just received via pass, shown in selrow for 5s
@@ -2368,9 +2370,28 @@ function renderHearts(v) {
     } else {
       const showLast = v.currentTrick.length === 0 && v.lastTrick;
       const winSeat = showLast ? v.lastTrick.winner : null;
+
+      // Collecting animation: detect when a new trick is collected and briefly
+      // show the scatter→fan animation before settling on the static last-trick fan.
+      if (showLast) {
+        const ltKey = `${v.handNo}:${v.lastTrick.winner}:${v.lastTrick.cards.map(p => p.card.id ?? p.card.rank + p.card.suit).join(",")}`;
+        if (ltKey !== S.heartsLastTrickKey) {
+          S.heartsLastTrickKey = ltKey;
+          const collectPlays = v.lastTrick.cards.map((p) => ({ ...p, name: seatName(v, p.seat) }));
+          S.heartsCollecting = { plays: collectPlays, winSeat: v.lastTrick.winner, ts: Date.now() };
+          setTimeout(() => { S.heartsCollecting = null; render(); }, 500);
+        }
+      } else {
+        S.heartsCollecting = null;
+      }
+
       if (v.currentTrick.length) {
         const plays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
         heartsTrick = trickHTML(plays, v.you, v.seats.length, { mini: false });
+      } else if (S.heartsCollecting) {
+        // Show scatter→fan collecting animation for ~500ms after trick is collected.
+        heartsTrick = trickHTML(S.heartsCollecting.plays, v.you, v.seats.length,
+          { mini: false, collecting: true, winSeat: S.heartsCollecting.winSeat });
       } else if (showLast && !S.heartsLastTrickOpen) {
         // Collapsed last-trick fan.
         const ltCards = v.lastTrick.cards.map((p) => p.card);
