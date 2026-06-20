@@ -876,10 +876,16 @@ function positionHatWatermark() {
   wrap.style.width = width + "px";
   wrap.style.height = width * 1.5 * ((1527 - 59) / 1536) + "px";
   wrap.style.top = (s.top - r.top - 28) + "px";
-  // Mobile browser (not the installed app) nudges the hat slightly left; the app's
-  // position is unchanged. Larger CSS `right` shifts the element leftward.
-  const mobileBrowser = !isStandalone && window.innerWidth <= 560;
-  wrap.style.right = (r.right - s.right - 70 + (mobileBrowser ? 16 : 0)) + "px";
+  if (tabletBrowser) {
+    // On tablet the right-offset calculation drifts; center the hat over the spacer instead.
+    wrap.style.right = "";
+    wrap.style.left = (s.left - r.left + s.width / 2 - width / 2) + "px";
+  } else {
+    // Mobile browser nudges the hat slightly left; standalone is unchanged.
+    const mobileBrowser = !isStandalone && window.innerWidth <= 560;
+    wrap.style.left = "";
+    wrap.style.right = (r.right - s.right - 70 + (mobileBrowser ? 16 : 0)) + "px";
+  }
   img.style.marginTop = -(width * 1.5 * (59 / 1536)) + "px";
 }
 window.addEventListener("resize", () => positionHatWatermark());
