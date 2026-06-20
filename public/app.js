@@ -3080,7 +3080,11 @@ app.addEventListener("pointerdown", (e) => {
 document.addEventListener("pointermove", (e) => {
   if (e.pointerId !== DPT.ptId) return;
   if (!DPT.started) {
-    if (Math.hypot(e.clientX - DPT.ox, e.clientY - DPT.oy) < 10) return;
+    const dx = Math.abs(e.clientX - DPT.ox);
+    const dy = Math.abs(e.clientY - DPT.oy);
+    if (Math.hypot(dx, dy) < 10) return;
+    // Primarily horizontal → let the browser handle it as a scroll gesture
+    if (dx > dy) { DPT.ptId = null; DPT.started = false; return; }
     DPT.started = true;
     const r = DPT.cardEl.getBoundingClientRect();
     const g = DPT.cardEl.cloneNode(true);
