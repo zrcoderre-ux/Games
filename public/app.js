@@ -866,7 +866,8 @@ function positionHatWatermark() {
   const isStandalone = document.documentElement.classList.contains("is-standalone");
   // Tablet/desktop browser: smaller footprint so the hat is decorative, not dominant.
   // Standalone capped at 482px so it doesn't overflow on iPad.
-  const tabletBrowser = !isStandalone && window.innerWidth > 560;
+  const isTablet = window.innerWidth > 560;
+  const tabletBrowser = !isStandalone && isTablet;
   const width = Math.min(s.width * (isStandalone ? 1.276 : tabletBrowser ? 0.55 : 1.18), tabletBrowser ? 320 : 482);
   // joker-hat.png is 1024x1536 with its opaque artwork spanning y=59..1527 —
   // there's a third, forward-hanging point (with two of the three bells)
@@ -876,8 +877,9 @@ function positionHatWatermark() {
   wrap.style.width = width + "px";
   wrap.style.height = width * 1.5 * ((1527 - 59) / 1536) + "px";
   wrap.style.top = (s.top - r.top - 28) + "px";
-  if (tabletBrowser) {
+  if (isTablet) {
     // On tablet the right-offset calculation drifts; center the hat over the spacer instead.
+    // Apply regardless of standalone so iPad PWA also gets centered hat.
     wrap.style.right = "";
     wrap.style.left = (s.left - r.left + s.width / 2 - width / 2) + "px";
   } else {
