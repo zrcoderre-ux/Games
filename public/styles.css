@@ -1491,8 +1491,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* Scrollable fan wrapper — lets a large hand (e.g. Hearts 13-card) scroll
    horizontally without clipping. Hides the scrollbar; touch-scroll on iOS. */
 .fan-scroll{
-  width:100%;overflow-x:auto;overflow-y:hidden;
+  width:100%;overflow-x:auto;overflow-y:clip;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  touch-action:pan-x;
 }
 .fan-scroll::-webkit-scrollbar{display:none}
 .fan-scroll .fan-inner{
