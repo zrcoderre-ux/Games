@@ -2441,7 +2441,7 @@ function renderHearts(v) {
     const full = S.heartsPass.size >= 3;
     const fan = fanHand(fanCards, (c) => ({ action: full ? "" : "toggle-pass", id: c.id, playable: !full, dim: full }));
     const fanHtml = fan ? `<div class="fan-inner">${fan}</div>` : "";
-    hand = selRow + (fanHtml ? `<div class="fan-scroll">${fanHtml}</div>` : "");
+    hand = selRow + fanHtml;
   } else if (!passing && receivedSet.size > 0) {
     // Show received cards in selrow for 5s (dim, non-interactive).
     const recCards = heartsHand.filter((c) => receivedSet.has(c.id));
