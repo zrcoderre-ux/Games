@@ -19,6 +19,15 @@ export class GameLogServer extends DurableObject {
   async fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
 
+    // Dev diagnostic: GET /gamelog/ping inserts a test record and returns "ok".
+    if (req.method === "GET" && url.pathname.endsWith("/ping")) {
+      this.ctx.storage.sql.exec(
+        "INSERT INTO hands (game, ts, record) VALUES (?, ?, ?)",
+        "ping", new Date().toISOString(), JSON.stringify({ game: "ping", ts: new Date().toISOString() }),
+      );
+      return new Response("ok — test record inserted");
+    }
+
     // Internal: a room appends one finished-hand record (JSON string body).
     if (req.method === "POST" && url.pathname.endsWith("/append")) {
       const body = await req.text();
