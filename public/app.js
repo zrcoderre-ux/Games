@@ -287,7 +287,7 @@ function podHTML(v, i, o = {}) {
 }
 
 // fanned hand with per-card rotation + arc, overlap scaled to fit
-function fanHand(cards, optFn, { scrollable = false } = {}) {
+function fanHand(cards, optFn, { scrollable = false, arcScale = 1 } = {}) {
   const n = cards.length;
   if (!n) return "";
   const cardW = scrollable ? 68 : 64;
@@ -297,7 +297,7 @@ function fanHand(cards, optFn, { scrollable = false } = {}) {
   const step = n > 1 ? Math.min(44, Math.max(20, (avail - cardW) / (n - 1))) : 0;
   const overlap = step - cardW; // negative => overlap
   const spread = Math.min(3, 24 / n);
-  const arc = n > 2 ? Math.min(13, n * 1.4) : 0;
+  const arc = (n > 2 ? Math.min(13, n * 1.4) : 0) * arcScale;
   const mid = (n - 1) / 2 || 1;
   return cards
     .map((c, i) => {
@@ -2104,6 +2104,7 @@ function renderRummy(v) {
         must: c.id === v.mustMeldCardId,
       })).join("")}</div>`
     : "";
+  const twoPlayer = v.seats.length <= 2;
   const fan = fanHand(fanCards, (c) => {
     const incompatible = inPlay && compatibleIds != null && !compatibleIds.has(c.id);
     return {
@@ -2114,7 +2115,7 @@ function renderRummy(v) {
       playable: inPlay && !incompatible,
       dim: incompatible,
     };
-  });
+  }, { scrollable: twoPlayer, arcScale: 0.6 });
 
   // Dynamic hand sizing: shrink card width when many cards exceed the available space
   const handN = fanCards.length;
@@ -2127,7 +2128,12 @@ function renderRummy(v) {
     : naturalCardW;
   const handSizeStyle = cardWpx < naturalCardW ? `style="--w:${cardWpx}px"` : "";
 
-  const hand = drawnPreview + selRow + (fan ? `<div class="fan-inner" ${handSizeStyle}>${fan}</div>` : "");
+  const fanWrap = fan
+    ? (twoPlayer
+        ? `<div class="fan-scroll"><div class="fan-inner" ${handSizeStyle}>${fan}</div></div>`
+        : `<div class="fan-inner" ${handSizeStyle}>${fan}</div>`)
+    : "";
+  const hand = drawnPreview + selRow + fanWrap;
   const canMeld = selCards.length >= 3 && rValidMeld(selCards);
   const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards);
   const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;

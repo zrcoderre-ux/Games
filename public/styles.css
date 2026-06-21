@@ -2684,3 +2684,101 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     padding:0 6px !important;
   }
 }
+
+/* ── PARLOR ENHANCEMENTS ───────────────────────────────────── */
+
+/* 1 · Card-back jester-hat emblem */
+.card.back{
+  background:radial-gradient(120% 90% at 50% 30%, #c93a30, #a8281f 70%, #8c2018);
+}
+.card.back::before{
+  content:"";
+  position:absolute; inset:0; z-index:1; pointer-events:none;
+  -webkit-mask:url("/joker-silhouette.png") center / 52% no-repeat;
+          mask:url("/joker-silhouette.png") center / 52% no-repeat;
+  background:linear-gradient(160deg, #f2e3bd, #d4b85a 70%);
+  filter:drop-shadow(0 1px 0 rgba(0,0,0,.25));
+}
+
+/* 2 · Walnut wood table frame */
+.felt-frame{
+  padding:11px;
+  border-radius:20px;
+  background:
+    repeating-linear-gradient(96deg,#5a3a22 0,#6b462a 5px,#4e3220 11px,#623f26 17px),
+    linear-gradient(160deg,#6e4a2c,#3f2817);
+  box-shadow:
+    inset 0 2px 1px rgba(255,210,160,.28),
+    inset 0 -3px 3px rgba(0,0,0,.45),
+    inset 0 0 0 1px rgba(0,0,0,.4),
+    0 10px 22px -12px rgba(0,0,0,.7);
+}
+.felt-frame .felt{
+  border-radius:13px;
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,.5),
+    inset 0 2px 6px rgba(0,0,0,.55),
+    inset 0 0 60px rgba(0,0,0,.45);
+}
+
+/* 3 · Rummy hand lift */
+@media (min-height:600px){
+  .table:has(.rummy-melds-scroll) .selfwrap{
+    margin-top:-28px;
+    position:relative; z-index:5;
+  }
+  .table:has(.rummy-melds-scroll) .fan-inner{
+    filter:drop-shadow(0 -5px 12px rgba(0,0,0,.45));
+  }
+}
+
+/* 4 · Option B — Wide felt (Rummy, tablet+) */
+@media (min-width:768px) and (min-height:600px){
+  .table:has(.rummy-melds-scroll){
+    --lg-table-max: min(1480px, max(calc(100dvh - 60px), calc(100dvw * 0.94)));
+  }
+  .felt-stage:has(.rummy-melds-scroll) .felt-bottom{
+    left:0; right:0; bottom:0;
+    max-height:none; height:auto;
+    padding:36px 26px 18px;
+    justify-content:flex-start;
+    background:linear-gradient(180deg, rgba(6,9,16,0) 0%, rgba(6,9,16,.46) 52%);
+    border-top:1px solid rgba(212,184,90,.22);
+    overflow:visible;
+  }
+  .felt-stage:has(.rummy-melds-scroll) .felt-bottom::before{
+    content:"Melds on the table";
+    position:absolute; top:11px; left:28px;
+    font-family:"Fraunces",serif; font-weight:600;
+    font-size:13px; letter-spacing:.26em; text-transform:uppercase;
+    color:var(--brass-hi);
+    text-shadow:0 1px 3px rgba(0,0,0,.6);
+  }
+  .felt-stage:has(.rummy-melds-scroll) .rummy-melds-scroll{
+    max-height:none; overflow-x:auto; overflow-y:hidden;
+    padding-bottom:4px;
+    scrollbar-width:none;
+  }
+  .felt-stage:has(.rummy-melds-scroll) .rummy-melds-scroll::-webkit-scrollbar{display:none}
+  .felt-stage:has(.rummy-melds-scroll) .melds{
+    flex-wrap:nowrap; justify-content:flex-start;
+    width:max-content; max-width:none; gap:16px;
+    align-items:flex-end;
+  }
+  .felt-stage:has(.rummy-melds-scroll) .meld{
+    background:rgba(0,0,0,.28);
+    border-color:rgba(212,184,90,.4);
+    box-shadow:0 6px 16px -10px rgba(0,0,0,.7);
+    padding:8px 9px;
+  }
+  .felt-stage:has(.rummy-melds-scroll) .meld .card.mini{ --w:52px; }
+  .felt-stage:has(.rummy-melds-scroll) .meld .owner{
+    font-size:12px; color:var(--brass-hi); font-weight:700;
+    letter-spacing:.4px; text-transform:uppercase;
+  }
+  .felt-stage:has(.rummy-melds-scroll) .center{ top:40%; }
+}
+@media (min-width:1024px) and (min-height:600px) and (orientation:landscape){
+  .felt-stage:has(.rummy-melds-scroll) .center{ top:37%; }
+  .felt-stage:has(.rummy-melds-scroll) .meld .card.mini{ --w:56px; }
+}
