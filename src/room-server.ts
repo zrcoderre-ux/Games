@@ -76,6 +76,24 @@ export abstract class RoomServer<
     // Identity arrives via an explicit "join"; nothing to assign yet.
   }
 
+  // Diagnostic: GET /parties/<game>/<room>/gamelog-test
+  // Tests whether this DO can reach the GameLog DO via env binding.
+  async onRequest(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    if (url.pathname.endsWith("/gamelog-test")) {
+      const gl = this.env.GameLog;
+      if (!gl) return new Response(JSON.stringify({ error: "GameLog binding missing from env", envKeys: Object.keys(this.env as object) }), { headers: { "content-type": "application/json" } });
+      try {
+        const stub = gl.get(gl.idFromName("singleton"));
+        await stub.fetch("https://gamelog/append", { method: "POST", body: JSON.stringify({ game: "_do-test", ts: new Date().toISOString() }) });
+        return new Response(JSON.stringify({ ok: true, envKeys: Object.keys(this.env as object) }), { headers: { "content-type": "application/json" } });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: String(err), envKeys: Object.keys(this.env as object) }), { headers: { "content-type": "application/json" } });
+      }
+    }
+    return new Response("Not found", { status: 404 });
+  }
+
   async onMessage(conn: Connection<ConnState>, raw: string | ArrayBuffer) {
     let msg: ClientMessage<Config, Move>;
     try {
