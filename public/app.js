@@ -490,7 +490,7 @@ let localMod = null;
 async function connectLocal(serverSeats = null, startConfig = null) {
   S.offline = true;
   try {
-    if (!localMod) localMod = await import("/local.js");
+    if (!localMod) localMod = await import("/local.js?v=20260621f");
   } catch (err) {
     return toast("Couldn't load offline mode.");
   }
