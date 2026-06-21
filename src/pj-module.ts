@@ -685,6 +685,14 @@ export const pegsAndJokersModule: Game<PJState, PJMove, PJConfig, PJView> = {
   redact,
   lobbyView,
   aiMove,
+  loggableHand(prev, next) {
+    if (next.phase !== "gameOver" || prev.phase === "gameOver") return null;
+    return {
+      game: "pegs-and-jokers",
+      winner: next.winner ?? null,
+      log: next.log ?? [],
+    };
+  },
 };
 
 export const __test = {
