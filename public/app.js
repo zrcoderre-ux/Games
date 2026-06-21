@@ -676,7 +676,7 @@ function tableShell(v, parts) {
               : `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
           return `<div class="pod-slot ${side}" style="position:absolute;${pos};z-index:2">${html}</div>`;
         }).join("")
-      : `<div class="pod-slot" style="position:absolute;top:14%;left:50%;transform:translate(-50%,-50%);z-index:2"><div class="callout">Waiting for players to arrive…</div></div>`;
+      : (parts.feltLedger ? "" : `<div class="pod-slot" style="position:absolute;top:14%;left:50%;transform:translate(-50%,-50%);z-index:2"><div class="callout">Waiting for players to arrive…</div></div>`);
     feltPods = slots;
   }
 
@@ -714,12 +714,13 @@ function tableShell(v, parts) {
     ${parts.feltHeader ? `<div class="frame-title">${parts.feltHeader}</div>` : ""}
     ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
     <div class="felt">
-      <div class="felt-stage">
+      <div class="felt-stage${parts.feltLedger ? ' has-ledger' : ''}">
         ${feltPods}
+        ${parts.feltLedger ? `<div class="felt-ledger">${parts.feltLedger}</div>` : ""}
         ${parts.feltTop ? `<div class="felt-top">${parts.feltTop}</div>` : ""}
         ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
         ${parts.cornerSuits ? `<div class="felt-corners" aria-hidden="true">${parts.cornerSuits}</div>` : ""}
-        <div class="center${parts.centerFull ? ' full' : ''}">${parts.center}</div>
+        <div class="center${parts.centerFull ? ' full' : ''}${parts.centerBottom ? ' at-bottom' : ''}">${parts.center}</div>
         ${parts.trick || ""}
         ${parts.feltBid || ""}
         ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
@@ -1948,6 +1949,63 @@ function rCompatible(sel, c, layMeld) {
   return false;
 }
 
+function rummyMeldInner(m) {
+  const jokerRes = resolveJokers(m);
+  let inner;
+  if (m.kind === "set") {
+    const naturals = m.cards.filter((c) => !c.joker);
+    const redCount = naturals.filter((c) => RED.has(c.suit)).length;
+    const blackCount = naturals.length - redCount;
+    const oddIsRed = redCount < blackCount;
+    const sorted = [...m.cards].sort((a, b) => {
+      const aOdd = a.joker ? 0 : (RED.has(a.suit) === oddIsRed ? 1 : 0);
+      const bOdd = b.joker ? 0 : (RED.has(b.suit) === oddIsRed ? 1 : 0);
+      return aOdd - bOdd;
+    });
+    const n = sorted.length;
+    const negMargin = n <= 1 ? 0 : Math.round(44 * (n - 2) / (n - 1));
+    const allCards = sorted.map((c, ci) => {
+      const ml = ci === 0 ? "" : `margin-left:-${negMargin}px`;
+      return cardHTML(c, { mini: true, inMeld: true, style: ml });
+    }).join("");
+    inner = `<div class="run-dense tappable">${allCards}</div>`;
+  } else {
+    const n = m.cards.length;
+    const negMargin = n <= 1 ? 0 : Math.round(44 * (n - 2) / (n - 1));
+    const allCards = m.cards.map((c, ci) => {
+      const ml = ci === 0 ? "" : `margin-left:-${negMargin}px`;
+      return cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true, style: ml });
+    }).join("");
+    inner = `<div class="run-dense tappable">${allCards}</div>`;
+  }
+  return inner;
+}
+
+function rummyLedgerHTML(v, ctx) {
+  const me = v.you;
+  const byOwner = {};
+  for (const m of v.melds) (byOwner[m.owner] ||= []).push(m);
+  const order = v.seats.map((s, i) => i).filter((i) => i !== me).concat(me == null ? [] : [me]);
+  const rows = order.map((i) => {
+    const active = i === v.toAct;
+    const you = i === me;
+    const name = esc(seatName(v, i));
+    const init = (name[0] || "?").toUpperCase();
+    const count = you ? (v.yourHand ? v.yourHand.length : 0) : (v.handCounts[i] ?? 0);
+    const badge = `<span class="ledger-count">${count}</span>`;
+    const avatar = `<span class="ledger-av" style="--avseat:${i}">${init}</span>`;
+    const myMelds = byOwner[i] || [];
+    const ribbon = myMelds.length
+      ? `<div class="ledger-ribbon">${myMelds.map((m) => ctx.meldTile(m)).join("")}</div>`
+      : `<div class="ledger-empty">no melds yet</div>`;
+    return `<div class="ledger-row${active ? " active" : ""}${you ? " you" : ""}">
+      <div class="ledger-id">${avatar}${badge}<span class="ledger-name">${you ? "You" : name}</span></div>
+      ${ribbon}
+    </div>`;
+  });
+  return `<div class="ledger-head">Players &amp; melds</div>${rows.join("")}`;
+}
+
 function renderRummy(v) {
   // prune stale selections (cards no longer in hand)
   const handIds = new Set(v.yourHand.map((c) => c.id));
@@ -2193,7 +2251,16 @@ function renderRummy(v) {
   const rummyCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${['tl','tr','br','bl'][i]}">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltBottom: melds, feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn }) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
+  const ledgerCtx = {
+    meldTile: (m) => `<div class="meld tappable" data-action="open-meld" data-meldid="${m.id}">${rummyMeldInner(m)}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`,
+  };
+  const usePortraitLedger = window.matchMedia("(orientation:portrait)").matches;
+  const rummyParts = usePortraitLedger
+    ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx), center, centerBottom: true,
+        feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn }
+    : { pods, center, feltBottom: melds,
+        feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn };
+  app.__set = tableShell(v, rummyParts) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
 }
 
 // Round-end summary popup: no longer used for handComplete (replaced by rummyHandCompleteScreen).
