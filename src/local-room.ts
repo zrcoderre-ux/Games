@@ -224,8 +224,10 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     if (this.seats[seat].kind !== "human") throw new Error("It is not your turn");
     if (move.seat !== seat) throw new Error("Seat mismatch");
     if (!this.game.isLegal(this.state, move)) throw new Error("Illegal move");
+    const prev = this.state;
     const afterMove = this.game.applyMove(this.state, move);
     this.state = this.game.openHumanGate?.(afterMove, move) ?? afterMove;
+    this.logHandIfComplete(prev, this.state);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
@@ -261,6 +263,22 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
 
   // ---------- bots + broadcast ----------
 
+  private logHandIfComplete(prev: State, next: State): void {
+    const rec = this.game.loggableHand?.(prev, next);
+    if (!rec) return;
+    const enriched = {
+      ...(rec as object),
+      ts: new Date().toISOString(),
+      seatKinds: this.seats.map((s) => s.kind),
+      offline: true,
+    };
+    fetch("/gamelog/append-offline", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(enriched),
+    }).catch(() => { /* fire-and-forget; silently ignore offline or failed requests */ });
+  }
+
   private meta(): RoomMeta {
     return { seats: this.seats, hostSeat: this.hostSeat, players: this.seats.length, inLobby: this.state === null, botReplacement: false, disconnectedSeats: [] };
   }
@@ -284,7 +302,9 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     if (!this.state) throw new Error("No game in progress");
     const pace = this.game.pacing ? this.game.pacing(this.state) : null;
     if (!pace || !pace.move) throw new Error("Nothing to advance");
+    const prev = this.state;
     this.state = this.game.applyMove(this.state, pace.move);
+    this.logHandIfComplete(prev, this.state);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
@@ -296,6 +316,7 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     if (!s || this.game.isOver(s)) return;
     if (this.game.seatToAct(s) !== null) return; // no longer in a gate
     this.state = this.game.applyMove(s, move);
+    this.logHandIfComplete(s, this.state);
     this.syncViewSeat();
     this.broadcast();
     this.scheduleBotStep();
@@ -337,8 +358,10 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
       const a = this.game.aux.botAux(ns, seat);
       if (a != null) ns = this.game.aux.apply(ns, seat, a);
     }
+    const prevNs = ns;
     ns = this.game.applyMove(ns, this.game.aiMove(ns, seat));
     this.state = ns;
+    this.logHandIfComplete(prevNs, ns);
     this.syncViewSeat(); // a bot may have handed the turn to a human
     this.broadcast();
     this.scheduleBotStep();

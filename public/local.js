@@ -39,9 +39,6 @@ var LocalRoom = class {
     this.emit = emit;
     this.seats = emptySeats(game.seatCount(config));
   }
-  game;
-  config;
-  emit;
   state = null;
   seats;
   hostSeat = null;
@@ -213,8 +210,10 @@ var LocalRoom = class {
     if (this.seats[seat].kind !== "human") throw new Error("It is not your turn");
     if (move.seat !== seat) throw new Error("Seat mismatch");
     if (!this.game.isLegal(this.state, move)) throw new Error("Illegal move");
+    const prev = this.state;
     const afterMove = this.game.applyMove(this.state, move);
     this.state = this.game.openHumanGate?.(afterMove, move) ?? afterMove;
+    this.logHandIfComplete(prev, this.state);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
@@ -242,6 +241,22 @@ var LocalRoom = class {
     this.broadcast();
   }
   // ---------- bots + broadcast ----------
+  logHandIfComplete(prev, next) {
+    const rec = this.game.loggableHand?.(prev, next);
+    if (!rec) return;
+    const enriched = {
+      ...rec,
+      ts: (/* @__PURE__ */ new Date()).toISOString(),
+      seatKinds: this.seats.map((s) => s.kind),
+      offline: true
+    };
+    fetch("/gamelog/append-offline", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(enriched)
+    }).catch(() => {
+    });
+  }
   meta() {
     return { seats: this.seats, hostSeat: this.hostSeat, players: this.seats.length, inLobby: this.state === null, botReplacement: false, disconnectedSeats: [] };
   }
@@ -260,7 +275,9 @@ var LocalRoom = class {
     if (!this.state) throw new Error("No game in progress");
     const pace = this.game.pacing ? this.game.pacing(this.state) : null;
     if (!pace || !pace.move) throw new Error("Nothing to advance");
+    const prev = this.state;
     this.state = this.game.applyMove(this.state, pace.move);
+    this.logHandIfComplete(prev, this.state);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
@@ -271,6 +288,7 @@ var LocalRoom = class {
     if (!s || this.game.isOver(s)) return;
     if (this.game.seatToAct(s) !== null) return;
     this.state = this.game.applyMove(s, move);
+    this.logHandIfComplete(s, this.state);
     this.syncViewSeat();
     this.broadcast();
     this.scheduleBotStep();
@@ -310,8 +328,10 @@ var LocalRoom = class {
       const a = this.game.aux.botAux(ns, seat);
       if (a != null) ns = this.game.aux.apply(ns, seat, a);
     }
+    const prevNs = ns;
     ns = this.game.applyMove(ns, this.game.aiMove(ns, seat));
     this.state = ns;
+    this.logHandIfComplete(prevNs, ns);
     this.syncViewSeat();
     this.broadcast();
     this.scheduleBotStep();
@@ -810,6 +830,40 @@ function suitValue(hand, suit, players) {
   score += 0.1 * Math.max(0, n - 3);
   return score;
 }
+var CAPTURE_WEIGHTS = {
+  4: [1.143, 1.141, -0.161, -0.396, 0.487, -0.063, 0.504, -0.041, -0.264, 0.567, -0.052, 0.013, 0.584],
+  6: [1.552, 1.146, -0.14, -0.383, 0.513, -0.082, 0.078, 0.083, -0.384, 0.405, 7e-3, 0.04, 0.622],
+  8: [1.832, 1.071, -0.095, -0.365, 0.575, -0.064, -0.144, 0.123, -0.314, 0.318, 0.025, 2e-3, 0.611]
+};
+function expectedCapture(hand, suit, players) {
+  const tr = hand.filter((c) => isTrump(c, suit));
+  const has = (r) => tr.some((c) => !isJoker(c) && c.rank === r);
+  const hasJoker = tr.some(isJoker);
+  const n = tr.length;
+  const jackProt = has(11) ? [14, 13, 12].filter(has).length + (hasJoker ? 1 : 0) : 0;
+  const tens = hand.filter((c) => !isJoker(c) && c.rank === 10).length;
+  const highCt = tr.filter((c) => !isJoker(c) && c.rank >= 12).length;
+  const low = lowRankFor(players);
+  const f = [
+    1,
+    has(14) ? 1 : 0,
+    has(13) ? 1 : 0,
+    has(12) ? 1 : 0,
+    has(11) ? 1 : 0,
+    jackProt,
+    hasJoker ? 1 : 0,
+    hasJoker ? n - 1 : 0,
+    hasJoker && has(14) ? 1 : 0,
+    n,
+    tens,
+    has(low) ? 1 : 0,
+    highCt
+  ];
+  const w = CAPTURE_WEIGHTS[players] ?? CAPTURE_WEIGHTS[6];
+  let s = 0;
+  for (let i = 0; i < w.length; i++) s += f[i] * w[i];
+  return Math.max(0, Math.min(6, s));
+}
 function bestSuit(hand, players) {
   let best = { suit: SUITS[0], score: -Infinity };
   for (const suit of SUITS) {
@@ -976,6 +1030,7 @@ var competeProb = (myConf, theirConf, stretchProb) => {
 };
 function opponentThreatLevel(state, opponentSeat, bidAmount) {
   const team = teamOf(opponentSeat);
+  if (bidAmount === 6 && state.scores[team] >= 0) return 2;
   const after = state.scores[team] + bidAmount;
   if (after >= state.target) return 2;
   if (after >= state.target - 2) return 1;
@@ -1008,7 +1063,7 @@ function decideBid(state, seat, rng, p) {
   const oppGap = state.target - state.scores[oppTeam];
   const desperationBonus = oppGap <= 6 ? (6 - oppGap) * 0.18 : 0;
   const effectiveSafety = Math.max(0, p.bidSafety - desperationBonus);
-  const willing = clamp(Math.round(best.score - effectiveSafety), 0, 6);
+  const willing = clamp(Math.round(expectedCapture(hand, best.suit, state.players) - effectiveSafety), 0, 6);
   const myConf = confFromScore(best.score);
   const isDealer = seat === state.dealerSeat;
   const high = state.highBid;
@@ -1016,7 +1071,23 @@ function decideBid(state, seat, rng, p) {
   if (isDealer && highAmt === null) return { type: "bid", seat, amount: 2 };
   const needed = highAmt === null ? 2 : isDealer ? highAmt : highAmt + 1;
   if (needed > 6) return { type: "pass", seat };
-  if (willing >= needed) return { type: "bid", seat, amount: needed };
+  if (needed <= 6) {
+    const sixProb = estimateSixBidProb(hand, state.players);
+    const myScore = state.scores[myTeam];
+    const myGap = state.target - myScore;
+    const safeFromHoleBonus = myScore >= 1 ? Math.min(0.1, myScore * 8e-3) : 0;
+    const autoWinBonus = myScore >= 0 ? 0.07 : 0;
+    const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
+    const rawNearWinPenalty = myGap <= 6 ? (6 - myGap) * 0.1 : 0;
+    const nearWinPenalty = rawNearWinPenalty * Math.max(0, 1 - despSixBonus * 5);
+    const sixThresh = clamp(
+      0.65 + p.bidSafety * 0.2 - safeFromHoleBonus - autoWinBonus - despSixBonus + nearWinPenalty,
+      0.48,
+      0.97
+    );
+    if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
+  }
+  if (willing >= needed) return { type: "bid", seat, amount: Math.min(willing, needed + 1) };
   if (high !== null) {
     const sameTeam = teamOf(high.seat) === teamOf(seat);
     const holderProf = state.profiles[high.seat];
@@ -1041,22 +1112,6 @@ function decideBid(state, seat, rng, p) {
       if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
     }
   }
-  if (needed === 6) {
-    const sixProb = estimateSixBidProb(hand, state.players);
-    const myScore = state.scores[myTeam];
-    const myGap = state.target - myScore;
-    const safeFromHoleBonus = myScore >= 1 ? Math.min(0.1, myScore * 8e-3) : 0;
-    const autoWinBonus = myScore >= 0 ? 0.07 : 0;
-    const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
-    const rawNearWinPenalty = myGap <= 6 ? (6 - myGap) * 0.1 : 0;
-    const nearWinPenalty = rawNearWinPenalty * Math.max(0, 1 - despSixBonus * 5);
-    const sixThresh = clamp(
-      0.65 + p.bidSafety * 0.2 - safeFromHoleBonus - autoWinBonus - despSixBonus + nearWinPenalty,
-      0.48,
-      0.97
-    );
-    if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
-  }
   return { type: "pass", seat };
 }
 function decidePlay(state, seat, p) {
@@ -1075,7 +1130,9 @@ function decidePlay(state, seat, p) {
   const myTrumps = cards.filter((c) => isTrump(c, trump));
   const isLast = state.currentTrick.length === players - 1;
   if (state.currentTrick.length === 0) {
-    const shouldPullTrumps = myTrumps.length > 0 && unseenTrumps > 0 && unseenTrumps / (remaining * (players - 1)) >= p.trumpPullFrac;
+    const isDeclarer = state.winningBid?.seat === seat;
+    const earlyDeclarerPull = isDeclarer && state.trickIndex <= 1 && myTrumps.length >= 2;
+    const shouldPullTrumps = earlyDeclarerPull || myTrumps.length > 0 && unseenTrumps > 0 && unseenTrumps / (remaining * (players - 1)) >= p.trumpPullFrac;
     if (myTrumps.length) {
       const top = pick(myTrumps, (c) => trumpValue(c, trump), "max");
       const topVal = trumpValue(top, trump);
@@ -1356,6 +1413,20 @@ var hljModule = {
       }
       return null;
     }
+  },
+  loggableHand(prev, next) {
+    if (!next.lastHand || next.lastHand === prev.lastHand) return null;
+    return {
+      game: "high-low-jack",
+      target: next.target,
+      hand: next.lastHand,
+      // bidderSeat, bid, made, deltaByTeam, detail, dealtHands, kitty, lastTrick
+      bidHistory: prev.bidHistory,
+      // prev still holds the finished hand's auction; next's is reset
+      log: next.log,
+      scores: next.scores,
+      gameOver: next.phase === "gameOver"
+    };
   }
 };
 
@@ -1842,7 +1913,7 @@ var PERSONALITIES2 = [
   // 0 · Balanced — reliable execution, moderate risk tolerance
   { pickupThreshold: 6, earlyDiscount: 0.68, endgameHandSize: 3, dangerWeight: 1.8, misplayRate: 0.03 },
   // 1 · Aggressive — highest pile appetite, sharpest execution, rarely misplays
-  { pickupThreshold: 3, earlyDiscount: 0.76, endgameHandSize: 2, dangerWeight: 0.8, misplayRate: 0.01 },
+  { pickupThreshold: 3, earlyDiscount: 0.76, endgameHandSize: 2, dangerWeight: 3, misplayRate: 0.01 },
   // 2 · Conservative — very selective pickups, strongest danger avoidance, patient
   { pickupThreshold: 9, earlyDiscount: 0.65, endgameHandSize: 5, dangerWeight: 3.5, misplayRate: 0.02 },
   // 3 · Opportunist — erratic: swings between brilliance and blunder
@@ -2331,7 +2402,7 @@ function aiMove2(state, seat) {
     const mev = cardMeldEV(state, seat, c);
     const danger2 = opponentDangerWithModel(state, c, seat, model);
     let score = -mev;
-    score += danger2 * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
+    score -= danger2 * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
     if (opponentLow) score += Math.max(0, -mev) * 0.5;
     return { card: c, score };
   }).sort((a, b) => b.score - a.score);
@@ -2355,8 +2426,19 @@ var rummy500Module = {
   redact: redact2,
   lobbyView,
   aiMove: aiMove2,
-  pacing
+  pacing,
   // no `aux`: Rummy has no non-turn side actions
+  loggableHand(prev, next) {
+    if (!next.lastRound || next.lastRound === prev.lastRound) return null;
+    return {
+      game: "rummy-500",
+      target: next.target,
+      lastRound: next.lastRound,
+      scores: next.scores,
+      gameOver: next.phase === "gameOver",
+      winner: next.winner ?? null
+    };
+  }
 };
 
 // src/hearts-module.ts
@@ -2442,6 +2524,7 @@ function dealHand(prev) {
     ...prev,
     seed: nextSeed,
     hands,
+    dealtHands: hands.map((h) => h.slice()),
     passOffset,
     selected: Array.from({ length: prev.players }, () => null),
     currentTrick: [],
@@ -2479,6 +2562,7 @@ function createGame3(config, seed) {
     scores: Array(config.players).fill(0),
     winner: null,
     lastHand: null,
+    dealtHands: null,
     log: [],
     logSeq: 0
   };
@@ -2716,8 +2800,34 @@ function danger(c) {
 }
 function aiPass(state, seat) {
   const hand = state.hands[seat];
-  const cards = [...hand].sort((a, b) => danger(b) - danger(a)).slice(0, 3);
-  return { type: "pass", seat, cards: cards.map((c) => c.id) };
+  const chosen = [];
+  const qs = hand.find(isQueenOfSpades);
+  if (qs) chosen.push(qs);
+  let progress2 = true;
+  while (chosen.length < 3 && progress2) {
+    progress2 = false;
+    const slots = 3 - chosen.length;
+    let bestSuit2 = null, bestLen = Infinity;
+    for (const su of ["S", "D", "C"]) {
+      const rem = hand.filter((c) => c.suit === su && !chosen.includes(c));
+      if (rem.length >= 1 && rem.length <= slots && rem.length < bestLen) {
+        bestLen = rem.length;
+        bestSuit2 = su;
+      }
+    }
+    if (bestSuit2) {
+      for (const c of hand.filter((c2) => c2.suit === bestSuit2 && !chosen.includes(c2))) chosen.push(c);
+      progress2 = true;
+    }
+  }
+  if (chosen.length < 3) {
+    const rest = hand.filter((c) => !chosen.includes(c)).sort((a, b) => danger(b) - danger(a));
+    for (const c of rest) {
+      if (chosen.length >= 3) break;
+      chosen.push(c);
+    }
+  }
+  return { type: "pass", seat, cards: chosen.slice(0, 3).map((c) => c.id) };
 }
 function aiPlay(state, seat) {
   const legal = legalPlays(state, seat);
@@ -2728,6 +2838,22 @@ function aiPlay(state, seat) {
     const nonHearts = legal.filter((c) => !isHeart(c));
     const pool = nonHearts.length ? nonHearts : legal;
     return play(lowestBy(pool, (c) => c.rank));
+  }
+  {
+    const pts = state.points;
+    const others = pts.map((p, i) => ({ i, p })).filter((o) => o.i !== seat);
+    const shooter = others.reduce((a, b) => b.p > a.p ? b : a, others[0]);
+    const threat = shooter.p >= 13 && pts[seat] === 0 && !others.some((o) => o.i !== shooter.i && o.p > 0) && pts.reduce((a, b) => a + b, 0) < 26;
+    if (threat) {
+      const ledSuit2 = state.currentTrick[0].card.suit;
+      const inLed = state.currentTrick.filter((tp) => tp.card.suit === ledSuit2);
+      const curWin = inLed.reduce((hi, tp) => tp.card.rank > hi.card.rank ? tp : hi, inLed[0]);
+      const trickPts = state.currentTrick.reduce((a, tp) => a + cardPoints(tp.card), 0);
+      const winners = legal.filter((c) => c.suit === ledSuit2 && c.rank > curWin.card.rank);
+      if (trickPts > 0 && curWin.seat === shooter.i && winners.length) {
+        return play(winners.reduce((lo, c) => c.rank < lo.rank ? c : lo, winners[0]));
+      }
+    }
   }
   const ledSuit = state.currentTrick[0].card.suit;
   const inSuit = legal.filter((c) => c.suit === ledSuit);
@@ -2762,7 +2888,21 @@ var heartsModule = {
   redact: redact3,
   lobbyView: lobbyView2,
   aiMove: aiMove3,
-  pacing: pacing2
+  pacing: pacing2,
+  loggableHand(prev, next) {
+    if (!next.lastHand || next.lastHand === prev.lastHand) return null;
+    return {
+      game: "hearts",
+      target: next.target,
+      dealtHands: prev.dealtHands,
+      // prev still holds this hand's deal; next has the new deal
+      lastHand: next.lastHand,
+      // delta per seat + shooter (if moon)
+      log: next.log,
+      scores: next.scores,
+      gameOver: next.phase === "gameOver"
+    };
+  }
   // no `aux`: Hearts has no non-turn side actions
 };
 
@@ -3265,7 +3405,15 @@ var pegsAndJokersModule = {
   isOver: isOver3,
   redact: redact4,
   lobbyView: lobbyView3,
-  aiMove: aiMove4
+  aiMove: aiMove4,
+  loggableHand(prev, next) {
+    if (next.phase !== "gameOver" || prev.phase === "gameOver") return null;
+    return {
+      game: "pegs-and-jokers",
+      winner: next.winner ?? null,
+      log: next.log ?? []
+    };
+  }
 };
 
 // src/client-local.ts
