@@ -2900,3 +2900,54 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     border-top:1px solid rgba(212,184,90,.18);
   }
 }
+/* ============================================================
+   PATCH 06 — L1 landscape layout (Rummy)
+   ------------------------------------------------------------
+   Depends on Patch 05 (ledger). Append to public/styles.css.
+   Scoped to .felt-stage.has-ledger.ledger-landscape AND landscape,
+   so portrait / other games / wide-screen are never affected.
+   ============================================================ */
+
+@media (orientation:landscape){
+
+  /* ledger becomes a LEFT RAIL; centre column holds pile + hand */
+  .felt-stage.has-ledger.ledger-landscape{
+    --ledger-card:32px;        /* bigger melds in the rail */
+  }
+  .felt-stage.has-ledger.ledger-landscape .felt-ledger{
+    position:absolute; left:0; top:0; bottom:0; right:auto;
+    width:46%; max-width:340px;
+    padding:7px 7px 7px 26px;     /* 26px clears the landscape notch */
+    overflow-y:auto;
+    gap:5px;
+  }
+  .felt-stage.has-ledger.ledger-landscape .ledger-head{ font-size:10px; }
+
+  /* compact rows for the short landscape height */
+  .felt-stage.has-ledger.ledger-landscape .ledger-row{
+    padding:4px 6px; gap:7px;
+  }
+  .felt-stage.has-ledger.ledger-landscape .ledger-av{ width:28px; height:28px; font-size:11px; }
+  .felt-stage.has-ledger.ledger-landscape .ledger-count{ top:20px; }
+  .felt-stage.has-ledger.ledger-landscape .ledger-name{ width:30px; font-size:10px; }
+  .felt-stage.has-ledger.ledger-landscape .ledger-ribbon{ gap:6px; }
+  .felt-stage.has-ledger.ledger-landscape .ledger-ribbon .card.mini{ --w:var(--ledger-card); }
+
+  /* centre column: pile + hand pulled toward the LEFT (just right of rail) */
+  .felt-stage.has-ledger.ledger-landscape .center{
+    position:absolute; left:46%; right:0; top:0; bottom:auto;
+    transform:none;
+    display:flex; align-items:center;
+    padding:14px 0 0 14px;
+  }
+  .felt-stage.has-ledger.ledger-landscape .center .piles{ gap:16px; }
+  .felt-stage.has-ledger.ledger-landscape .center .card.mini{ --w:46px; }
+
+  /* hand spreads along the bottom of the centre column, left-aligned */
+  .felt-stage.has-ledger.ledger-landscape ~ .selfwrap,
+  .ledger-landscape .selfwrap{
+    margin-left:46%;
+    justify-content:flex-start;
+  }
+  .ledger-landscape .fan-inner{ justify-content:flex-start; }
+}

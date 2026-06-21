@@ -714,7 +714,7 @@ function tableShell(v, parts) {
     ${parts.feltHeader ? `<div class="frame-title">${parts.feltHeader}</div>` : ""}
     ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
     <div class="felt">
-      <div class="felt-stage${parts.feltLedger ? ' has-ledger' : ''}">
+      <div class="felt-stage${parts.feltLedger ? ' has-ledger' : ''}${parts.ledgerLandscape ? ' ledger-landscape' : ''}">
         ${feltPods}
         ${parts.feltLedger ? `<div class="felt-ledger">${parts.feltLedger}</div>` : ""}
         ${parts.feltTop ? `<div class="felt-top">${parts.feltTop}</div>` : ""}
@@ -894,6 +894,7 @@ function positionHatWatermark() {
   img.style.marginTop = -(width * 1.5 * (59 / 1536)) + "px";
 }
 window.addEventListener("resize", () => positionHatWatermark());
+window.matchMedia("(orientation:landscape)").addEventListener("change", () => render());
 // Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
 // scores=null → lobby (ghost rings). scores=[a,b] → gameplay (filled numbers).
 // highBid={seat,amount} → shows winning bid in that team's BID cell.
@@ -2254,11 +2255,15 @@ function renderRummy(v) {
   const ledgerCtx = {
     meldTile: (m) => `<div class="meld tappable" data-action="open-meld" data-meldid="${m.id}">${rummyMeldInner(m)}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`,
   };
-  const usePortraitLedger = window.matchMedia("(orientation:portrait)").matches;
-  const rummyParts = usePortraitLedger
-    ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx), center: "",
+  const useLedger = window.matchMedia("(max-width:1023px)").matches;
+  const isLandscape = window.matchMedia("(orientation:landscape)").matches;
+  const rummyParts = useLedger
+    ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx),
+        center: isLandscape ? center : "",
+        centerBottom: false, ledgerLandscape: isLandscape,
         feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
-        hand, actions: acts.join(""), selfMeta, selfTurn, selfExtra: center }
+        hand, actions: acts.join(""), selfMeta, selfTurn,
+        selfExtra: isLandscape ? "" : center }
     : { pods, center, feltBottom: melds,
         feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn };
   app.__set = tableShell(v, rummyParts) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
