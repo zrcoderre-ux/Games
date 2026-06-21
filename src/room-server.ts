@@ -522,7 +522,7 @@ export abstract class RoomServer<
     try {
       const stub = this.env.GameLog.get(this.env.GameLog.idFromName("singleton"));
       await stub.fetch("https://gamelog/append", { method: "POST", body: JSON.stringify(enriched) });
-    } catch { /* logging must never break play */ }
+    } catch (err) { console.error("[gamelog] append failed:", err); }
   }
 }
 

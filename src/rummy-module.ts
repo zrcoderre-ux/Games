@@ -1498,6 +1498,17 @@ export const rummy500Module: Game<RummyState, RummyMove, RummyConfig, RummyView>
   aiMove,
   pacing,
   // no `aux`: Rummy has no non-turn side actions
+  loggableHand(prev, next) {
+    if (!next.lastRound || next.lastRound === prev.lastRound) return null;
+    return {
+      game: "rummy-500",
+      target: next.target,
+      lastRound: next.lastRound,
+      scores: next.scores,
+      gameOver: next.phase === "gameOver",
+      winner: next.winner ?? null,
+    };
+  },
 };
 
 // Exposed for unit tests / tuning.
