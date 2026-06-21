@@ -513,6 +513,7 @@ export abstract class RoomServer<
 
   private async logHandIfComplete(prev: State, next: State) {
     const rec = this.game.loggableHand?.(prev, next);
+    console.log("[gamelog] check: rec=", !!rec, "GameLog=", !!this.env.GameLog, "game=", this.game.id ?? "?");
     if (!rec || !this.env.GameLog) return;
     const enriched = {
       ...(rec as object),
