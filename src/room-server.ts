@@ -513,15 +513,22 @@ export abstract class RoomServer<
 
   private async logHandIfComplete(prev: State, next: State) {
     const rec = this.game.loggableHand?.(prev, next);
-    console.log("[gamelog] check: rec=", !!rec, "GameLog=", !!this.env.GameLog, "game=", this.game.meta?.id ?? "?");
-    if (!rec || !this.env.GameLog) return;
+    if (!this.env.GameLog) return;
+    const stub = this.env.GameLog.get(this.env.GameLog.idFromName("singleton"));
+    if (!rec) {
+      // Diagnostic: write a noop record every 50 calls to prove this path is reachable.
+      // Remove after confirming gamelog writes work end-to-end.
+      if (Math.random() < 0.02) {
+        await stub.fetch("https://gamelog/append", { method: "POST", body: JSON.stringify({ game: "_debug", ts: new Date().toISOString(), gameId: this.game.meta?.id }) });
+      }
+      return;
+    }
     const enriched = {
       ...(rec as object),
       ts: new Date().toISOString(),
-      seatKinds: this.room.seats.map((s) => s.kind), // "human" | "bot" | "empty", no names
+      seatKinds: this.room.seats.map((s) => s.kind),
     };
     try {
-      const stub = this.env.GameLog.get(this.env.GameLog.idFromName("singleton"));
       await stub.fetch("https://gamelog/append", { method: "POST", body: JSON.stringify(enriched) });
     } catch (err) { console.error("[gamelog] append failed:", err); }
   }
