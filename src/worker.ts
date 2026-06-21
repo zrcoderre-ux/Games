@@ -63,6 +63,11 @@ export default {
       const stub = env.GameLog.get(env.GameLog.idFromName("singleton"));
       return stub.fetch(request);
     }
+    // Client-side offline games POST completed hands here.
+    if (url.pathname === "/gamelog/append-offline" && request.method === "POST") {
+      const stub = env.GameLog.get(env.GameLog.idFromName("singleton"));
+      return stub.fetch(new Request("https://gamelog/append", { method: "POST", body: await request.text() }));
+    }
     return (await routePartykitRequest(request, env)) || new Response("Not Found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
