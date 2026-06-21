@@ -2256,8 +2256,9 @@ function renderRummy(v) {
   };
   const usePortraitLedger = window.matchMedia("(orientation:portrait)").matches;
   const rummyParts = usePortraitLedger
-    ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx), center, centerBottom: true,
-        feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn }
+    ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx), center: "",
+        feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
+        hand, actions: acts.join(""), selfMeta, selfTurn, selfExtra: center }
     : { pods, center, feltBottom: melds,
         feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn };
   app.__set = tableShell(v, rummyParts) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
