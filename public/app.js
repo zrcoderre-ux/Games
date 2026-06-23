@@ -2442,6 +2442,7 @@ function renderHearts(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             avatar: true,
+            extraClass: "hearts-pod",
             cardCount: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
