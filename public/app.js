@@ -2271,7 +2271,7 @@ function renderRummy(v) {
           feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
           hand, actions: acts.join(""), selfMeta, selfTurn,
           selfExtra: "" }
-      : { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx),
+      : { pods, feltLedger: rummyLedgerHTML(v, ledgerCtx),
           center, centerBottom: true,
           ledgerLandscape: false,
           feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
