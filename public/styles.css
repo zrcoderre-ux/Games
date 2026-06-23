@@ -2645,12 +2645,12 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .hs-lbl-game{ grid-column:2; grid-row:2; text-align:center; margin:0; }
   .tbl-fan{     grid-column:2; grid-row:3; margin:0; }
   .hs-cta{      grid-column:2; grid-row:4; width:100%; margin:4px 0 0; }
-  /* Left column: Room Code */
-  .hs-lbl-room{ grid-column:1; grid-row:1; margin:0; }
-  #f-room{      grid-column:1; grid-row:2; width:100%; box-sizing:border-box; }
-  /* Right column: Your Name */
-  .hs-lbl-name{ grid-column:3; grid-row:1; margin:0; }
-  #f-name{      grid-column:3; grid-row:2; width:100%; box-sizing:border-box; }
+  /* Left column: Room Code — centred vertically (rows 2–3) */
+  .hs-lbl-room{ grid-column:1; grid-row:2; margin:0; align-self:end; }
+  #f-room{      grid-column:1; grid-row:3; width:100%; box-sizing:border-box; }
+  /* Right column: Your Name — centred vertically (rows 2–3) */
+  .hs-lbl-name{ grid-column:3; grid-row:2; margin:0; align-self:end; }
+  #f-name{      grid-column:3; grid-row:3; width:100%; box-sizing:border-box; }
 
   /* Table is a flex column filling the full viewport */
   #app:not(:has(.lby-outer)) .table,
