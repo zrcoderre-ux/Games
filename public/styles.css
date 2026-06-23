@@ -2844,7 +2844,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 @media (orientation:portrait){
 
   /* Felt-stage is a flex column: ledger grows to fill space, piles sit below. */
-  .felt-stage.has-ledger{ bottom:0; display:flex; flex-direction:column; }
+  .felt-stage.has-ledger{ bottom:0; display:flex; flex-direction:column; padding-bottom:130px; }
 
   .felt-ledger{
     --ledger-card:38px;
