@@ -2928,12 +2928,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     border-top:1px solid rgba(212,184,90,.18);
   }
 
-  /* Portrait Rummy: move selfbar below the ledger (self-extra), above actions */
-  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap{ flex-direction:column; }
-  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .self-extra{ order:1; }
-  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .hand{ order:2; }
-  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .selfbar{ order:3; margin:6px 0 4px; }
-  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .actions{ order:4; }
+  /* Portrait Rummy: selfbar sits below hand, above actions */
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .selfbar{ margin:6px 0 4px; }
 }
 /* ============================================================
    PATCH 06 — L1 landscape layout (Rummy)
