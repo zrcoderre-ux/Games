@@ -2271,12 +2271,12 @@ function renderRummy(v) {
           feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
           hand, actions: acts.join(""), selfMeta, selfTurn,
           selfExtra: "" }
-      : { pods, feltLedger: rummyLedgerHTML(v, ledgerCtx),
-          center, centerBottom: true,
+      : { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx),
+          center: "", centerBottom: false,
           ledgerLandscape: false,
           feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
           hand, actions: acts.join(""), selfMeta, selfTurn,
-          selfExtra: "" }
+          selfExtra: center }
     : { pods, center, feltBottom: melds,
         feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn };
   app.__set = tableShell(v, rummyParts) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
