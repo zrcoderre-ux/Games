@@ -1356,6 +1356,11 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 .pod.active .pod-av-count{border-color:var(--brass-hi)}
 .pod-av-name{font-size:10px;font-weight:700;color:var(--ink-soft);max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pod.active .pod-av-name{color:var(--brass-hi)}
+/* Hearts: crimson avatar */
+.pod.hearts-pod .pod-av{background:linear-gradient(145deg,#e8524a,#b8201a);color:#fff}
+.pod.active.hearts-pod .pod-av{box-shadow:0 0 0 2px #e8524a,0 0 10px rgba(232,82,74,.55)}
+.pod.active.hearts-pod .pod-av-count{border-color:#e8524a}
+.pod.active.hearts-pod .pod-av-name{color:#e8847f}
 
 /* ---------- Center play area ---------- */
 .center{
