@@ -271,11 +271,18 @@ function podHTML(v, i, o = {}) {
     ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
     : "";
   const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
+  const mainBlock = o.avatar
+    ? `<div class="pod-av-id" style="--avseat:${i}">
+        <span class="pod-av">${(esc(name)[0] || "?").toUpperCase()}</span>
+        ${cardCount != null ? `<span class="pod-av-count">${cardCount}</span>` : ""}
+        <span class="pod-av-name">${esc(name)}${disconnectedBadge}</span>
+      </div>`
+    : `<div class="ministack">
+        ${mb}
+        <span class="back-name">${esc(name)}${disconnectedBadge}</span>
+      </div>`;
   return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""} ${o.extraClass || ""}">
-    <div class="ministack">
-      ${mb}
-      <span class="back-name">${esc(name)}${disconnectedBadge}</span>
-    </div>
+    ${mainBlock}
     ${o.highBid != null ? `<div class="pod-dealer-badge bid">${o.highBid}</div>` : o.signalIcon != null ? `<div class="pod-dealer-badge signal">${o.signalIcon}</div>` : o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
     ${o.pts != null || o.count != null ? `<div class="pod-info">
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
@@ -2434,10 +2441,10 @@ function renderHearts(v) {
         ? null
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
+            avatar: true,
             cardCount: v.handCounts[i],
             pts: v.scores[i],
             note: passing ? null : i === v.toAct ? "to play" : v.points[i] ? `+${v.points[i]} this hand` : null,
-            extraClass: "hearts-backs",
           }) },
     )
     .filter(Boolean);
