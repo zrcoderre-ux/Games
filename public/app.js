@@ -2258,12 +2258,18 @@ function renderRummy(v) {
   const useLedger = window.matchMedia("(max-width:1023px)").matches;
   const isLandscape = window.matchMedia("(orientation:landscape)").matches;
   const rummyParts = useLedger
-    ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx),
-        center: isLandscape ? center : "",
-        centerBottom: false, ledgerLandscape: isLandscape,
-        feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
-        hand, actions: acts.join(""), selfMeta, selfTurn,
-        selfExtra: isLandscape ? "" : center }
+    ? isLandscape
+      ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx),
+          center, centerBottom: false, ledgerLandscape: true,
+          feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
+          hand, actions: acts.join(""), selfMeta, selfTurn,
+          selfExtra: "" }
+      : { pods: [], feltLedger: "",
+          center, centerBottom: true,
+          ledgerLandscape: false,
+          feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
+          hand, actions: acts.join(""), selfMeta, selfTurn,
+          selfExtra: rummyLedgerHTML(v, ledgerCtx) }
     : { pods, center, feltBottom: melds,
         feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn };
   app.__set = tableShell(v, rummyParts) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
