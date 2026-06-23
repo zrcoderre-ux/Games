@@ -2936,43 +2936,51 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
 @media (orientation:landscape){
 
-  /* ledger becomes a LEFT RAIL; centre column holds pile + hand */
+  /* Two-column table: piles on the LEFT, pods+melds on the RIGHT */
   .felt-stage.has-ledger.ledger-landscape{
-    --ledger-card:32px;        /* bigger melds in the rail */
+    --ledger-card:34px;
   }
-  .felt-stage.has-ledger.ledger-landscape .felt-ledger{
-    position:absolute; left:0; top:0; bottom:0; right:auto;
-    width:46%; max-width:340px;
-    padding:7px 7px 7px 26px;     /* 26px clears the landscape notch */
-    overflow-y:auto;
-    gap:5px;
-  }
-  .felt-stage.has-ledger.ledger-landscape .ledger-head{ font-size:10px; }
 
-  /* compact rows for the short landscape height */
-  .felt-stage.has-ledger.ledger-landscape .ledger-row{
-    padding:4px 6px; gap:7px;
+  /* LEFT column: centre (piles) — clears the notch on the left edge */
+  .felt-stage.has-ledger.ledger-landscape .center{
+    position:absolute; left:0; right:46%; top:50%; bottom:auto;
+    transform:translateY(-50%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:0 8px 0 max(20px,env(safe-area-inset-left));
+    gap:12px;
   }
-  .felt-stage.has-ledger.ledger-landscape .ledger-av{ width:28px; height:28px; font-size:11px; }
-  .felt-stage.has-ledger.ledger-landscape .ledger-count{ top:20px; }
-  .felt-stage.has-ledger.ledger-landscape .ledger-name{ width:30px; font-size:10px; }
+  .felt-stage.has-ledger.ledger-landscape .center .piles{ gap:18px; }
+  .felt-stage.has-ledger.ledger-landscape .center .card.mini{ --w:48px; }
+
+  /* RIGHT column: ledger (pods + meld ribbons) */
+  .felt-stage.has-ledger.ledger-landscape .felt-ledger{
+    position:absolute; left:auto; right:0; top:0; bottom:0;
+    width:46%; max-width:360px;
+    padding:6px max(8px,env(safe-area-inset-right)) 6px 8px;
+    overflow-y:auto; scrollbar-width:none;
+    gap:4px;
+  }
+  .felt-stage.has-ledger.ledger-landscape .felt-ledger::-webkit-scrollbar{ display:none; }
+  .felt-stage.has-ledger.ledger-landscape .ledger-head{ font-size:10px; margin-bottom:2px; }
+
+  /* Compact but readable rows for landscape height */
+  .felt-stage.has-ledger.ledger-landscape .ledger-row{
+    padding:5px 7px; gap:8px;
+  }
+  .felt-stage.has-ledger.ledger-landscape .ledger-av{
+    width:32px; height:32px; font-size:12px;
+  }
+  .felt-stage.has-ledger.ledger-landscape .ledger-count{ top:22px; right:3px; }
+  .felt-stage.has-ledger.ledger-landscape .ledger-name{ font-size:10px; }
   .felt-stage.has-ledger.ledger-landscape .ledger-ribbon{ gap:6px; }
   .felt-stage.has-ledger.ledger-landscape .ledger-ribbon .card.mini{ --w:var(--ledger-card); }
 
-  /* centre column: pile + hand pulled toward the LEFT (just right of rail) */
-  .felt-stage.has-ledger.ledger-landscape .center{
-    position:absolute; left:46%; right:0; top:0; bottom:auto;
-    transform:none;
-    display:flex; align-items:center;
-    padding:14px 0 0 14px;
-  }
-  .felt-stage.has-ledger.ledger-landscape .center .piles{ gap:16px; }
-  .felt-stage.has-ledger.ledger-landscape .center .card.mini{ --w:46px; }
-
-  /* hand spreads along the bottom of the centre column, left-aligned */
+  /* Hand sits below the left column, left-aligned */
   .felt-stage.has-ledger.ledger-landscape ~ .selfwrap,
   .ledger-landscape .selfwrap{
-    margin-left:46%;
+    margin-left:0;
+    margin-right:46%;
+    padding-left:max(8px,env(safe-area-inset-left));
     justify-content:flex-start;
   }
   .ledger-landscape .fan-inner{ justify-content:flex-start; }
