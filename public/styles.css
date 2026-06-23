@@ -1336,6 +1336,26 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
 /* active turn glow on the card stack */
 .pod.active .ministack .mb:last-of-type{box-shadow:0 0 0 2px var(--brass-hi),0 0 10px 1px rgba(231,196,133,.7),0 1px 2px rgba(0,0,0,.6)!important;animation:turnpulse 1.6s ease-in-out infinite}
 .pod.active .back-name{color:var(--brass-hi);text-shadow:0 0 8px rgba(231,196,133,.6),0 1px 3px rgba(0,0,0,.9)}
+/* Round-avatar pod variant (Hearts) */
+.pod-av-id{display:flex;flex-direction:column;align-items:center;gap:3px;width:48px;position:relative}
+.pod-av{
+  width:36px;height:36px;border-radius:50%;display:grid;place-items:center;
+  font-family:"Fraunces",serif;font-weight:700;font-size:14px;color:#0a1020;
+  background:linear-gradient(145deg,var(--brass-hi),var(--brass));
+  box-shadow:0 1px 3px rgba(0,0,0,.5);
+}
+.pod.active .pod-av{box-shadow:0 0 0 2px var(--brass-hi),0 0 10px rgba(212,184,90,.55);animation:turnpulse 1.6s ease-in-out infinite}
+.pod-av-count{
+  position:absolute;top:22px;right:2px;
+  min-width:16px;height:20px;padding:0 3px;display:grid;place-items:center;
+  font-family:"Bevan",serif;font-size:10px;line-height:1;color:#fff;border-radius:3px;
+  background:linear-gradient(180deg,#d6463a,#b8281f);
+  border:1px solid rgba(255,225,210,.4);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 1px 2px rgba(0,0,0,.5);
+}
+.pod.active .pod-av-count{border-color:var(--brass-hi)}
+.pod-av-name{font-size:10px;font-weight:700;color:var(--ink-soft);max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pod.active .pod-av-name{color:var(--brass-hi)}
 
 /* ---------- Center play area ---------- */
 .center{
