@@ -2843,17 +2843,19 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
 @media (orientation:portrait){
 
-  /* The ledger column fills the felt; pile is pinned to the bottom. */
-  .felt-stage.has-ledger{ bottom:0; }
+  /* Felt-stage is a flex column: ledger grows to fill space, piles sit below. */
+  .felt-stage.has-ledger{ bottom:0; display:flex; flex-direction:column; }
 
   .felt-ledger{
-    --ledger-card:38px;     /* meld + pile card size (keep in sync w/ .center.at-bottom) */
+    --ledger-card:38px;
     --row-gap:7px;
-    position:absolute; left:0; right:0; top:0;
+    position:relative;        /* no longer absolute — flows in the column */
+    flex:1; overflow-y:auto; scrollbar-width:none;
     display:flex; flex-direction:column; gap:var(--row-gap);
     padding:9px 9px 4px;
     z-index:1;
   }
+  .felt-ledger::-webkit-scrollbar{ display:none; }
 
   .ledger-head{
     font-family:"Fraunces",serif; font-size:11px; font-weight:600;
@@ -2932,10 +2934,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     color:var(--ink-dim); padding-left:4px;
   }
 
-  /* stock + discard pinned to the bottom of the felt, by the hand */
+  /* stock + discard: flows below the ledger in the flex column */
   .felt-stage.has-ledger .center.at-bottom{
-    position:absolute; top:auto; bottom:8px; left:50%;
-    transform:translateX(-50%);
+    position:relative; top:auto; bottom:auto; left:auto;
+    transform:none; width:100%;
   }
   .felt-stage.has-ledger .center.at-bottom .piles{
     display:flex; gap:22px;
