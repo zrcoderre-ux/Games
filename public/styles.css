@@ -2625,7 +2625,32 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 @media (max-height:500px) and (orientation:landscape){
   /* Appbar stays in normal document flow — no overlay */
   .hs-wm-wrap{ display:none; }
-  .hs-wm-spacer{ height:0; margin:0; }
+  .hs-wm-spacer{ display:none; }
+
+  /* Home screen: full-width rail, 3-column felt layout */
+  .hs-rail{
+    max-width:100%; border-radius:0; padding:5px;
+  }
+  .hs-felt{
+    display:grid;
+    grid-template-columns:1fr 1.6fr 1fr;
+    grid-template-rows:auto auto auto auto;
+    gap:6px 18px;
+    padding:10px max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left));
+    border-radius:0; align-items:center; overflow:visible;
+  }
+  .hs-felt::before,.hs-felt::after{ border-radius:0; }
+  /* Center column: title + game picker + CTA */
+  .hs-title{    grid-column:2; grid-row:1; font-size:clamp(22px,5vw,36px); margin:0; }
+  .hs-lbl-game{ grid-column:2; grid-row:2; text-align:center; margin:0; }
+  .tbl-fan{     grid-column:2; grid-row:3; margin:0; }
+  .hs-cta{      grid-column:2; grid-row:4; width:100%; margin:4px 0 0; }
+  /* Left column: Room Code */
+  .hs-lbl-room{ grid-column:1; grid-row:1; margin:0; }
+  #f-room{      grid-column:1; grid-row:2; width:100%; box-sizing:border-box; }
+  /* Right column: Your Name */
+  .hs-lbl-name{ grid-column:3; grid-row:1; margin:0; }
+  #f-name{      grid-column:3; grid-row:2; width:100%; box-sizing:border-box; }
 
   /* Table is a flex column filling the full viewport */
   #app:not(:has(.lby-outer)) .table,
