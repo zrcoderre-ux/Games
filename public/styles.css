@@ -2620,10 +2620,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     margin:0 5px 0 !important;
   }
 
-  /* Rotate trump/Hearts watermarks -90° — device rotated right, content rotates left */
-  .trump-watermark{ transform:rotate(-90deg) !important; }
-  .trump-watermark.joker-placeholder{ transform:rotate(-90deg) !important; }
-  /* Hat watermark: centered, shrunk to fit, no rotation (faces the top toolbar) */
+  /* Watermarks upright — pointing toward top of table (top of screen in landscape) */
+  .trump-watermark{ transform:none !important; }
+  .trump-watermark.joker-placeholder{ transform:translateY(-50%) !important; }
+  /* Hat watermark: centered, shrunk to fit */
   .lby-felt-watermark{
     top:50% !important; left:50% !important;
     transform:translate(-50%,-50%) !important;
