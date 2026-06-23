@@ -2624,6 +2624,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
    ============================================================ */
 @media (max-height:500px) and (orientation:landscape){
   /* Appbar stays in normal document flow — no overlay */
+  .hs-wm-wrap{ display:none; }
+  .hs-wm-spacer{ height:0; margin:0; }
 
   /* Table is a flex column filling the full viewport */
   #app:not(:has(.lby-outer)) .table,
