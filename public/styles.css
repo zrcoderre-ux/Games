@@ -2928,8 +2928,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   /* Portrait Rummy: move selfbar below the ledger (self-extra), above actions */
   .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap{ flex-direction:column; }
-  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .hand{ order:1; }
-  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .self-extra{ order:2; }
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .self-extra{ order:1; }
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .hand{ order:2; }
   .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .selfbar{ order:3; margin:6px 0 4px; }
   .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .actions{ order:4; }
 }
