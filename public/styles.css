@@ -2633,7 +2633,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      shift them outside the felt on a rectangular viewport) */
   .felt-corner-suit{ transform:rotate(-90deg) !important; }
 
-  /* ---- Landscape appbar player strip ---- */
+  /* ---- Landscape appbar player strip — moved to bottom ---- */
+  .table .appbar{ order:10; padding:4px 6px max(4px,env(safe-area-inset-bottom)) !important; }
   .appbar{ flex-wrap:nowrap; gap:4px; padding:4px 6px; }
   .ls-self{ display:flex; align-items:center; gap:5px; flex-shrink:1; min-width:0; }
   .ls-self .avatar{ width:26px; height:26px; font-size:10px; flex-shrink:0; }
