@@ -2934,10 +2934,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     color:var(--ink-dim); padding-left:4px;
   }
 
-  /* stock + discard: flows below the ledger in the flex column */
+  /* stock + discard: pinned to the bottom of the flex column, above the hand */
   .felt-stage.has-ledger .center.at-bottom{
     position:relative; top:auto; bottom:auto; left:auto;
     transform:none; width:100%; z-index:5; flex:none;
+    margin-top:auto;
   }
   .felt-stage.has-ledger .center.at-bottom .piles{
     display:flex; gap:22px;
