@@ -1998,16 +1998,15 @@ function rummyLedgerHTML(v, ctx) {
     const active = i === v.toAct;
     const you = i === me;
     const name = esc(seatName(v, i));
-    const init = (name[0] || "?").toUpperCase();
     const count = you ? (v.yourHand ? v.yourHand.length : 0) : (v.handCounts[i] ?? 0);
     const badge = `<span class="ledger-count">${count}</span>`;
-    const avatar = `<span class="ledger-av" style="--avseat:${i}">${init}</span>`;
+    const nameplate = `<span class="ledger-av" style="--avseat:${i}">${you ? "You" : name}</span>`;
     const myMelds = byOwner[i] || [];
     const ribbon = myMelds.length
       ? `<div class="ledger-ribbon">${myMelds.map((m) => ctx.meldTile(m)).join("")}</div>`
       : `<div class="ledger-empty">no melds yet</div>`;
     return `<div class="ledger-row${active ? " active" : ""}${you ? " you" : ""}">
-      <div class="ledger-id">${avatar}${badge}<span class="ledger-name">${you ? "You" : name}</span></div>
+      <div class="ledger-id">${nameplate}${badge}</div>
       ${ribbon}
     </div>`;
   });

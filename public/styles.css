@@ -2883,24 +2883,26 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   }
   .ledger-row.you{ background:rgba(58,158,90,.1); }
 
-  /* identity block: avatar + card-shaped count + name */
+  /* identity block: rectangular nameplate + card-shaped count badge */
   .ledger-id{
-    display:flex; flex-direction:column; align-items:center; gap:3px;
-    width:52px; flex:none; position:relative;
+    display:flex; align-items:center;
+    width:96px; flex:none; position:relative;
   }
   .ledger-av{
-    width:var(--av,34px); height:var(--av,34px); border-radius:50%;
-    display:grid; place-items:center;
-    font-family:"Fraunces",serif; font-weight:700; font-size:13px; color:#0a1020;
+    flex:1; min-width:0; height:var(--av,34px);
+    display:flex; align-items:center; justify-content:center;
+    padding:0 8px; border-radius:8px;
+    font-family:"Fraunces",serif; font-weight:700; font-size:12px; color:#0a1020;
     background:linear-gradient(145deg,var(--brass-hi),var(--brass));
     box-shadow:0 1px 3px rgba(0,0,0,.5);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .ledger-row.active .ledger-av{
     box-shadow:0 0 0 2px var(--brass-hi),0 0 10px rgba(212,184,90,.55);
   }
   /* card-shaped count badge — deck red, no pattern */
   .ledger-count{
-    position:absolute; top:calc(var(--av,34px) - 10px); right:4px;
+    position:absolute; top:-6px; right:-6px;
     min-width:16px; height:21px; padding:0 3px;
     display:grid; place-items:center;
     font-family:"Bevan",serif; font-size:11px; line-height:1; color:#fff;
@@ -2910,12 +2912,6 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 1px 2px rgba(0,0,0,.5);
   }
   .ledger-row.active .ledger-count{ border-color:var(--brass-hi); }
-  .ledger-name{
-    font-size:10.5px; font-weight:700; color:var(--ink-soft);
-    max-width:52px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  }
-  .ledger-row.active .ledger-name{ color:var(--brass-hi); }
-  .ledger-row.you .ledger-name{ color:#7fd0a0; }
 
   /* per-player meld ribbon — one scrollable row */
   .ledger-ribbon{
@@ -3013,11 +3009,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .felt-stage.has-ledger.ledger-landscape .ledger-row{
     padding:5px 7px; gap:8px;
   }
+  .felt-stage.has-ledger.ledger-landscape .ledger-id{ width:88px; }
   .felt-stage.has-ledger.ledger-landscape .ledger-av{
-    width:32px; height:32px; font-size:12px;
+    height:30px; font-size:11px;
   }
-  .felt-stage.has-ledger.ledger-landscape .ledger-count{ top:22px; right:3px; }
-  .felt-stage.has-ledger.ledger-landscape .ledger-name{ font-size:10px; }
+  .felt-stage.has-ledger.ledger-landscape .ledger-count{ top:-6px; right:-6px; }
   .felt-stage.has-ledger.ledger-landscape .ledger-ribbon{ gap:6px; }
   .felt-stage.has-ledger.ledger-landscape .ledger-ribbon .card.mini{ --w:var(--ledger-card); }
 
