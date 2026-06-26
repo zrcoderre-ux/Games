@@ -721,7 +721,7 @@ function tableShell(v, parts) {
     ${parts.feltHeader ? `<div class="frame-title">${parts.feltHeader}</div>` : ""}
     ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
     <div class="felt">
-      <div class="felt-stage${parts.feltLedger ? ' has-ledger' : ''}${parts.ledgerLandscape ? ' ledger-landscape' : ''}">
+      <div class="felt-stage${parts.feltLedger ? ' has-ledger' : ''}${parts.ledgerLandscape ? ' ledger-landscape' : ''}${parts.ledgerSplit ? ' ledger-split' : ''}">
         ${feltPods}
         ${parts.feltLedger ? `<div class="felt-ledger"${parts.ledgerRows ? ` style="--rows:${parts.ledgerRows}"` : ""}>${parts.feltLedger}</div>` : ""}
         ${parts.feltTop ? `<div class="felt-top">${parts.feltTop}</div>` : ""}
@@ -1989,12 +1989,12 @@ function rummyMeldInner(m) {
   return inner;
 }
 
-function rummyLedgerHTML(v, ctx) {
+function rummyLedgerRows(v, ctx) {
   const me = v.you;
   const byOwner = {};
   for (const m of v.melds) (byOwner[m.owner] ||= []).push(m);
   const order = v.seats.map((s, i) => i).filter((i) => i !== me).concat(me == null ? [] : [me]);
-  const rows = order.map((i) => {
+  return order.map((i) => {
     const active = i === v.toAct;
     const you = i === me;
     const name = esc(seatName(v, i));
@@ -2010,7 +2010,19 @@ function rummyLedgerHTML(v, ctx) {
       ${ribbon}
     </div>`;
   });
-  return `<div class="ledger-head">Players &amp; melds</div>${rows.join("")}`;
+}
+
+function rummyLedgerHTML(v, ctx) {
+  return `<div class="ledger-head">Players &amp; melds</div>${rummyLedgerRows(v, ctx).join("")}`;
+}
+
+// Landscape: split players into two columns (left / right), piles go between.
+function rummyLedgerSplit(v, ctx) {
+  const rows = rummyLedgerRows(v, ctx);
+  const half = Math.ceil(rows.length / 2);
+  const left = rows.slice(0, half).join("");
+  const right = rows.slice(half).join("");
+  return `<div class="ledger-col left">${left}</div><div class="ledger-col right">${right}</div>`;
 }
 
 function renderRummy(v) {
@@ -2265,8 +2277,8 @@ function renderRummy(v) {
   const isLandscape = window.matchMedia("(orientation:landscape)").matches;
   const rummyParts = useLedger
     ? isLandscape
-      ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx), ledgerRows: v.seats.length,
-          center, centerBottom: false, ledgerLandscape: true,
+      ? { pods: [], feltLedger: rummyLedgerSplit(v, ledgerCtx), ledgerRows: v.seats.length,
+          center, centerBottom: false, ledgerLandscape: true, ledgerSplit: true,
           feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
           hand, actions: acts.join(""), selfMeta, selfTurn,
           selfExtra: "" }
