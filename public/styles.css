@@ -2937,7 +2937,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* stock + discard: flows below the ledger in the flex column */
   .felt-stage.has-ledger .center.at-bottom{
     position:relative; top:auto; bottom:auto; left:auto;
-    transform:none; width:100%;
+    transform:none; width:100%; z-index:5; flex:none;
   }
   .felt-stage.has-ledger .center.at-bottom .piles{
     display:flex; gap:22px;
