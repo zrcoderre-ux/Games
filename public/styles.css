@@ -2847,8 +2847,12 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .felt-stage.has-ledger{ bottom:0; display:flex; flex-direction:column; }
 
   .felt-ledger{
-    --ledger-card:38px;
-    --row-gap:7px;
+    --rows:4;                 /* overridden inline per player count */
+    /* sizes shrink as the player count grows so every row fits without scrolling */
+    --ledger-card:clamp(22px, calc(48px - (var(--rows) - 2) * 3px), 38px);
+    --av:clamp(24px, calc(40px - (var(--rows) - 2) * 1.5px), 34px);
+    --row-pad:clamp(3px, calc(8px - (var(--rows) - 2) * 1px), 7px);
+    --row-gap:clamp(3px, calc(8px - (var(--rows) - 2) * 1px), 7px);
     position:relative;        /* no longer absolute — flows in the column */
     flex:1; overflow-y:auto; scrollbar-width:none;
     display:flex; flex-direction:column; gap:var(--row-gap);
@@ -2870,7 +2874,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   .ledger-row{
     display:flex; align-items:center; gap:9px;
-    padding:7px 9px; border-radius:11px;
+    padding:var(--row-pad,7px) 9px; border-radius:11px;
     background:rgba(0,0,0,.2); border:1px solid var(--wood-edge);
   }
   .ledger-row.active{
@@ -2885,7 +2889,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     width:52px; flex:none; position:relative;
   }
   .ledger-av{
-    width:34px; height:34px; border-radius:50%;
+    width:var(--av,34px); height:var(--av,34px); border-radius:50%;
     display:grid; place-items:center;
     font-family:"Fraunces",serif; font-weight:700; font-size:13px; color:#0a1020;
     background:linear-gradient(145deg,var(--brass-hi),var(--brass));
@@ -2896,7 +2900,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   }
   /* card-shaped count badge — deck red, no pattern */
   .ledger-count{
-    position:absolute; top:24px; right:4px;
+    position:absolute; top:calc(var(--av,34px) - 10px); right:4px;
     min-width:16px; height:21px; padding:0 3px;
     display:grid; place-items:center;
     font-family:"Bevan",serif; font-size:11px; line-height:1; color:#fff;
@@ -2936,17 +2940,26 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   /* stock + discard: absolutely pinned to the bottom of the felt, above the hand */
   .felt-stage.has-ledger .center.at-bottom{
+    --pile-card:34px;
     position:absolute; left:0; right:0; bottom:6px; top:auto;
     transform:none; width:100%; z-index:5;
     display:flex; justify-content:center;
   }
   .felt-stage.has-ledger .center.at-bottom .piles{
-    display:flex; gap:22px;
+    --w:var(--pile-card); --mini-w:var(--pile-card);
+    display:flex; gap:28px; align-items:flex-start;
     background:linear-gradient(180deg,rgba(6,9,16,0),rgba(6,9,16,.5));
     border-top:1px solid rgba(212,184,90,.2);
-    padding:8px 18px 6px; border-radius:12px;
+    padding:8px 22px 6px; border-radius:12px;
   }
-  .felt-stage.has-ledger .center.at-bottom .card.mini{ --w:var(--ledger-card); }
+  .felt-stage.has-ledger .center.at-bottom .card.mini{ --w:var(--pile-card); }
+  /* size the pile containers to the small cards so the stacks line up */
+  .felt-stage.has-ledger .center.at-bottom .mini-pile .stockwrap{
+    min-width:var(--pile-card); min-height:calc(var(--pile-card)*1.42);
+  }
+  .felt-stage.has-ledger .center.at-bottom .discardstack{
+    width:var(--pile-card); height:calc(var(--pile-card)*1.42); margin:6px 0 0 16px;
+  }
 
   /* Piles in selfExtra (portrait ledger mode): horizontal row above the hand */
   .felt-stage.has-ledger ~ * .self-extra .piles,
