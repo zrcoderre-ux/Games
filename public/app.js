@@ -723,7 +723,7 @@ function tableShell(v, parts) {
     <div class="felt">
       <div class="felt-stage${parts.feltLedger ? ' has-ledger' : ''}${parts.ledgerLandscape ? ' ledger-landscape' : ''}">
         ${feltPods}
-        ${parts.feltLedger ? `<div class="felt-ledger">${parts.feltLedger}</div>` : ""}
+        ${parts.feltLedger ? `<div class="felt-ledger"${parts.ledgerRows ? ` style="--rows:${parts.ledgerRows}"` : ""}>${parts.feltLedger}</div>` : ""}
         ${parts.feltTop ? `<div class="felt-top">${parts.feltTop}</div>` : ""}
         ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
         ${parts.cornerSuits ? `<div class="felt-corners" aria-hidden="true">${parts.cornerSuits}</div>` : ""}
@@ -2266,12 +2266,12 @@ function renderRummy(v) {
   const isLandscape = window.matchMedia("(orientation:landscape)").matches;
   const rummyParts = useLedger
     ? isLandscape
-      ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx),
+      ? { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx), ledgerRows: v.seats.length,
           center, centerBottom: false, ledgerLandscape: true,
           feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
           hand, actions: acts.join(""), selfMeta, selfTurn,
           selfExtra: "" }
-      : { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx),
+      : { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx), ledgerRows: v.seats.length,
           center, centerBottom: true,
           ledgerLandscape: false,
           feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
