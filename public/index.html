@@ -31,5 +31,10 @@
   <main id="app"></main>
   <script src="/tutorial.js?v=20260617a"></script>
   <script type="module" src="/app.js?v=20260626a"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js');
+    }
+  </script>
 </body>
 </html>
