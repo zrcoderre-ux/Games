@@ -1266,7 +1266,8 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     if (lsMobile) {
       // Mirror the arced pod layout, pulled inward so the played cards sit
       // just inside each player's pod.
-      if (off === 0) return "top:74%;left:50%;transform:translate(-50%,-50%)";
+      // Own played card: bottom aligns with the user's bid chip (bottom:60px)
+      if (off === 0) return "position:fixed;bottom:60px;top:auto;left:50%;transform:translateX(-50%);z-index:10";
       ({ x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 40, y2: 78, topY: 24 }));
       const isSide = x < 27 || x > 73;
       const arcShift = isSide ? Math.max(0, 78 - y) * 0.16 : 0;
