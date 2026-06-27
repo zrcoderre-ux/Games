@@ -1481,7 +1481,6 @@ function renderHLJ(v) {
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             backs: v.handCounts[i],
-            cardCount: v.handCounts[i],
           }) },
     )
     .filter(Boolean);
