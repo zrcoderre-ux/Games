@@ -665,8 +665,9 @@ function tableShell(v, parts) {
           // stays flush. shift grows with height above the bottom reference (~72%).
           const arcShift = Math.max(0, 72 - y) * 0.16;
           const ax = side === "pos-left" ? x + arcShift : x - arcShift;
+          const ay = y + 8; // nudge the whole side arc down (top pod is pos-top, unaffected)
           const pos = insetSide
-            ? `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`
+            ? `top:${ay}%;left:${ax}%;transform:translate(-50%,-50%)`
             : side === "pos-left"
               ? `top:${y}%;left:0;transform:translateY(-50%)`
               : side === "pos-right"
@@ -1577,7 +1578,11 @@ function renderHLJ(v) {
       : "top:76%;left:50%;transform:translate(-50%,-50%)";
     // Other seats: tighter bounds so chips appear inward from card backs
     const { x, y } = wallPerimPos(off, n, bidBounds);
-    return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
+    // Match the side-pod arc: higher side chips sit further toward center.
+    const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
+    const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.14 : 0;
+    const ax = x < 50 ? x + arcShift : x - arcShift;
+    return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = (() => {
     // While the bid-end hold is active, freeze the full bid overlay
