@@ -2691,8 +2691,9 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .table .appbar{ order:10; padding:4px 6px max(4px,env(safe-area-inset-bottom)) !important; }
   .appbar{ flex-wrap:nowrap; gap:4px; padding:4px 6px; }
   .ls-self{ display:none !important; }
-  /* Game buttons live inside .appbar-left — push that group to the far right */
-  .appbar-left{ order:10; margin-left:auto; display:flex; align-items:center; min-width:0; }
+  /* Game buttons live inside .appbar-left — push that group to the far right.
+     Override the base flex:1 so it shrinks to its content and margin-left:auto bites. */
+  .appbar-left{ order:10; flex:0 0 auto !important; margin-left:auto; display:flex; align-items:center; min-width:0; }
   .ls-actions{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
   /* No room for the guidance hint text in landscape — hide it */
   .ls-actions .hint{ display:none !important; }
