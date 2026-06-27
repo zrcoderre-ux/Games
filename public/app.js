@@ -2102,7 +2102,6 @@ function renderRummy(v) {
       <div class="discardstack" data-action="open-discard" title="View discard pile" style="cursor:pointer">
         ${top ? stackCards : `<div class="card mini" style="opacity:.22"></div>`}
       </div>
-      <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
     </div>`;
   // Compute selected cards early so melds can highlight valid layoff targets
   const orderedForMelds = rummyOrdered(v.yourHand);
