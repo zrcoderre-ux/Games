@@ -2773,6 +2773,16 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     bottom:44px !important;
     padding:0 6px !important;
   }
+
+  /* The fixed selfwrap spans full width over the bottom appbar; let its empty
+     areas pass clicks through to Log/Leave/game buttons. Only the cards capture. */
+  .selfwrap,
+  .selfwrap .hand,
+  .selfwrap .fan-scroll,
+  .selfwrap .fan-inner{ pointer-events:none !important; }
+  .selfwrap .card,
+  .selfwrap .rummy-drawn-preview,
+  .selfwrap .selrow{ pointer-events:auto !important; }
 }
 
 /* ── PARLOR ENHANCEMENTS ───────────────────────────────────── */
