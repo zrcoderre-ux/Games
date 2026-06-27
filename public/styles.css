@@ -2736,12 +2736,14 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     left:50% !important; transform:translateX(-50%) !important;
   }
 
-  /* Shrink the hand cards + opponent pods for the compass games (HLJ / Hearts /
-     PJ) so the short landscape felt isn't dominated by oversized cards. */
-  .table:not(:has(.felt-stage.has-ledger)) .fan-inner .card{ --w:46px !important; }
-  .table:not(:has(.felt-stage.has-ledger)) .selrow .card{ --w:46px !important; }
+  /* Shrink the opponent pods for the compass games (HLJ / Hearts / PJ) so the
+     short landscape felt isn't dominated by oversized card backs. */
   .table:not(:has(.felt-stage.has-ledger)) .pod .card.back{ --w:30px !important; }
   .table:not(:has(.felt-stage.has-ledger)) .pod .ministack{ min-height:38px; }
+
+  /* Compass games: full-size hand, pushed down to the bottom of the screen. */
+  .table:not(:has(.felt-stage.has-ledger)) .selfwrap{ bottom:-48px !important; }
+  #app:not(:has(.lby-outer)) .table:not(:has(.felt-stage.has-ledger)) .selfwrap{ bottom:-48px !important; }
 
   /* Spacer collapses — selfwrap provides its own room */
   .selfwrap-spacer{ height:0 !important; }
