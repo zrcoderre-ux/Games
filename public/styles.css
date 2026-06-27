@@ -3109,11 +3109,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .felt-stage.has-ledger.ledger-landscape .ledger-ribbon{ gap:6px; }
   .felt-stage.has-ledger.ledger-landscape .ledger-ribbon .card.mini{ --w:var(--ledger-card); }
 
-  /* Hand fans centred at the bottom, between the two columns */
+  /* Hand fans centred across the full width at the bottom */
   .felt-stage.has-ledger.ledger-landscape ~ .selfwrap,
   .ledger-landscape .selfwrap{
-    margin-left:30%;
-    margin-right:30%;
+    margin-left:0;
+    margin-right:0;
     justify-content:center;
   }
   .ledger-landscape .fan-inner{ justify-content:center; }
