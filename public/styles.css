@@ -2720,17 +2720,15 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   html.is-standalone .table .selfwrap-spacer{ height:0 !important; }
   #app:not(:has(.lby-outer)) .table .selfwrap-spacer{ height:0 !important; }
 
-  /* Shift hand down so only the top ~half of the center card is visible.
-     Card height ≈ 89px (64px wide × 1.4). Center suit is at ~50% ≈ 44px.
-     Clipping 48px keeps the suit symbol visible at the very top of the clip. */
+  /* Lift the hand up to clear the bottom appbar so the full cards are visible. */
   .selfwrap{
     position:fixed !important;
-    bottom:-48px !important;
+    bottom:44px !important;
     padding:0 6px !important;
   }
   #app:not(:has(.lby-outer)) .table .selfwrap{
     position:fixed !important;
-    bottom:-48px !important;
+    bottom:44px !important;
     padding:0 6px !important;
   }
 }
