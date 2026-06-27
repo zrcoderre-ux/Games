@@ -661,8 +661,12 @@ function tableShell(v, parts) {
           // Landscape: bring side pods in off the wall so they read like the
           // portrait compass instead of hugging the far edges.
           const insetSide = isLandscape && (side === "pos-left" || side === "pos-right");
+          // Arc the side pods: higher pods sit further toward center, the lowest
+          // stays flush. shift grows with height above the bottom reference (~72%).
+          const arcShift = Math.max(0, 72 - y) * 0.16;
+          const ax = side === "pos-left" ? x + arcShift : x - arcShift;
           const pos = insetSide
-            ? `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`
+            ? `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`
             : side === "pos-left"
               ? `top:${y}%;left:0;transform:translateY(-50%)`
               : side === "pos-right"
