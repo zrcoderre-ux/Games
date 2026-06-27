@@ -2700,16 +2700,13 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* Shorten button labels ("Draw stock"→"Draw", "Sort 1–9 rank"→"Sort") */
   .btn-extra{ display:none !important; }
 
-  /* Rummy landscape: the game buttons grow to fill the bar and get thicker */
-  .table:has(.felt-stage.has-ledger.ledger-landscape) .appbar-left{
-    flex:1 1 auto !important; margin-left:8px; align-items:stretch;
-  }
+  /* Rummy landscape: game buttons sit at the right, sized to their text but thicker */
   .table:has(.felt-stage.has-ledger.ledger-landscape) .ls-actions{
-    flex:1; align-items:stretch; gap:8px;
+    align-items:stretch; gap:8px;
   }
   .table:has(.felt-stage.has-ledger.ledger-landscape) .ls-actions .btn,
   .table:has(.felt-stage.has-ledger.ledger-landscape) .ls-actions button{
-    flex:1; font-size:15px !important; padding:14px 10px !important;
+    font-size:15px !important; padding:14px 16px !important;
   }
   /* Shrink action buttons to fit */
   .ls-actions .btn,
