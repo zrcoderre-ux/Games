@@ -3058,27 +3058,28 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .felt-stage.has-ledger.ledger-landscape .center .piles{ gap:14px; }
   .felt-stage.has-ledger.ledger-landscape .center .card.mini{ --w:42px; }
 
-  /* The ledger spans the full felt; its two columns hug the left & right edges */
+  /* The ledger spans the full felt; the two columns are positioned explicitly:
+     left column at the left edge, right column pulled in from the right edge. */
   .felt-stage.has-ledger.ledger-landscape .felt-ledger{
     position:absolute; inset:0;
-    display:flex; justify-content:space-between; align-items:stretch;
-    padding:6px 0; gap:0;
+    padding:6px 0;
     overflow:visible;
   }
   /* hide the "Players & melds" head in split mode (each column is self-evident) */
   .felt-stage.has-ledger.ledger-landscape .ledger-head{ display:none; }
 
   .felt-stage.has-ledger.ledger-landscape .ledger-col{
-    width:30%; max-width:230px;
+    position:absolute; top:6px; bottom:6px;
+    width:34%;
     display:flex; flex-direction:column; gap:5px;
     overflow-y:auto; scrollbar-width:none;
   }
   .felt-stage.has-ledger.ledger-landscape .ledger-col::-webkit-scrollbar{ display:none; }
   .felt-stage.has-ledger.ledger-landscape .ledger-col.left{
-    padding-left:max(8px,env(safe-area-inset-left));
+    left:max(8px,env(safe-area-inset-left));
   }
   .felt-stage.has-ledger.ledger-landscape .ledger-col.right{
-    padding-right:max(8px,env(safe-area-inset-right));
+    left:58%;
   }
 
   /* Compact but readable rows for landscape height */
