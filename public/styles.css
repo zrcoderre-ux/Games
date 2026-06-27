@@ -3116,5 +3116,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     margin-right:0;
     justify-content:center;
   }
-  .ledger-landscape .fan-inner{ justify-content:center; }
+  /* The hand is a SIBLING of the felt-stage, not a descendant — reach it via
+     the selfwrap sibling so the fan (incl. the scrollable 2-player fan) centers. */
+  .felt-stage.has-ledger.ledger-landscape ~ .selfwrap .fan-inner,
+  .felt-stage.has-ledger.ledger-landscape ~ .selfwrap .fan-scroll .fan-inner{
+    justify-content:center !important;
+  }
 }
