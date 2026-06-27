@@ -2747,6 +2747,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     bottom:88px !important;
     left:50% !important; transform:translateX(-50%) !important;
   }
+  /* Signal badge bar: sits higher so it clears the user's bid chip below it */
+  .hlj-felt-bid:has(.hlj-signal-felt){
+    bottom:140px !important;
+  }
 
   /* Side pods: dealer chip / signal / bid badge sits on the edge side of the pod
      (left-wall pods → left, right-wall pods → right). Top pod unchanged. */
