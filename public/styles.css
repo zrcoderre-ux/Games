@@ -2693,7 +2693,9 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .ls-self{ display:none !important; }
   /* Game buttons live inside .appbar-left — push that group to the far right */
   .appbar-left{ order:10; margin-left:auto; display:flex; align-items:center; min-width:0; }
-  .ls-actions{ display:flex; align-items:center; gap:4px; flex-shrink:1; }
+  .ls-actions{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
+  /* No room for the guidance hint text in landscape — hide it */
+  .ls-actions .hint{ display:none !important; }
   /* Shrink action buttons to fit */
   .ls-actions .btn,
   .ls-actions button{ font-size:11px !important; padding:3px 7px !important; }
