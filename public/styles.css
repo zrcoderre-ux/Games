@@ -3000,7 +3000,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* stock + discard: absolutely pinned to the bottom of the felt, above the hand */
   .felt-stage.has-ledger .center.at-bottom{
     --pile-card:34px;
-    position:absolute; left:0; right:0; bottom:6px; top:auto;
+    position:absolute; left:0; right:0; bottom:34px; top:auto;
     transform:none; width:100%; z-index:5;
     display:flex; justify-content:center;
   }
