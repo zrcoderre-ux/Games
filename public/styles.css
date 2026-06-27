@@ -2685,17 +2685,14 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      shift them outside the felt on a rectangular viewport) */
   .felt-corner-suit{ transform:rotate(-90deg) !important; }
 
-  /* ---- Landscape appbar player strip — moved to bottom ---- */
+  /* ---- Landscape appbar — moved to bottom ----
+     Left: room tag + Log + Leave.  Right: the game action buttons.
+     The player's name / turn / score strip is hidden. */
   .table .appbar{ order:10; padding:4px 6px max(4px,env(safe-area-inset-bottom)) !important; }
   .appbar{ flex-wrap:nowrap; gap:4px; padding:4px 6px; }
-  .ls-self{ display:flex; align-items:center; gap:5px; flex-shrink:1; min-width:0; }
-  .ls-self .avatar{ width:26px; height:26px; font-size:10px; flex-shrink:0; }
-  .ls-self-info{ display:flex; flex-direction:column; gap:0; min-width:0; line-height:1.1; }
-  .ls-self-info .name,
-  .ls-self-info .lby-name-row{ font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; }
-  .ls-self-info .lby-name-input{ font-size:11px; width:60px; padding:1px 3px; }
-  .ls-self-info .me-pts{ font-size:10px; }
-  .ls-self-turn{ display:flex; align-items:center; }
+  .ls-self{ display:none !important; }
+  /* Game buttons live inside .appbar-left — push that group to the far right */
+  .appbar-left{ order:10; margin-left:auto; display:flex; align-items:center; min-width:0; }
   .ls-actions{ display:flex; align-items:center; gap:4px; flex-shrink:1; }
   /* Shrink action buttons to fit */
   .ls-actions .btn,
