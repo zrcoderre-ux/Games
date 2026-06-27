@@ -2263,13 +2263,9 @@ function renderRummy(v) {
   const lastMeldSuit = v.melds.length
     ? v.melds[v.melds.length - 1].cards.find((c) => !c.joker)?.suit ?? null
     : null;
-  const rummyFeltOverlay = lastMeldSuit
-    ? `<span class="trump-watermark${RED.has(lastMeldSuit) ? " red" : ""}">${SUIT[lastMeldSuit]}</span>`
-    : "";
-
-  const rummyCornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
-    `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${['tl','tr','br','bl'][i]}">${s}</span>`
-  ).join("");
+  // Watermarks (felt overlay + corner suits) are disabled for Rummy 500.
+  const rummyFeltOverlay = "";
+  const rummyCornerSuits = "";
   const ledgerCtx = {
     meldTile: (m) => `<div class="meld tappable" data-action="open-meld" data-meldid="${m.id}">${rummyMeldInner(m)}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`,
   };
