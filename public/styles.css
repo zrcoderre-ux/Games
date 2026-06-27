@@ -2732,7 +2732,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* Bid chip bar: just above the peeking hand */
   .hlj-felt-bid{
     position:fixed !important;
-    bottom:52px !important;
+    bottom:110px !important;
     left:50% !important; transform:translateX(-50%) !important;
   }
 
