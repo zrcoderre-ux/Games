@@ -2730,6 +2730,13 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     left:50% !important; transform:translateX(-50%) !important;
   }
 
+  /* Shrink the hand cards + opponent pods for the compass games (HLJ / Hearts /
+     PJ) so the short landscape felt isn't dominated by oversized cards. */
+  .table:not(:has(.felt-stage.has-ledger)) .fan-inner .card{ --w:46px !important; }
+  .table:not(:has(.felt-stage.has-ledger)) .selrow .card{ --w:46px !important; }
+  .table:not(:has(.felt-stage.has-ledger)) .pod .card.back{ --w:30px !important; }
+  .table:not(:has(.felt-stage.has-ledger)) .pod .ministack{ min-height:38px; }
+
   /* Spacer collapses — selfwrap provides its own room */
   .selfwrap-spacer{ height:0 !important; }
   html.is-standalone .table .selfwrap-spacer{ height:0 !important; }
