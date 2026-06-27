@@ -1577,7 +1577,7 @@ function renderHLJ(v) {
   // clears the top pod, and raise the bottom reference accordingly.
   const lsMobile = window.matchMedia("(max-height:500px) and (orientation:landscape)").matches;
   const bidBounds = lsMobile
-    ? { x1: 26, x2: 74, y1: 40, y2: 78, topY: 27 }
+    ? { x1: 20, x2: 80, y1: 40, y2: 78, topY: 27 }
     : { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 };
   // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
@@ -1593,7 +1593,7 @@ function renderHLJ(v) {
     const { x, y } = wallPerimPos(off, n, bidBounds);
     // Match the side-pod arc: higher side chips sit further toward center.
     const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
-    const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.30 : 0;
+    const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.15 : 0;
     const ax = x < 50 ? x + arcShift : x - arcShift;
     return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
   };
@@ -1610,7 +1610,7 @@ function renderHLJ(v) {
           : "top:76%;left:50%;transform:translate(-50%,-50%)";
         const { x, y } = wallPerimPos(off, n, bidBounds);
         const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
-        const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.30 : 0;
+        const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.15 : 0;
         const ax = x < 50 ? x + arcShift : x - arcShift;
         return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
       };
