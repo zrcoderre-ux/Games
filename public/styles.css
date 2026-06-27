@@ -2674,11 +2674,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   /* Central watermark: shrink to fit the short landscape felt, centered */
   .trump-watermark{
-    font-size:min(58dvh,42dvw) !important;
+    font-size:min(116dvh,84dvw) !important;
     margin-top:10% !important; transform:none !important;
   }
   .trump-watermark.joker-placeholder{
-    width:min(58dvh,42dvw) !important; height:auto !important;
+    width:min(116dvh,84dvw) !important; height:auto !important;
     top:60% !important; left:50% !important; margin:0 !important;
     transform:translate(-50%,-50%) !important;
   }
@@ -2732,7 +2732,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* Bid chip bar: just above the peeking hand */
   .hlj-felt-bid{
     position:fixed !important;
-    bottom:60px !important;
+    bottom:80px !important;
     left:50% !important; transform:translateX(-50%) !important;
   }
 
