@@ -663,7 +663,7 @@ function tableShell(v, parts) {
           const insetSide = isLandscape && (side === "pos-left" || side === "pos-right");
           // Arc the side pods: higher pods sit further toward center, the lowest
           // stays flush. shift grows with height above the bottom reference (~72%).
-          const arcShift = Math.max(0, 72 - y) * 0.16;
+          const arcShift = Math.max(0, 72 - y) * 0.24;
           const ax = side === "pos-left" ? x + arcShift : x - arcShift;
           const ay = y + 4; // nudge the whole side arc down (top pod is pos-top, unaffected)
           const pos = insetSide
