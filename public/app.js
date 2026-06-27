@@ -2218,13 +2218,13 @@ function renderRummy(v) {
   // sort controls (available whenever you hold cards) \u2014 single alternating button
   const nextSort = S.rummySort === "suit" ? "rank" : "suit";
   const sortBar = v.yourHand.length
-    ? `<button class="btn ghost sm" data-action="sort-toggle">Sort ${nextSort === "suit" ? "\u2660\u2665 suit" : "1\u20139 rank"}</button>`
+    ? `<button class="btn ghost sm" data-action="sort-toggle">Sort<span class="btn-extra"> ${nextSort === "suit" ? "\u2660\u2665 suit" : "1\u20139 rank"}</span></button>`
     : "";
 
   // actions
   const acts = [];
   if (v.yourTurn && v.turnPhase === "draw") {
-    if (canStock) acts.push(`<button class="btn" data-action="draw-stock">Draw stock</button>`);
+    if (canStock) acts.push(`<button class="btn" data-action="draw-stock">Draw<span class="btn-extra"> stock</span></button>`);
     acts.push(sortBar);
     acts.push(`<span class="hint">Draw from stock, or tap the discard pile to pick up cards.</span>`);
   } else if (inPlay) {

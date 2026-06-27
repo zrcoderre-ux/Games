@@ -2697,6 +2697,20 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .ls-actions{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
   /* No room for the guidance hint text in landscape — hide it */
   .ls-actions .hint{ display:none !important; }
+  /* Shorten button labels ("Draw stock"→"Draw", "Sort 1–9 rank"→"Sort") */
+  .btn-extra{ display:none !important; }
+
+  /* Rummy landscape: the game buttons grow to fill the bar and get thicker */
+  .table:has(.felt-stage.has-ledger.ledger-landscape) .appbar-left{
+    flex:1 1 auto !important; margin-left:8px; align-items:stretch;
+  }
+  .table:has(.felt-stage.has-ledger.ledger-landscape) .ls-actions{
+    flex:1; align-items:stretch; gap:8px;
+  }
+  .table:has(.felt-stage.has-ledger.ledger-landscape) .ls-actions .btn,
+  .table:has(.felt-stage.has-ledger.ledger-landscape) .ls-actions button{
+    flex:1; font-size:15px !important; padding:14px 10px !important;
+  }
   /* Shrink action buttons to fit */
   .ls-actions .btn,
   .ls-actions button{ font-size:11px !important; padding:3px 7px !important; }
