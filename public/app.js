@@ -1605,9 +1605,14 @@ function renderHLJ(v) {
         const n = bh.seats.length;
         if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
         const off = (seat - bh.you + n) % n;
-        if (off === 0) return "top:76%;left:50%;transform:translate(-50%,-50%)";
+        if (off === 0) return lsMobile
+          ? "position:fixed;bottom:100px;top:auto;left:50%;transform:translateX(-50%);z-index:6"
+          : "top:76%;left:50%;transform:translate(-50%,-50%)";
         const { x, y } = wallPerimPos(off, n, bidBounds);
-        return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
+        const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
+        const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.30 : 0;
+        const ax = x < 50 ? x + arcShift : x - arcShift;
+        return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
       };
       const highBidSeat = bh.highBid?.seat ?? null;
       const histToks = (bh.bidHistory ?? []).filter(b => !b.implicit).map(b => {
