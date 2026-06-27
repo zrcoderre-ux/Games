@@ -665,7 +665,9 @@ function tableShell(v, parts) {
           // stays flush. shift grows with height above the bottom reference (~72%).
           const arcShift = Math.max(0, 72 - y) * 0.24;
           const ax = side === "pos-left" ? x + arcShift : x - arcShift;
-          const ay = y + 4; // nudge the whole side arc down (top pod is pos-top, unaffected)
+          // Raise higher side pods (lowest row stays put) so the top side pods
+          // rise toward the top pod — top edge ~halfway up the top pod.
+          const ay = y - Math.max(0, 72 - y) * 0.3;
           const pos = insetSide
             ? `top:${ay}%;left:${ax}%;transform:translate(-50%,-50%)`
             : side === "pos-left"
