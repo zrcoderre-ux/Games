@@ -2708,6 +2708,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .table:has(.felt-stage.has-ledger.ledger-landscape) .ls-actions button{
     font-size:15px !important; padding:14px 16px !important;
   }
+  /* Match the left-side controls (Log, Leave, Share) to the game buttons */
+  .table:has(.felt-stage.has-ledger.ledger-landscape) .appbar > .btn{
+    font-size:15px !important; padding:14px 16px !important;
+  }
   /* Shrink action buttons to fit */
   .ls-actions .btn,
   .ls-actions button{ font-size:11px !important; padding:3px 7px !important; }
