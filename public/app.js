@@ -1587,7 +1587,7 @@ function renderHLJ(v) {
     // User's own seat: raised so it clears the confidence chip row.
     // In mobile landscape, align it with the fixed bid chip bar (bottom:80px).
     if (off === 0) return lsMobile
-      ? "position:fixed;bottom:100px;top:auto;left:50%;transform:translateX(-50%);z-index:6"
+      ? "position:fixed;bottom:52px;top:auto;left:50%;transform:translateX(-50%);z-index:6"
       : "top:76%;left:50%;transform:translate(-50%,-50%)";
     // Other seats: tighter bounds so chips appear inward from card backs
     const { x, y } = wallPerimPos(off, n, bidBounds);
@@ -1606,7 +1606,7 @@ function renderHLJ(v) {
         if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
         const off = (seat - bh.you + n) % n;
         if (off === 0) return lsMobile
-          ? "position:fixed;bottom:100px;top:auto;left:50%;transform:translateX(-50%);z-index:6"
+          ? "position:fixed;bottom:52px;top:auto;left:50%;transform:translateX(-50%);z-index:6"
           : "top:76%;left:50%;transform:translate(-50%,-50%)";
         const { x, y } = wallPerimPos(off, n, bidBounds);
         const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
