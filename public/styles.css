@@ -2707,6 +2707,13 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .ls-actions{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
   /* No room for the guidance hint text in landscape — hide it */
   .ls-actions .hint{ display:none !important; }
+
+  /* Lobby landscape: spread the Invite / Tutorial / Deal buttons across the bar
+     to fill the empty middle space instead of bunching them on the right. */
+  .appbar-left:has(.lby-deal-btn),
+  .appbar-left:has(.lby-share-btn){ flex:1 1 auto !important; margin-left:8px; }
+  .appbar-left:has(.lby-deal-btn) .ls-actions,
+  .appbar-left:has(.lby-share-btn) .ls-actions{ flex:1; justify-content:space-evenly; gap:8px; }
   /* Shorten button labels ("Draw stock"→"Draw", "Sort 1–9 rank"→"Sort") */
   .btn-extra{ display:none !important; }
 
