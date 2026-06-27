@@ -1559,7 +1559,7 @@ function renderHLJ(v) {
   // clears the top pod, and raise the bottom reference accordingly.
   const lsMobile = window.matchMedia("(max-height:500px) and (orientation:landscape)").matches;
   const bidBounds = lsMobile
-    ? { x1: 26, x2: 74, y1: 40, y2: 78, topY: 22 }
+    ? { x1: 26, x2: 74, y1: 40, y2: 78, topY: 27 }
     : { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 };
   // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
