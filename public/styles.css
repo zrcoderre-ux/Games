@@ -2686,11 +2686,12 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     top:78% !important; left:50% !important; margin:0 !important;
     transform:translate(-50%,-50%) !important;
   }
-  /* Hat watermark: centered, shrunk to fit */
+  /* Lobby hat watermark: match the table's joker placeholder (size + position) */
   .lby-felt-watermark{
-    top:50% !important; left:50% !important;
+    top:78% !important; left:50% !important;
     transform:translate(-50%,-50%) !important;
-    width:min(44dvh,36dvw) !important;
+    width:min(116dvh,84dvw) !important;
+    background-color:rgba(45,122,74,.7) !important;
   }
   /* Corner suits point up (no rotation) */
   .felt-corner-suit{ transform:none !important; }
