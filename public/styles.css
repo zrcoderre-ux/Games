@@ -2741,6 +2741,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      short landscape felt isn't dominated by oversized card backs. */
   .table:not(:has(.felt-stage.has-ledger)) .pod .card.back{ --w:30px !important; }
   .table:not(:has(.felt-stage.has-ledger)) .pod .ministack{ min-height:38px; }
+  /* Shrink the played (trick) cards too */
+  .table:not(:has(.felt-stage.has-ledger)) .trick .play .card{ --w:52px !important; }
 
   /* Compass games: full-size hand, pushed down to the bottom of the screen. */
   .table:not(:has(.felt-stage.has-ledger)) .selfwrap{ bottom:-48px !important; }
