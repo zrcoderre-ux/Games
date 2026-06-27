@@ -1555,6 +1555,12 @@ function renderHLJ(v) {
   const curHighAmt = v.highBid ? v.highBid.amount : null;
   const bidHistory = Array.isArray(v.bidHistory) ? v.bidHistory : [];
 
+  // In mobile landscape the felt is short — drop the top bid token lower so it
+  // clears the top pod, and raise the bottom reference accordingly.
+  const lsMobile = window.matchMedia("(max-height:500px) and (orientation:landscape)").matches;
+  const bidBounds = lsMobile
+    ? { x1: 26, x2: 74, y1: 40, y2: 78, topY: 34 }
+    : { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 };
   // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
@@ -1563,7 +1569,7 @@ function renderHLJ(v) {
     // User's own seat: raised so it clears the confidence chip row
     if (off === 0) return "top:76%;left:50%;transform:translate(-50%,-50%)";
     // Other seats: tighter bounds so chips appear inward from card backs
-    const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 });
+    const { x, y } = wallPerimPos(off, n, bidBounds);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const bidTokens = (() => {
@@ -1575,7 +1581,7 @@ function renderHLJ(v) {
         if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
         const off = (seat - bh.you + n) % n;
         if (off === 0) return "top:76%;left:50%;transform:translate(-50%,-50%)";
-        const { x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 });
+        const { x, y } = wallPerimPos(off, n, bidBounds);
         return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
       };
       const highBidSeat = bh.highBid?.seat ?? null;
