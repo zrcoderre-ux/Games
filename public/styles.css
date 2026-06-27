@@ -3007,9 +3007,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .felt-stage.has-ledger .center.at-bottom .piles{
     --w:var(--pile-card); --mini-w:var(--pile-card);
     display:flex; gap:28px; align-items:flex-start;
-    background:linear-gradient(180deg,rgba(6,9,16,0),rgba(6,9,16,.5));
-    border-top:1px solid rgba(212,184,90,.2);
-    padding:8px 22px 6px; border-radius:12px;
+    padding:8px 22px 6px;
   }
   .felt-stage.has-ledger .center.at-bottom .card.mini{ --w:var(--pile-card); }
   /* size the pile containers to the small cards so the stacks line up */
