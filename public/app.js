@@ -663,11 +663,7 @@ function tableShell(v, parts) {
           const insetSide = isLandscape && (side === "pos-left" || side === "pos-right");
           // Arc the side pods: higher pods sit further toward center, the lowest
           // stays flush. shift grows with height above the bottom reference (~72%).
-          // For a full 8-player table (3 per wall) the indent is symmetric about
-          // the wall's vertical center, so the bottom row matches the top row.
-          const arcShift = n >= 8
-            ? Math.abs(y - 47) * 0.48
-            : Math.max(0, 72 - y) * 0.24;
+          const arcShift = Math.max(0, 72 - y) * 0.24;
           const ax = side === "pos-left" ? x + arcShift : x - arcShift;
           // Raise higher side pods (lowest row stays put) so the top side pods
           // rise toward the top pod — top edge ~halfway up the top pod.
@@ -1273,9 +1269,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
       if (off === 0) return "top:74%;left:50%;transform:translate(-50%,-50%)";
       ({ x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 40, y2: 78, topY: 24 }));
       const isSide = x < 27 || x > 73;
-      const arcShift = isSide
-        ? (n >= 8 ? Math.abs(y - 59) * 0.5 : Math.max(0, 78 - y) * 0.16)
-        : 0;
+      const arcShift = isSide ? Math.max(0, 78 - y) * 0.16 : 0;
       x = x < 50 ? x + arcShift : x - arcShift;
       const ay = isSide ? y + 6 : y;
       return `top:${ay}%;left:${x}%;transform:translate(-50%,-50%)`;
@@ -1599,9 +1593,7 @@ function renderHLJ(v) {
     const { x, y } = wallPerimPos(off, n, bidBounds);
     // Match the side-pod arc: higher side chips sit further toward center.
     const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
-    const arcShift = lsMobile && isSide
-      ? (n >= 8 ? Math.abs(y - 59) * 0.5 : Math.max(0, 78 - y) * 0.30)
-      : 0;
+    const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.30 : 0;
     const ax = x < 50 ? x + arcShift : x - arcShift;
     return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
   };
@@ -1618,9 +1610,7 @@ function renderHLJ(v) {
           : "top:76%;left:50%;transform:translate(-50%,-50%)";
         const { x, y } = wallPerimPos(off, n, bidBounds);
         const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
-        const arcShift = lsMobile && isSide
-          ? (n >= 8 ? Math.abs(y - 59) * 0.5 : Math.max(0, 78 - y) * 0.30)
-          : 0;
+        const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.30 : 0;
         const ax = x < 50 ? x + arcShift : x - arcShift;
         return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
       };
