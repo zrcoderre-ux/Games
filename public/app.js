@@ -1267,7 +1267,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
       // Mirror the arced pod layout, pulled inward so the played cards sit
       // just inside each player's pod.
       // Own played card: bottom aligns with the user's bid chip (bottom:60px)
-      if (off === 0) return "position:fixed;bottom:60px;top:auto;left:50%;transform:translateX(-50%);z-index:25";
+      if (off === 0) return "position:fixed;bottom:70px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none";
       ({ x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 40, y2: 78, topY: 24 }));
       const isSide = x < 27 || x > 73;
       const arcShift = isSide ? Math.max(0, 78 - y) * 0.16 : 0;
@@ -1588,7 +1588,7 @@ function renderHLJ(v) {
     // User's own seat: raised so it clears the confidence chip row.
     // In mobile landscape, align it with the fixed bid chip bar (bottom:80px).
     if (off === 0) return lsMobile
-      ? "position:fixed;bottom:60px;top:auto;left:50%;transform:translateX(-50%);z-index:25"
+      ? "position:fixed;bottom:70px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none"
       : "top:76%;left:50%;transform:translate(-50%,-50%)";
     // Other seats: tighter bounds so chips appear inward from card backs
     const { x, y } = wallPerimPos(off, n, bidBounds);
@@ -1607,7 +1607,7 @@ function renderHLJ(v) {
         if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
         const off = (seat - bh.you + n) % n;
         if (off === 0) return lsMobile
-          ? "position:fixed;bottom:60px;top:auto;left:50%;transform:translateX(-50%);z-index:25"
+          ? "position:fixed;bottom:70px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none"
           : "top:76%;left:50%;transform:translate(-50%,-50%)";
         const { x, y } = wallPerimPos(off, n, bidBounds);
         const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
