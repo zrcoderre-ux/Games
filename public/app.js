@@ -650,37 +650,24 @@ function tableShell(v, parts) {
       const off = you == null
         ? podItems.findIndex(p => p.seat === seat) + 1
         : (seat - you + n) % n;
-      let x, y, side;
-      if (isLandscape) {
-        // Distribute all opponents evenly across left/right walls.
-        const opponents = n - 1;
-        const oppIdx = off - 1; // 0-based among opponents
-        const leftCount = Math.ceil(opponents / 2);
-        const rightCount = opponents - leftCount;
-        if (oppIdx < leftCount) {
-          side = "left"; x = 0;
-          const fy = leftCount === 1 ? 0.5 : 1 - oppIdx / (leftCount - 1);
-          y = 10 + 80 * fy;
-        } else {
-          side = "right"; x = 100;
-          const rIdx = oppIdx - leftCount;
-          const fy = rightCount === 1 ? 0.5 : rIdx / (rightCount - 1);
-          y = 10 + 80 * fy;
-        }
-      } else {
-        ({ x, y, side } = wallPerimPos(off, n, podBounds));
-      }
+      // Both orientations use the same compass perimeter so landscape mirrors
+      // portrait player positioning.
+      const { x, y, side } = wallPerimPos(off, n, podBounds);
       return { html, x, y, side: `pos-${side}` };
     });
     const slots = infos.length
       ? infos.map(({ html, x, y, side }) => {
-          // Side pods anchor flush to the felt edge so the card backs always sit
-          // against the wall; only the vertical position comes from the perimeter.
-          const pos = side === "pos-left"
-            ? `top:${y}%;left:0;transform:translateY(-50%)`
-            : side === "pos-right"
-              ? `top:${y}%;right:0;transform:translateY(-50%)`
-              : `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
+          // Portrait: side pods anchor flush to the felt edge (narrow felt).
+          // Landscape: bring side pods in off the wall so they read like the
+          // portrait compass instead of hugging the far edges.
+          const insetSide = isLandscape && (side === "pos-left" || side === "pos-right");
+          const pos = insetSide
+            ? `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`
+            : side === "pos-left"
+              ? `top:${y}%;left:0;transform:translateY(-50%)`
+              : side === "pos-right"
+                ? `top:${y}%;right:0;transform:translateY(-50%)`
+                : `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
           return `<div class="pod-slot ${side}" style="position:absolute;${pos};z-index:2">${html}</div>`;
         }).join("")
       : (parts.feltLedger ? "" : `<div class="pod-slot" style="position:absolute;top:14%;left:50%;transform:translate(-50%,-50%);z-index:2"><div class="callout">Waiting for players to arrive…</div></div>`);
