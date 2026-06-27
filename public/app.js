@@ -1256,10 +1256,22 @@ function wallPerimPos(off, n, b) {
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
 function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, collecting = false } = {}) {
+  const lsMobile = window.matchMedia("(max-height:500px) and (orientation:landscape)").matches;
   const circleStyle = (seat) => {
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
     let x, y;
+    if (lsMobile) {
+      // Mirror the arced pod layout, pulled inward so the played cards sit
+      // just inside each player's pod.
+      if (off === 0) return "top:74%;left:50%;transform:translate(-50%,-50%)";
+      ({ x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 40, y2: 78, topY: 24 }));
+      const isSide = x < 27 || x > 73;
+      const arcShift = isSide ? Math.max(0, 78 - y) * 0.16 : 0;
+      x = x < 50 ? x + arcShift : x - arcShift;
+      const ay = isSide ? y + 6 : y;
+      return `top:${ay}%;left:${x}%;transform:translate(-50%,-50%)`;
+    }
     if (mini) {
       ({ x, y } = wallPerimPos(off, n, { x1: 18, x2: 82, y1: 18, y2: 88 }));
     } else {
