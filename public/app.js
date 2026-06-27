@@ -1566,8 +1566,11 @@ function renderHLJ(v) {
     const n = v.seats.length;
     if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
     const off = (seat - you + n) % n;
-    // User's own seat: raised so it clears the confidence chip row
-    if (off === 0) return "top:76%;left:50%;transform:translate(-50%,-50%)";
+    // User's own seat: raised so it clears the confidence chip row.
+    // In mobile landscape, align it with the fixed bid chip bar (bottom:80px).
+    if (off === 0) return lsMobile
+      ? "position:fixed;bottom:80px;top:auto;left:50%;transform:translateX(-50%);z-index:6"
+      : "top:76%;left:50%;transform:translate(-50%,-50%)";
     // Other seats: tighter bounds so chips appear inward from card backs
     const { x, y } = wallPerimPos(off, n, bidBounds);
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
