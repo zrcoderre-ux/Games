@@ -2717,12 +2717,21 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     margin-right:max(48px,7vw);
   }
 
-  /* Lobby landscape: spread the Invite / Tutorial / Deal buttons across the bar
-     to fill the empty middle space instead of bunching them on the right. */
+  /* Lobby landscape: size the Invite / Tutorial / Deal buttons to their text
+     (no stretching) and center the whole bar — room tag through Deal — so the
+     row sits under the felt instead of overflowing to the screen edges. */
+  .appbar:has(.lby-deal-btn),
+  .appbar:has(.lby-share-btn){ justify-content:center; }
   .appbar-left:has(.lby-deal-btn),
-  .appbar-left:has(.lby-share-btn){ flex:1 1 auto !important; margin-left:8px; }
+  .appbar-left:has(.lby-share-btn){ flex:0 0 auto !important; margin-left:0; }
   .appbar-left:has(.lby-deal-btn) .ls-actions,
-  .appbar-left:has(.lby-share-btn) .ls-actions{ flex:1; justify-content:space-evenly; gap:8px; }
+  .appbar-left:has(.lby-share-btn) .ls-actions{ flex:0 0 auto; justify-content:center; gap:6px; }
+  .appbar-left:has(.lby-deal-btn) .lby-action-row,
+  .appbar-left:has(.lby-share-btn) .lby-action-row{ width:auto; gap:6px; }
+  /* Shrink the lobby buttons to just their words: no flex-grow, compact height. */
+  .ls-actions .lby-share-btn,
+  .ls-actions .lby-tutorial-btn,
+  .ls-actions .lby-deal-btn{ flex:0 0 auto !important; min-height:0 !important; }
   /* Shorten button labels ("Draw stock"→"Draw", "Sort 1–9 rank"→"Sort") */
   .btn-extra{ display:none !important; }
 
