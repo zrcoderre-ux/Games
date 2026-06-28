@@ -2846,8 +2846,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      team-A score bottom-left, team-B score bottom-right. The table keeps its full
      width; the controls simply overlap the felt's corners where they need to. */
   .table:has(.hlj-scores){
-    --hlj-edge-l: max(4px, env(safe-area-inset-left));
-    --hlj-edge-r: max(4px, env(safe-area-inset-right));
+    --hlj-edge-l: max(20px, env(safe-area-inset-left));
+    --hlj-edge-r: max(20px, env(safe-area-inset-right));
+    --hlj-edge-t: max(12px, env(safe-area-inset-top));
+    --hlj-edge-b: max(12px, env(safe-area-inset-bottom));
   }
   .appbar:has(.hlj-scores) [data-action="leave"],
   .appbar:has(.hlj-scores) [data-action="toggle-log"]{
@@ -2855,10 +2857,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     min-height:0 !important; padding:3px 6px !important; font-size:10px !important;
   }
   .appbar:has(.hlj-scores) [data-action="leave"]{
-    top:5px; left:var(--hlj-edge-l); right:auto; bottom:auto;
+    top:var(--hlj-edge-t); left:var(--hlj-edge-l); right:auto; bottom:auto;
   }
   .appbar:has(.hlj-scores) [data-action="toggle-log"]{
-    top:5px; right:var(--hlj-edge-r); left:auto; bottom:auto;
+    top:var(--hlj-edge-t); right:var(--hlj-edge-r); left:auto; bottom:auto;
   }
   /* Dissolve the pill wrapper so each pill positions to its own corner. */
   .appbar:has(.hlj-scores) .hlj-scores{ display:contents; }
@@ -2871,11 +2873,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   }
   .appbar:has(.hlj-scores) .hlj-score-pill.tA{
     position:fixed !important; z-index:60; margin:0 !important;
-    bottom:5px; left:var(--hlj-edge-l); top:auto; right:auto;
+    bottom:var(--hlj-edge-b); left:var(--hlj-edge-l); top:auto; right:auto;
   }
   .appbar:has(.hlj-scores) .hlj-score-pill.tB{
     position:fixed !important; z-index:60; margin:0 !important;
-    bottom:5px; right:var(--hlj-edge-r); top:auto; left:auto;
+    bottom:var(--hlj-edge-b); right:var(--hlj-edge-r); top:auto; left:auto;
   }
 
   /* Lobby landscape: flatten the room tag, controls and action buttons into a
