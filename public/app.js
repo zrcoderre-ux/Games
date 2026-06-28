@@ -1293,6 +1293,9 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
       // card tucks just under the raised top pod (.pod-slot.pos-top in the
       // landscape CSS).
       ({ x, y } = ovalPos(off, n, { cx: 50, cy: 55.5, rx: 26, ry: 22.5 }));
+      // 8-player: drop the bottom side row (off 1 = bottom-left, off n-1 =
+      // bottom-right) a bit lower so those cards sit nearer their players.
+      if (n === 8 && (off === 1 || off === n - 1)) y += 6;
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     }
     if (mini) {
