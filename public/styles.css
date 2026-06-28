@@ -2814,6 +2814,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* Shrink the played (trick) cards too */
   .table:not(:has(.felt-stage.has-ledger)) .trick .play .card{ --w:52px !important; }
 
+  /* Raise the top-centre pod as close to the felt's top edge as possible (the
+     trick oval tucks its top card just beneath it). */
+  .pod-slot.pos-top{ top:2px !important; }
+
   /* Compass games: full-size hand, pushed down to the bottom of the screen. */
   .table:not(:has(.felt-stage.has-ledger)) .selfwrap{ bottom:-48px !important; }
   #app:not(:has(.lby-outer)) .table:not(:has(.felt-stage.has-ledger)) .selfwrap{ bottom:-48px !important; }
