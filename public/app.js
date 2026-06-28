@@ -1275,9 +1275,11 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     let x, y;
     if (lsMobile) {
       // Orderly oval ring — same approach as portrait (ovalPos), widened to suit
-      // the short, wide landscape felt. ovalPos(0,…) lands the user's own card at
-      // bottom-centre, so no special case is needed.
-      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 46, rx: 23, ry: 26 }));
+      // the short, wide landscape felt. The centre sits low (cy 55.5) so the top
+      // card tucks just under the raised top pod (see .pod-slot.pos-top in the
+      // landscape CSS) and the user's own card (ovalPos(0,…) = bottom-centre)
+      // ends up a symmetric distance from the felt's bottom edge.
+      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 55.5, rx: 26, ry: 24.2 }));
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     }
     if (mini) {
