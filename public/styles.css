@@ -2843,16 +2843,19 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   /* HLJ landscape: spread the controls into the four screen corners instead of
      a single bottom button bar — Leave top-left, Log top-right, team-A score
-     bottom-left, team-B score bottom-right. */
-     The felt fills the screen leaving only a ~7vw side gutter, so hug the very
-     edges (a small 4px inset, NOT the safe-area inset which would push them
-     inward, across the felt edge). */
-  .appbar:has(.hlj-scores) [data-action="leave"]{
+     bottom-left, team-B score bottom-right. The felt fills the screen leaving
+     only a ~7vw side gutter, so hug the very edges (a small 4px inset, NOT the
+     safe-area inset which would push them inward across the felt edge) and keep
+     the Log / Leave buttons compact so they fit the corner gutter. */
+  .appbar:has(.hlj-scores) [data-action="leave"],
+  .appbar:has(.hlj-scores) [data-action="toggle-log"]{
     position:fixed !important; z-index:60; margin:0 !important;
+    min-height:0 !important; padding:6px 11px !important; font-size:12.5px !important;
+  }
+  .appbar:has(.hlj-scores) [data-action="leave"]{
     top:4px; left:4px; right:auto; bottom:auto;
   }
   .appbar:has(.hlj-scores) [data-action="toggle-log"]{
-    position:fixed !important; z-index:60; margin:0 !important;
     top:4px; right:4px; left:auto; bottom:auto;
   }
   /* Dissolve the pill wrapper so each pill positions to its own corner. */
