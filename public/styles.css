@@ -2843,17 +2843,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   /* HLJ landscape: pin each corner control's OUTER edge to the screen edge (its
      safe-area boundary, so a notch can't clip it) — Leave top-left, Log top-right,
-     team-A score bottom-left, team-B score bottom-right — then expand the felt so
-     its side margin only clears the controls by a small gap. No wasted gutter:
-     the table fills out to just shy of the buttons. */
+     team-A score bottom-left, team-B score bottom-right. The table keeps its full
+     width; the controls simply overlap the felt's corners where they need to. */
   .table:has(.hlj-scores){
     --hlj-edge-l: max(4px, env(safe-area-inset-left));
     --hlj-edge-r: max(4px, env(safe-area-inset-right));
-  }
-  .table:has(.hlj-scores) .felt-frame,
-  html.is-standalone .table:has(.hlj-scores) .felt-frame{
-    margin-left:calc(var(--hlj-edge-l) + 52px) !important;
-    margin-right:calc(var(--hlj-edge-r) + 52px) !important;
   }
   .appbar:has(.hlj-scores) [data-action="leave"],
   .appbar:has(.hlj-scores) [data-action="toggle-log"]{
