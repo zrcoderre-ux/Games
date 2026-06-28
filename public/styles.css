@@ -2818,6 +2818,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      trick oval tucks its top card just beneath it). */
   .pod-slot.pos-top{ top:2px !important; }
 
+  /* Trick result hint sits in the empty centre of the card ring (the user's own
+     card has dropped to the bottom, so the middle is clear). */
+  .trick-gate-hint{ top:52%; bottom:auto; transform:translate(-50%,-50%); }
+
   /* Compass games: full-size hand, pushed down to the bottom of the screen. */
   .table:not(:has(.felt-stage.has-ledger)) .selfwrap{ bottom:-48px !important; }
   #app:not(:has(.lby-outer)) .table:not(:has(.felt-stage.has-ledger)) .selfwrap{ bottom:-48px !important; }
