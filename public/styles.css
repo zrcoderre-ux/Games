@@ -2841,26 +2841,23 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     display:inline-flex; align-items:center; justify-content:center;
   }
 
-  /* HLJ landscape: pin each corner control's OUTER edge to the screen edge (its
-     safe-area boundary, so a notch can't clip it) — Leave top-left, Log top-right,
-     team-A score bottom-left, team-B score bottom-right. The table keeps its full
-     width; the controls simply overlap the felt's corners where they need to. */
-  .table:has(.hlj-scores){
-    --hlj-edge-l: max(20px, env(safe-area-inset-left));
-    --hlj-edge-r: max(20px, env(safe-area-inset-right));
-    --hlj-edge-t: max(12px, env(safe-area-inset-top));
-    --hlj-edge-b: max(12px, env(safe-area-inset-bottom));
-  }
+  /* HLJ landscape: attach the corner controls to the FELT's edges, not the screen
+     edges — Leave top-left, Log top-right, team-A score bottom-left, team-B score
+     bottom-right. Each control's outer edge sits just inside the wood frame
+     (felt side margin max(48px,7vw) + ~11px wood), so it lands on the felt just
+     off the wood. The felt is always on-screen, so no safe-area math is needed —
+     anchoring to the table keeps them on screen. */
+  .table:has(.hlj-scores){ --hlj-side: calc(max(48px, 7vw) + 13px); }
   .appbar:has(.hlj-scores) [data-action="leave"],
   .appbar:has(.hlj-scores) [data-action="toggle-log"]{
     position:fixed !important; z-index:60; margin:0 !important;
     min-height:0 !important; padding:3px 6px !important; font-size:10px !important;
   }
   .appbar:has(.hlj-scores) [data-action="leave"]{
-    top:var(--hlj-edge-t); left:var(--hlj-edge-l); right:auto; bottom:auto;
+    top:14px; left:var(--hlj-side); right:auto; bottom:auto;
   }
   .appbar:has(.hlj-scores) [data-action="toggle-log"]{
-    top:var(--hlj-edge-t); right:var(--hlj-edge-r); left:auto; bottom:auto;
+    top:14px; right:var(--hlj-side); left:auto; bottom:auto;
   }
   /* Dissolve the pill wrapper so each pill positions to its own corner. */
   .appbar:has(.hlj-scores) .hlj-scores{ display:contents; }
@@ -2873,11 +2870,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   }
   .appbar:has(.hlj-scores) .hlj-score-pill.tA{
     position:fixed !important; z-index:60; margin:0 !important;
-    bottom:var(--hlj-edge-b); left:var(--hlj-edge-l); top:auto; right:auto;
+    bottom:16px; left:var(--hlj-side); top:auto; right:auto;
   }
   .appbar:has(.hlj-scores) .hlj-score-pill.tB{
     position:fixed !important; z-index:60; margin:0 !important;
-    bottom:var(--hlj-edge-b); right:var(--hlj-edge-r); top:auto; left:auto;
+    bottom:16px; right:var(--hlj-side); top:auto; left:auto;
   }
 
   /* Lobby landscape: flatten the room tag, controls and action buttons into a
