@@ -2844,27 +2844,26 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* HLJ landscape: spread the controls into the four screen corners instead of
      a single bottom button bar — Leave top-left, Log top-right, team-A score
      bottom-left, team-B score bottom-right. */
+     The felt fills the screen leaving only a ~7vw side gutter, so hug the very
+     edges (a small 4px inset, NOT the safe-area inset which would push them
+     inward, across the felt edge). */
   .appbar:has(.hlj-scores) [data-action="leave"]{
     position:fixed !important; z-index:60; margin:0 !important;
-    top:max(6px,env(safe-area-inset-top)); left:max(6px,env(safe-area-inset-left));
-    right:auto; bottom:auto;
+    top:4px; left:4px; right:auto; bottom:auto;
   }
   .appbar:has(.hlj-scores) [data-action="toggle-log"]{
     position:fixed !important; z-index:60; margin:0 !important;
-    top:max(6px,env(safe-area-inset-top)); right:max(6px,env(safe-area-inset-right));
-    left:auto; bottom:auto;
+    top:4px; right:4px; left:auto; bottom:auto;
   }
   /* Dissolve the pill wrapper so each pill positions to its own corner. */
   .appbar:has(.hlj-scores) .hlj-scores{ display:contents; }
   .appbar:has(.hlj-scores) .hlj-score-pill.tA{
     position:fixed !important; z-index:60; margin:0 !important;
-    bottom:max(6px,env(safe-area-inset-bottom)); left:max(6px,env(safe-area-inset-left));
-    top:auto; right:auto;
+    bottom:4px; left:4px; top:auto; right:auto;
   }
   .appbar:has(.hlj-scores) .hlj-score-pill.tB{
     position:fixed !important; z-index:60; margin:0 !important;
-    bottom:max(6px,env(safe-area-inset-bottom)); right:max(6px,env(safe-area-inset-right));
-    top:auto; left:auto;
+    bottom:4px; right:4px; top:auto; left:auto;
   }
 
   /* Lobby landscape: flatten the room tag, controls and action buttons into a
