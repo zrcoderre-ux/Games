@@ -1274,11 +1274,14 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     const off = (seat - you + n) % n;
     let x, y;
     if (lsMobile) {
-      // Orderly oval ring — same approach as portrait (ovalPos), widened to suit
-      // the short, wide landscape felt. The centre sits low (cy 55.5) so the top
-      // card tucks just under the raised top pod (see .pod-slot.pos-top in the
-      // landscape CSS) and the user's own card (ovalPos(0,…) = bottom-centre)
-      // ends up a symmetric distance from the felt's bottom edge.
+      // The user's own played card drops to the very bottom of the felt, just
+      // above their hand (fixed; animation:none keeps dropinC's centring
+      // transform from shifting it).
+      if (off === 0) return "position:fixed;bottom:76px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none";
+      // Everyone else: an orderly oval ring (like portrait), widened for the
+      // short, wide landscape felt. The centre sits low (cy 55.5) so the top
+      // card tucks just under the raised top pod (.pod-slot.pos-top in the
+      // landscape CSS).
       ({ x, y } = ovalPos(off, n, { cx: 50, cy: 55.5, rx: 26, ry: 24.2 }));
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     }
