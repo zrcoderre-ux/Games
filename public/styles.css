@@ -2744,7 +2744,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      width and stretch tall to fill the band below the table. */
   .appbar:has(.lby-share-btn),
   .appbar:has(.lby-deal-btn){
-    justify-content:space-between !important;
+    justify-content:flex-start !important;
     align-items:stretch !important;
     gap:6px;
     padding:5px max(48px,7vw) max(5px,env(safe-area-inset-bottom)) !important;
@@ -2755,10 +2755,21 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .appbar-left:has(.lby-deal-btn) .ls-actions,
   .appbar-left:has(.lby-share-btn) .lby-action-row,
   .appbar-left:has(.lby-deal-btn) .lby-action-row{ display:contents; }
-  /* Keep the action buttons to the right of the room tag / Log / Share / Leave. */
+  /* Pack the left controls (room / settings / Leave, order 0) and the action
+     buttons (Invite / Tutorial / Deal) to the two ends; the editable player-name
+     block (ls-self, order 4, flex:1) fills the gap in the middle. */
   .appbar:has(.lby-share-btn) .lby-share-btn{ order:5; }
   .appbar:has(.lby-deal-btn) .lby-tutorial-btn{ order:6; }
   .appbar:has(.lby-deal-btn) .lby-deal-btn{ order:7; }
+  .appbar:has(.lby-share-btn) .ls-self,
+  .appbar:has(.lby-deal-btn) .ls-self{
+    display:flex !important; order:4; flex:1 1 auto; min-width:0;
+    align-items:center; justify-content:center; gap:8px;
+  }
+  .appbar:has(.lby-share-btn) .ls-self .me-pts,
+  .appbar:has(.lby-deal-btn) .ls-self .me-pts{ display:none; }
+  .appbar:has(.lby-share-btn) .ls-self .lby-name-row,
+  .appbar:has(.lby-deal-btn) .ls-self .lby-name-row{ margin:0; }
   /* Each item sized to its words horizontally, but tall enough to fill the band. */
   .appbar:has(.lby-share-btn) .btn,
   .appbar:has(.lby-deal-btn) .btn,
