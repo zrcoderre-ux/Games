@@ -2562,6 +2562,68 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   #f-name{      grid-column:3; grid-row:3; width:100%; box-sizing:border-box; margin:0; }
 }
 
+/* iPad / landscape tablet+: in-game PLAY layout. Match the mobile-landscape
+   setup — the in-hand name/score strip is gone, all the buttons sit in a row
+   below the table, and the hand sits beneath them — but KEEP the iPad-size
+   table and center the whole stack vertically (the table does NOT grow to fill
+   the screen). Portrait iPad and phone landscape are unaffected. */
+@media (min-width:768px) and (min-height:600px) and (orientation:landscape){
+  /* Center the felt + hand + buttons stack vertically in the viewport. */
+  #app:not(:has(.lby-outer)) .table,
+  html.is-standalone .table{
+    justify-content:center !important;
+  }
+  /* Keep the felt at its current size — flex:none so it does not stretch to
+     fill; the same height the iPad table uses today (100dvh minus the old
+     appbar + bottom reserve), centered horizontally. */
+  #app:not(:has(.lby-outer)) .table .felt-frame,
+  html.is-standalone .table .felt-frame,
+  .table .felt-frame{
+    flex:none !important;
+    height:calc(100dvh - 320px) !important;
+    margin:0 auto !important;
+  }
+
+  /* Hand: out of its fixed/absolute anchor and into the column flow, directly
+     under the table (order 5 — above the appbar at order 10). */
+  #app:not(:has(.lby-outer)) .table .selfwrap,
+  html.is-standalone .table .selfwrap,
+  .table .selfwrap{
+    position:static !important;
+    top:auto !important; bottom:auto !important; left:auto !important; right:auto !important;
+    width:100% !important; max-width:none !important;
+    order:5; margin:0 auto !important; padding:2px 8px 0 !important;
+  }
+  .above-self{ order:4; }
+  /* Felt no longer needs a reserved gap below it — the hand flows in-column. */
+  .table .selfwrap-spacer,
+  html.is-standalone .table .selfwrap-spacer,
+  #app:not(:has(.lby-outer)) .table .selfwrap-spacer{ height:0 !important; }
+
+  /* These live in the appbar now (mobile parity). */
+  .ls-self{ display:none !important; }
+  .selfbar{ display:none !important; }
+  .self-extra{ display:none !important; }
+  .actions{ display:none !important; }
+
+  /* ---- All buttons below the table: appbar moved to the bottom of the column,
+     compact, left controls (Log/Leave) + right group (game buttons / scores). */
+  .table .appbar{
+    order:10;
+    padding:6px max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)) !important;
+  }
+  .appbar{ flex-wrap:nowrap; gap:6px; }
+  .appbar-left{ order:10; flex:0 0 auto !important; margin-left:auto; display:flex; align-items:center; min-width:0; }
+  .ls-actions{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .ls-actions .hint{ display:none !important; }
+  /* Align the Log/Leave controls to the felt's left edge and the A/B score
+     pills / game buttons to its right edge (the felt is centered and capped at
+     --lg-table-max, so each side gap is (100dvw - cap)/2). */
+  .appbar:has(.hlj-scores){ padding-left:max(8px, calc((100dvw - var(--lg-table-max)) / 2)) !important; }
+  .appbar-left:has(.hlj-scores){ margin-right:max(0px, calc((100dvw - var(--lg-table-max)) / 2)); }
+  .table .appbar > .btn{ min-height:48px; display:inline-flex; align-items:center; justify-content:center; }
+}
+
 /* Scale-up: landscape tablet/desktop only. Portrait iPad uses the sizing above
    but keeps normal pod/card scale so it doesn't look zoomed in. Phone landscape
    (height<600px) is excluded by min-height:600px so phones are unaffected. */
