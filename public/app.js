@@ -1282,7 +1282,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
       // short, wide landscape felt. The centre sits low (cy 55.5) so the top
       // card tucks just under the raised top pod (.pod-slot.pos-top in the
       // landscape CSS).
-      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 55.5, rx: 26, ry: 24.2 }));
+      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 55.5, rx: 26, ry: 22.5 }));
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     }
     if (mini) {
