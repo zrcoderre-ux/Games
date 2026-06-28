@@ -2709,6 +2709,16 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* No room for the guidance hint text in landscape — hide it */
   .ls-actions .hint{ display:none !important; }
 
+  /* HLJ (no game buttons, just the A/B team score pills) — park the scores at
+     the left edge under the felt instead of the far right, swapping sides with
+     the room tag / Log / Leave controls (pushed right by margin-right:auto) so
+     neither cluster crowds the centered hand. */
+  .appbar-left:has(.hlj-scores){
+    order:-1 !important;
+    margin-left:0 !important;
+    margin-right:auto;
+  }
+
   /* Lobby landscape: spread the Invite / Tutorial / Deal buttons across the bar
      to fill the empty middle space instead of bunching them on the right. */
   .appbar-left:has(.lby-deal-btn),
