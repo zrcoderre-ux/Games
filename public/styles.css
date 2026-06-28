@@ -2716,6 +2716,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .appbar-left:has(.hlj-scores){
     margin-right:max(48px,7vw);
   }
+  /* ...and tuck the left controls (Log / Leave) under the felt's left edge too,
+     mirroring the score pills, by insetting the appbar's left padding to match. */
+  .appbar:has(.hlj-scores){
+    padding-left:max(48px,7vw) !important;
+  }
 
   /* Lobby landscape: flatten the room tag, controls and action buttons into a
      single flex row (display:contents dissolves the appbar-left / ls-actions /
