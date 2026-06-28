@@ -2730,8 +2730,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .appbar:has(.hlj-scores){
     padding-left:max(48px,7vw) !important;
   }
-  /* Make the play-screen Log / Leave as tall as the lobby's buttons (52px). */
-  .appbar:has(.hlj-scores) .btn{
+  /* Make the play-screen Log / Leave (+ Share / settings) as tall as the lobby's
+     buttons (52px), across all games. Only the direct appbar buttons — the
+     nested game-action buttons (.ls-actions) keep their compact size. */
+  .table .appbar > .btn{
     min-height:52px;
     display:inline-flex; align-items:center; justify-content:center;
   }
