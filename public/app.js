@@ -1296,6 +1296,9 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
       // 8-player: drop the bottom side row (off 1 = bottom-left, off n-1 =
       // bottom-right) a bit lower so those cards sit nearer their players.
       if (n === 8 && (off === 1 || off === n - 1)) y += 6;
+      // Top-pod card (player directly across, even tables): nudge up so its gap
+      // from the top pod matches the user's card-to-hand gap.
+      if (n % 2 === 0 && off === n / 2) y -= 4;
       return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     }
     if (mini) {
