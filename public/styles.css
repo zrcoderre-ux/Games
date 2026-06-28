@@ -2686,7 +2686,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
      The SUIT glyph is half the size of the joker watermark below. */
   .trump-watermark{
     font-size:min(70dvh,50dvw) !important;
-    position:absolute !important; top:50% !important; left:50% !important;
+    position:absolute !important; top:56% !important; left:50% !important;
     margin:0 !important; transform:translate(-50%,-50%) !important;
   }
   /* Joker hat: unchanged size + position (overrides the centering above) */
