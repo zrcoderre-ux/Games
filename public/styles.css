@@ -2850,7 +2850,7 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .appbar:has(.hlj-scores) [data-action="leave"],
   .appbar:has(.hlj-scores) [data-action="toggle-log"]{
     position:fixed !important; z-index:60; margin:0 !important;
-    min-height:0 !important; padding:6px 11px !important; font-size:12.5px !important;
+    min-height:0 !important; padding:4px 8px !important; font-size:11px !important;
   }
   .appbar:has(.hlj-scores) [data-action="leave"]{
     top:4px; left:4px; right:auto; bottom:auto;
@@ -2858,8 +2858,16 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .appbar:has(.hlj-scores) [data-action="toggle-log"]{
     top:4px; right:4px; left:auto; bottom:auto;
   }
-  /* Dissolve the pill wrapper so each pill positions to its own corner. */
+  /* Dissolve the pill wrapper so each pill positions to its own corner, and
+     shrink the pills so they tuck into the corner gutter too. */
   .appbar:has(.hlj-scores) .hlj-scores{ display:contents; }
+  .appbar:has(.hlj-scores) .hlj-score-pill{
+    padding:3px 7px !important; gap:3px !important; font-size:11px !important;
+  }
+  .appbar:has(.hlj-scores) .hlj-score-pill b{ font-size:13px !important; }
+  .appbar:has(.hlj-scores) .hlj-score-pill .teamcircle{
+    width:14px !important; height:14px !important; font-size:9px !important;
+  }
   .appbar:has(.hlj-scores) .hlj-score-pill.tA{
     position:fixed !important; z-index:60; margin:0 !important;
     bottom:4px; left:4px; top:auto; right:auto;
