@@ -537,8 +537,8 @@ function appbar(v, opts = {}) {
   return `<div class="appbar">
     ${opts.leftContent ? `<div class="appbar-left">${opts.leftContent}</div>` : `<div class="spacer"></div>`}
     ${S.offline ? "" : `<div class="roomtag">room <b>${esc(S.room)}</b></div>`}
-    ${opts.log ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
-    ${S.offline ? "" : `<button class="btn sm ghost" data-action="share-link">Share</button>`}
+    ${opts.log && v.phase !== "lobby" ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
+    ${!S.offline && v.phase !== "lobby" ? `<button class="btn sm ghost" data-action="share-link">Share</button>` : ""}
     ${opts.rightExtra || ""}
     <button class="btn sm ghost" data-action="leave">Leave</button>
   </div>`;
