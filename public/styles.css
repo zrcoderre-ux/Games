@@ -2792,10 +2792,10 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     position:absolute !important; top:56% !important; left:50% !important;
     margin:0 !important; transform:translate(-50%,-50%) !important;
   }
-  /* Joker hat: nudged up slightly (size unchanged; overrides the centering above).
-     The center suit glyph and the corner suits keep their own positions. */
+  /* Joker hat: shrunk + nudged up (overrides the centering above). Only the hat
+     changes — the center suit glyph and the corner suits keep their size/position. */
   .trump-watermark.joker-placeholder{
-    width:min(116dvh,84dvw) !important; height:auto !important;
+    width:min(94dvh,68dvw) !important; height:auto !important;
     top:72% !important; left:50% !important; margin:0 !important;
     transform:translate(-50%,-50%) !important;
   }
