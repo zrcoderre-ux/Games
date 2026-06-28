@@ -1485,7 +1485,11 @@ function renderHLJ(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
-            highBid: v.phase === "playing" && v.trumpRevealed && v.highBid?.seat === i && i !== v.you ? v.highBid.amount : null,
+            // Once the bid is taken (playing phase), the winner's pod shows the
+            // bid chip for the rest of the hand — replacing the dealer "D" chip
+            // when the dealer won. Skip during the brief bid-reveal freeze, when
+            // the floating chips are shown instead.
+            highBid: v.phase === "playing" && !S.hljBidHold && v.highBid?.seat === i && i !== v.you ? v.highBid.amount : null,
             signalIcon: v.phase === "bidding" && v.highBid?.seat === i && v.signals?.[i]
               ? `<img src="${SIGNAL_SRCS[v.signals[i]]}" alt="${SIGNAL_LABELS[v.signals[i]]}" class="signal-img">`
               : null,
@@ -1656,8 +1660,10 @@ function renderHLJ(v) {
       });
       return toks;
     }
-    if (v.highBid && (v.phase === "bidding" || (v.phase === "playing" && !v.trumpRevealed && v.highBid.seat !== v.you))) {
+    if (v.highBid && v.phase === "bidding") {
       // This branch is never the user's own seat, so it stays in the overlay.
+      // During play the winner's bid lives on their pod badge (see pods above),
+      // so no floating token is needed once the bid is taken.
       return tokenHTML({ type: "bid", seat: v.highBid.seat, amount: v.highBid.amount }, v.highBid.seat, bidPosStyle);
     }
     return "";
