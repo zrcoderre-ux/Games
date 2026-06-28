@@ -2524,6 +2524,44 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .hlj-felt-bid{ bottom:4%; }
 }
 
+/* Home screen on landscape tablet/desktop (iPad landscape): use the compact
+   mobile-landscape home screen — the 3-column grid with NO hat — instead of the
+   tall hat layout in the large-screen block above. Mirrors the home-screen rules
+   in the @media (max-height:500px) landscape block. Portrait iPad is unaffected
+   (it keeps the hat layout); phone landscape is excluded by min-height:600. */
+@media (min-width:768px) and (min-height:600px) and (orientation:landscape){
+  /* Hide the hat (its spacer too) — same as mobile landscape */
+  .hs-wm-wrap{ display:none; }
+  .hs-wm-spacer{ display:none; }
+
+  .hs-rail{ margin:0 auto; max-width:100%; border-radius:0; padding:5px; }
+  .hs-felt{
+    display:grid;
+    grid-template-columns:1fr 1.6fr 1fr;
+    grid-template-rows:auto auto auto auto;
+    gap:6px 18px;
+    padding:10px max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left));
+    border-radius:0; align-items:center; overflow:visible;
+  }
+  .hs-felt::before,.hs-felt::after{ border-radius:0; }
+  /* Center column: title + game picker + CTA */
+  .hs-title{    grid-column:2; grid-row:1; font-size:clamp(28px,4vw,48px); margin:0; }
+  .hs-lbl-game{ grid-column:2; grid-row:2; text-align:center; margin:0; }
+  html.is-standalone .hs-lbl-game{ margin:0; }
+  /* Reset the tall-hat fan sizing back to the base/mobile fan (override the
+     higher-specificity .hs-felt .tbl-fan rules from the large-screen block) */
+  .hs-felt .tbl-fan{ grid-column:2; grid-row:3; height:178px; margin:0; padding-top:16px; }
+  html.is-standalone .hs-felt .tbl-fan{ margin:0; }
+  .hs-felt .tbl-fan-inner{ transform:scale(1.18); }
+  .hs-cta{      grid-column:2; grid-row:4; width:100%; margin:4px 0 0; }
+  /* Left column: Room Code — centred vertically (rows 2–3) */
+  .hs-lbl-room{ grid-column:1; grid-row:2; margin:0; align-self:end; }
+  #f-room{      grid-column:1; grid-row:3; width:100%; box-sizing:border-box; margin:0; }
+  /* Right column: Your Name — centred vertically (rows 2–3) */
+  .hs-lbl-name{ grid-column:3; grid-row:2; margin:0; align-self:end; }
+  #f-name{      grid-column:3; grid-row:3; width:100%; box-sizing:border-box; margin:0; }
+}
+
 /* Scale-up: landscape tablet/desktop only. Portrait iPad uses the sizing above
    but keeps normal pod/card scale so it doesn't look zoomed in. Phone landscape
    (height<600px) is excluded by min-height:600px so phones are unaffected. */
