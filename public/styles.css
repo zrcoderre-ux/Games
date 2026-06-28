@@ -1806,6 +1806,9 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   font-family:"Fraunces",serif;font-style:italic;font-size:12.5px;
   color:var(--ink-soft);pointer-events:none;
 }
+/* Collapsed last trick: nudge the "won by …" label down a bit so it clears
+   the bottom of the fan instead of tucking up against it. */
+.lasttrick:not(.open) .lt-label{position:relative;top:8px}
 .lt-fan{position:relative;height:130px;width:300px;display:flex;align-items:flex-end;justify-content:center;overflow:visible}
 .lt-fan-card{
   position:absolute;bottom:0;
