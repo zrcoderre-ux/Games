@@ -2841,6 +2841,32 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     display:inline-flex; align-items:center; justify-content:center;
   }
 
+  /* HLJ landscape: spread the controls into the four screen corners instead of
+     a single bottom button bar — Leave top-left, Log top-right, team-A score
+     bottom-left, team-B score bottom-right. */
+  .appbar:has(.hlj-scores) [data-action="leave"]{
+    position:fixed !important; z-index:60; margin:0 !important;
+    top:max(6px,env(safe-area-inset-top)); left:max(6px,env(safe-area-inset-left));
+    right:auto; bottom:auto;
+  }
+  .appbar:has(.hlj-scores) [data-action="toggle-log"]{
+    position:fixed !important; z-index:60; margin:0 !important;
+    top:max(6px,env(safe-area-inset-top)); right:max(6px,env(safe-area-inset-right));
+    left:auto; bottom:auto;
+  }
+  /* Dissolve the pill wrapper so each pill positions to its own corner. */
+  .appbar:has(.hlj-scores) .hlj-scores{ display:contents; }
+  .appbar:has(.hlj-scores) .hlj-score-pill.tA{
+    position:fixed !important; z-index:60; margin:0 !important;
+    bottom:max(6px,env(safe-area-inset-bottom)); left:max(6px,env(safe-area-inset-left));
+    top:auto; right:auto;
+  }
+  .appbar:has(.hlj-scores) .hlj-score-pill.tB{
+    position:fixed !important; z-index:60; margin:0 !important;
+    bottom:max(6px,env(safe-area-inset-bottom)); right:max(6px,env(safe-area-inset-right));
+    top:auto; left:auto;
+  }
+
   /* Lobby landscape: flatten the room tag, controls and action buttons into a
      single flex row (display:contents dissolves the appbar-left / ls-actions /
      lby-action-row wrappers) so all of them spread edge-to-edge across the felt
