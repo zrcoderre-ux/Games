@@ -1274,16 +1274,11 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     const off = (seat - you + n) % n;
     let x, y;
     if (lsMobile) {
-      // Mirror the arced pod layout, pulled inward so the played cards sit
-      // just inside each player's pod.
-      // Own played card: bottom aligns with the user's bid chip (bottom:60px)
-      if (off === 0) return "position:fixed;bottom:70px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none";
-      ({ x, y } = wallPerimPos(off, n, { x1: 26, x2: 74, y1: 40, y2: 78, topY: 24 }));
-      const isSide = x < 27 || x > 73;
-      const arcShift = isSide ? Math.max(0, 78 - y) * 0.16 : 0;
-      x = x < 50 ? x + arcShift : x - arcShift;
-      const ay = isSide ? y + 6 : y;
-      return `top:${ay}%;left:${x}%;transform:translate(-50%,-50%)`;
+      // Orderly oval ring — same approach as portrait (ovalPos), widened to suit
+      // the short, wide landscape felt. ovalPos(0,…) lands the user's own card at
+      // bottom-centre, so no special case is needed.
+      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 46, rx: 23, ry: 26 }));
+      return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
     }
     if (mini) {
       ({ x, y } = wallPerimPos(off, n, { x1: 18, x2: 82, y1: 18, y2: 88 }));
