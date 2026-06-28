@@ -2717,21 +2717,38 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
     margin-right:max(48px,7vw);
   }
 
-  /* Lobby landscape: size the Invite / Tutorial / Deal buttons to their text
-     (no stretching) and center the whole bar — room tag through Deal — so the
-     row sits under the felt instead of overflowing to the screen edges. */
-  .appbar:has(.lby-deal-btn),
-  .appbar:has(.lby-share-btn){ justify-content:center; }
+  /* Lobby landscape: flatten the room tag, controls and action buttons into a
+     single flex row (display:contents dissolves the appbar-left / ls-actions /
+     lby-action-row wrappers) so all of them spread edge-to-edge across the felt
+     width and stretch tall to fill the band below the table. */
+  .appbar:has(.lby-share-btn),
+  .appbar:has(.lby-deal-btn){
+    justify-content:space-between !important;
+    align-items:stretch !important;
+    gap:6px;
+    padding:5px max(48px,7vw) max(5px,env(safe-area-inset-bottom)) !important;
+  }
+  .appbar-left:has(.lby-share-btn),
   .appbar-left:has(.lby-deal-btn),
-  .appbar-left:has(.lby-share-btn){ flex:0 0 auto !important; margin-left:0; }
+  .appbar-left:has(.lby-share-btn) .ls-actions,
   .appbar-left:has(.lby-deal-btn) .ls-actions,
-  .appbar-left:has(.lby-share-btn) .ls-actions{ flex:0 0 auto; justify-content:center; gap:6px; }
-  .appbar-left:has(.lby-deal-btn) .lby-action-row,
-  .appbar-left:has(.lby-share-btn) .lby-action-row{ width:auto; gap:6px; }
-  /* Shrink the lobby buttons to just their words: no flex-grow, compact height. */
-  .ls-actions .lby-share-btn,
-  .ls-actions .lby-tutorial-btn,
-  .ls-actions .lby-deal-btn{ flex:0 0 auto !important; min-height:0 !important; }
+  .appbar-left:has(.lby-share-btn) .lby-action-row,
+  .appbar-left:has(.lby-deal-btn) .lby-action-row{ display:contents; }
+  /* Keep the action buttons to the right of the room tag / Log / Share / Leave. */
+  .appbar:has(.lby-share-btn) .lby-share-btn{ order:5; }
+  .appbar:has(.lby-deal-btn) .lby-tutorial-btn{ order:6; }
+  .appbar:has(.lby-deal-btn) .lby-deal-btn{ order:7; }
+  /* Each item sized to its words horizontally, but tall enough to fill the band. */
+  .appbar:has(.lby-share-btn) .btn,
+  .appbar:has(.lby-deal-btn) .btn,
+  .appbar:has(.lby-share-btn) .roomtag,
+  .appbar:has(.lby-deal-btn) .roomtag{
+    flex:0 0 auto !important;
+    min-height:52px !important;
+    padding:0 12px !important;
+    font-size:14px !important;
+    display:inline-flex; align-items:center; justify-content:center;
+  }
   /* Shorten button labels ("Draw stock"→"Draw", "Sort 1–9 rank"→"Sort") */
   .btn-extra{ display:none !important; }
 
