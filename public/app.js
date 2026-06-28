@@ -896,6 +896,16 @@ function positionHatWatermark() {
 }
 window.addEventListener("resize", () => positionHatWatermark());
 window.matchMedia("(orientation:landscape)").addEventListener("change", () => render());
+// iOS standalone web apps can fire a transient portrait orientation/resize while
+// the screen locks; if the matching landscape event is missed on unlock, the
+// JS-baked layout can get stuck in portrait. Re-render whenever the app returns
+// to the foreground (immediately and again after the viewport settles) so the
+// layout follows the device's real orientation rather than a stale snapshot.
+const rerenderForViewport = () => { try { render(); } catch {} };
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { rerenderForViewport(); setTimeout(rerenderForViewport, 300); }
+});
+window.addEventListener("pageshow", rerenderForViewport);
 // Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
 // scores=null → lobby (ghost rings). scores=[a,b] → gameplay (filled numbers).
 // highBid={seat,amount} → shows winning bid in that team's BID cell.

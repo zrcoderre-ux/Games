@@ -5,7 +5,7 @@
    - Static assets are cached on install; cache is updated on network-first hits
 */
 
-const CACHE = "bonhomme-v1";
+const CACHE = "bonhomme-v2";
 
 const PRECACHE = [
   "/",
