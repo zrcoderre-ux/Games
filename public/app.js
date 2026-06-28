@@ -663,7 +663,17 @@ function tableShell(v, parts) {
           const insetSide = isLandscape && (side === "pos-left" || side === "pos-right");
           // Arc the side pods: higher pods sit further toward center, the lowest
           // stays flush. shift grows with height above the bottom reference (~72%).
-          const arcShift = Math.max(0, 72 - y) * 0.24;
+          let arcShift = Math.max(0, 72 - y) * 0.24;
+          // HLJ 8-player landscape: swap the side pods' horizontal distances from
+          // center. Top & bottom side pods move out to the middle pod's distance;
+          // the middle pod moves out to the bottom pod's (flush) distance. Vertical
+          // rows are unchanged, and the top-centre pod (side "top") is untouched.
+          if (S.party === "high-low-jack" && n === 8 && (side === "pos-left" || side === "pos-right")) {
+            const midShift = Math.max(0, 72 - 55) * 0.24; // original middle-row shift
+            const botShift = Math.max(0, 72 - 82) * 0.24; // original bottom-row shift (0)
+            // y rows for n=8 side walls are ~{28 top, 55 middle, 82 bottom}.
+            arcShift = y >= 41.5 && y < 68.5 ? botShift : midShift;
+          }
           const ax = side === "pos-left" ? x + arcShift : x - arcShift;
           // Raise higher side pods (lowest row stays put) so the top side pods
           // rise toward the top pod — top edge ~halfway up the top pod.
