@@ -1599,6 +1599,19 @@ function renderHLJ(v) {
     const ax = x < 50 ? x + arcShift : x - arcShift;
     return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
   };
+  // The user's own bid chip is routed OUT of the overlay (see bidOverlay below):
+  // the overlay is absolute/inset:0 sized to the felt-stage and lives inside the
+  // transformed, overflow-hidden .table, so on iOS a position:fixed child of it
+  // gets clipped. Rendering the user's chip as a direct felt-stage sibling (like
+  // the bid bar, which is not clipped) avoids the cutoff.
+  let selfBidToken = "";
+  const tokenHTML = (b, highBidSeat, posStyle) => {
+    const label = b.type === "pass" ? "Pass" : String(b.amount);
+    const isHigh = b.type === "bid" && b.seat === highBidSeat;
+    const team = `t${b.seat % 2 === 0 ? "A" : "B"}`;
+    const cls = b.type === "pass" ? "pass" : `chip ${team}${isHigh ? " high" : ""}`;
+    return `<div class="hlj-bid-token ${cls}" style="${posStyle(b.seat)}">${label}</div>`;
+  };
   const bidTokens = (() => {
     // While the bid-end hold is active, freeze the full bid overlay
     if (S.hljBidHold && v.phase === "playing") {
@@ -1617,38 +1630,30 @@ function renderHLJ(v) {
         return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
       };
       const highBidSeat = bh.highBid?.seat ?? null;
-      const histToks = (bh.bidHistory ?? []).filter(b => !b.implicit).map(b => {
-        const style = holdPos(b.seat);
-        const label = b.type === "pass" ? "Pass" : String(b.amount);
-        const isHigh = b.type === "bid" && b.seat === highBidSeat;
-        const team = `t${b.seat % 2 === 0 ? "A" : "B"}`;
-        const cls = b.type === "pass" ? "pass" : `chip ${team}${isHigh ? " high" : ""}`;
-        return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
-      }).join("");
-      return histToks;
+      let toks = "";
+      (bh.bidHistory ?? []).filter(b => !b.implicit).forEach(b => {
+        const html = tokenHTML(b, highBidSeat, holdPos);
+        if (bh.you != null && b.seat === bh.you) selfBidToken += html; else toks += html;
+      });
+      return toks;
     }
     if (v.phase === "bidding" && !handResultPending) {
       const highBidSeat = v.highBid?.seat ?? null;
-      const histToks = bidHistory.filter(b => !b.implicit).map(b => {
-        const style = bidPosStyle(b.seat);
-        const label = b.type === "pass" ? "Pass" : String(b.amount);
-        const isHigh = b.type === "bid" && b.seat === highBidSeat;
-        const team = `t${b.seat % 2 === 0 ? "A" : "B"}`;
-        const cls = b.type === "pass" ? "pass" : `chip ${team}${isHigh ? " high" : ""}`;
-        return `<div class="hlj-bid-token ${cls}" style="${style}">${label}</div>`;
-      }).join("");
-      return histToks;
+      let toks = "";
+      bidHistory.filter(b => !b.implicit).forEach(b => {
+        const html = tokenHTML(b, highBidSeat, bidPosStyle);
+        if (you != null && b.seat === you) selfBidToken += html; else toks += html;
+      });
+      return toks;
     }
     if (v.highBid && (v.phase === "bidding" || (v.phase === "playing" && !v.trumpRevealed && v.highBid.seat !== v.you))) {
-      const team = `t${v.highBid.seat % 2 === 0 ? "A" : "B"}`;
-      const bidTok = `<div class="hlj-bid-token chip ${team} high" style="${bidPosStyle(v.highBid.seat)}">${v.highBid.amount}</div>`;
-      return bidTok;
+      // This branch is never the user's own seat, so it stays in the overlay.
+      return tokenHTML({ type: "bid", seat: v.highBid.seat, amount: v.highBid.amount }, v.highBid.seat, bidPosStyle);
     }
     return "";
   })();
-  const bidOverlay = bidTokens
-    ? `<div class="hlj-bid-overlay">${bidTokens}</div>`
-    : "";
+  const bidOverlay =
+    (bidTokens ? `<div class="hlj-bid-overlay">${bidTokens}</div>` : "") + selfBidToken;
 
   // Your chip buttons — shown for the whole bidding phase, dimmed until your turn
   const claimedAmounts = new Set(

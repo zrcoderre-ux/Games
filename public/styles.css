@@ -1166,6 +1166,15 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);lette
   position:relative;
   display:flex;flex-direction:column;
   animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
+  /* The board is a game surface, not a document — stop touch long-press from
+     selecting button/pod/chip text and popping the iOS Copy/Look Up menu. */
+  -webkit-user-select:none;-moz-user-select:none;user-select:none;
+  -webkit-touch-callout:none;
+}
+/* ...but keep real text fields (name input, room code) selectable/editable. */
+.table input,.table textarea{
+  -webkit-user-select:text;-moz-user-select:text;user-select:text;
+  -webkit-touch-callout:default;
 }
 /* Standalone: original absolute fill */
 @media (display-mode: standalone){
