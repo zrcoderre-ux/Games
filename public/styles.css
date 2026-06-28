@@ -2709,14 +2709,12 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   /* No room for the guidance hint text in landscape — hide it */
   .ls-actions .hint{ display:none !important; }
 
-  /* HLJ (no game buttons, just the A/B team score pills) — park the scores at
-     the left edge under the felt instead of the far right, swapping sides with
-     the room tag / Log / Leave controls (pushed right by margin-right:auto) so
-     neither cluster crowds the centered hand. */
+  /* HLJ (no game buttons, just the A/B team score pills) — keep the pills on the
+     right (room tag / Log / Leave stay on the left) but pull them in from the
+     screen edge so they sit completely under the felt instead of out in the
+     corner. The right inset matches the felt's side margin (max(48px,7vw)). */
   .appbar-left:has(.hlj-scores){
-    order:-1 !important;
-    margin-left:0 !important;
-    margin-right:auto;
+    margin-right:max(48px,7vw);
   }
 
   /* Lobby landscape: spread the Invite / Tutorial / Deal buttons across the bar
