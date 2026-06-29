@@ -2660,6 +2660,92 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .table .appbar .spacer{ order:0; }
 }
 
+/* ============================================================
+   iPad / tablet landscape — render HIGH LOW JACK like the mobile-landscape
+   layout, just scaled up: the felt fills the screen, the controls sit in the
+   four corners, and the hand peeks at the bottom. Scoped to HLJ + landscape so
+   it overrides the centered/capped large-screen layout for this game only;
+   other games and orientations keep their layouts. Pods/cards stay at the
+   tablet scale-up size from the block above.
+   ============================================================ */
+@media (min-width:768px) and (min-height:600px) and (orientation:landscape){
+  /* Table fills the viewport as a flex column; felt grows to fill. */
+  #app:not(:has(.lby-outer)) .table:has(.hlj-scores),
+  html.is-standalone .table:has(.hlj-scores){
+    height:100dvh !important; min-height:0 !important;
+    display:flex !important; flex-direction:column !important;
+    justify-content:flex-start !important; overflow:hidden !important;
+  }
+  /* Felt: uncapped, full-width side margins, fills the height (like mobile). */
+  #app:not(:has(.lby-outer)) .table:has(.hlj-scores) .felt-frame,
+  html.is-standalone .table:has(.hlj-scores) .felt-frame,
+  .table:has(.hlj-scores) .felt-frame{
+    flex:1 !important; height:auto !important; min-height:0 !important;
+    width:auto !important; max-width:none !important;
+    margin:6px max(48px,7vw) 0 !important;
+  }
+  /* Central suit + joker-hat watermarks: landscape sizing. */
+  .table:has(.hlj-scores) .trump-watermark{
+    font-size:min(70dvh,50dvw) !important;
+    position:absolute !important; top:56% !important; left:50% !important;
+    margin:0 !important; transform:translate(-50%,-50%) !important;
+  }
+  .table:has(.hlj-scores) .trump-watermark.joker-placeholder{
+    width:min(94dvh,68dvw) !important; height:auto !important;
+    top:72% !important; left:50% !important;
+    transform:translate(-50%,-50%) !important;
+  }
+  .table:has(.hlj-scores) .pod-slot.pos-top{ top:4px !important; }
+
+  /* The in-hand name/score strip and action row are gone (corner controls). */
+  .table:has(.hlj-scores) .ls-self,
+  .table:has(.hlj-scores) .selfbar,
+  .table:has(.hlj-scores) .self-extra,
+  .table:has(.hlj-scores) .actions{ display:none !important; }
+
+  /* Hand peeks at the bottom, full width, over the felt. */
+  #app:not(:has(.lby-outer)) .table:has(.hlj-scores) .selfwrap,
+  html.is-standalone .table:has(.hlj-scores) .selfwrap,
+  .table:has(.hlj-scores) .selfwrap{
+    position:fixed !important; top:auto !important; bottom:8px !important;
+    left:0 !important; right:0 !important;
+    width:auto !important; max-width:none !important; margin:0 !important;
+    padding:0 16px !important;
+  }
+  .table:has(.hlj-scores) .selfwrap-spacer{ height:0 !important; }
+  /* Empty hand areas pass clicks through to the felt; only the cards capture. */
+  .table:has(.hlj-scores) .selfwrap,
+  .table:has(.hlj-scores) .selfwrap .hand,
+  .table:has(.hlj-scores) .selfwrap .fan-scroll,
+  .table:has(.hlj-scores) .selfwrap .fan-inner{ pointer-events:none !important; }
+  .table:has(.hlj-scores) .selfwrap .card{ pointer-events:auto !important; }
+
+  /* Bid chip bar sits above the peeking hand. */
+  .table:has(.hlj-scores) .hlj-felt-bid{
+    position:fixed !important; top:auto !important; bottom:160px !important;
+    left:50% !important; transform:translateX(-50%) !important;
+  }
+
+  /* ---- Corner controls — same anchoring as mobile (just inside the wood),
+     but full size on the tablet. ---- */
+  .table:has(.hlj-scores){ --hlj-gut: calc(100% - max(48px,7vw) + 4px); }
+  .appbar:has(.hlj-scores) [data-action="leave"],
+  .appbar:has(.hlj-scores) [data-action="toggle-log"]{
+    position:fixed !important; z-index:60; margin:0 !important; top:14px;
+  }
+  .appbar:has(.hlj-scores) [data-action="leave"]{ right:var(--hlj-gut); left:auto; bottom:auto; }
+  .appbar:has(.hlj-scores) [data-action="toggle-log"]{ left:var(--hlj-gut); right:auto; bottom:auto; }
+  .appbar:has(.hlj-scores) .hlj-scores{ display:contents; }
+  .appbar:has(.hlj-scores) .hlj-score-pill.tA{
+    position:fixed !important; z-index:60; margin:0 !important;
+    bottom:14px; right:var(--hlj-gut); left:auto; top:auto;
+  }
+  .appbar:has(.hlj-scores) .hlj-score-pill.tB{
+    position:fixed !important; z-index:60; margin:0 !important;
+    bottom:14px; left:var(--hlj-gut); right:auto; top:auto;
+  }
+}
+
 /* ---- Rummy hand-complete screen ---- */
 .rhc-wrap {
   position: absolute; inset: 0; z-index: 30;
