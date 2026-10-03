@@ -65,6 +65,7 @@ const S = {
   retryMs: 0, // current reconnect backoff
   retryTimer: null, // pending reconnect setTimeout handle
   view: null,
+  sentFor: null, // the view a move / advance tap was last sent for (see sendOnce)
   rummySel: new Set(), // selected card ids
   rummyLayoff: null, // selected meld id for layoff
   rummyMeldOpen: null, // meld id whose popup is open
@@ -337,6 +338,10 @@ function fanHand(cards, optFn, { scrollable = false, arcScale = 1 } = {}) {
       const lift = -arc * (1 - (off / mid) ** 2);
       const o = optFn(c, i) || {};
       o.style = `${i ? `margin-left:${overlap.toFixed(1)}px;` : ""}transform:rotate(${rot.toFixed(2)}deg) translateY(${lift.toFixed(1)}px);z-index:${i + 1};`;
+      // Drag-to-play: a touch drag on a card must reach the pointer handlers,
+      // not become a browser pan (which fires pointercancel). A .fan-scroll fan
+      // keeps its own pan-x so it can still scroll sideways.
+      if (!scrollable && (o.action === "play-card" || o.action === "toggle-card")) o.style += "touch-action:none;";
       return cardHTML(c, o);
     })
     .join("");
@@ -384,6 +389,16 @@ function logEntryHTML(v, e) {
 function send(m) {
   if (S.ws && S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify(m));
 }
+// A turn move or a gate tap is sent at most once per view: a double tap, a tap
+// racing the auto-play timer, or a second tap on a held trick waits for the
+// next frame (or an error, which re-arms it) instead of drawing an error toast.
+function sendOnce(m) {
+  if (S.view && S.sentFor === S.view) return;
+  S.sentFor = S.view;
+  clearTimeout(_autoPlayTimer);
+  _autoPlayTimer = null;
+  send(m);
+}
 
 // Shared frame handler for both the real socket and the offline LocalRoom.
 function onFrame(e) {
@@ -398,6 +413,13 @@ function onFrame(e) {
     // hand state may carry over.
     if (prev && msg.view && (prev.phase === "lobby") !== (msg.view.phase === "lobby")) resetGameUi();
     else if (prev && msg.view && prev.you !== msg.view.you) resetSeatUi(msg.view);
+    // HLJ: lastHand stays in the view for the whole next hand. Arriving mid-game
+    // (a reload, a late join) must not put an old hand's result page over the
+    // table — only one that ended moments ago (next hand not yet bid on) shows.
+    if (!prev && S.party === "high-low-jack" && msg.view?.lastHand
+        && !(msg.view.phase === "bidding" && !(msg.view.bidHistory ?? []).length)) {
+      S.hljHandAcked = JSON.stringify(msg.view.lastHand);
+    }
     // Pass-and-play reservations only make sense on seats that are still open.
     if (msg.view?.phase === "lobby") {
       for (const k of Object.keys(S.hotseats)) {
@@ -450,7 +472,7 @@ function onFrame(e) {
     window.Tutorial?.onView?.(S.view);
     maybeAutoPlay(msg.view);
   }
-  else if (msg.t === "error") { toast(msg.message); }
+  else if (msg.t === "error") { S.sentFor = null; toast(msg.message); }
 }
 
 // Auto-play: when it's your turn in HLJ playing phase and only one card is legal,
@@ -470,7 +492,7 @@ function maybeAutoPlay(v) {
   const delay = S.party === "high-low-jack" ? 1200 : 900;
   _autoPlayTimer = setTimeout(() => {
     _autoPlayTimer = null;
-    if (S.view === v) send({ t: "move", move });
+    if (S.view === v) sendOnce({ t: "move", move });
   }, delay);
 }
 
@@ -817,10 +839,12 @@ function tableShell(v, parts) {
     const podY1 = n === 6 || n === 7 ? 36 : 28;
     const podY2 = n >= 8 ? 55 : n >= 6 ? 74 : n >= 5 ? 68 : 82;
     const podBounds = { x1: 12, x2: 88, y1: podY1, y2: podY2, wideY1: 22, wideY2: Math.max(podY2, 72), topY: 9 };
+    // Spectators see the table from seat 0's chair (as trick cards and bid
+    // tokens do): seat 0's pod takes the bottom slot, which has no self rail.
+    const anchor = you ?? 0;
     const infos = podItems.map(({ seat, html }) => {
-      const off = you == null
-        ? podItems.findIndex(p => p.seat === seat) + 1
-        : (seat - you + n) % n;
+      const off = (seat - anchor + n) % n;
+      if (off === 0) return { html, x: 50, y: null, side: "pos-bottom" };
       // Both orientations use the same compass perimeter so landscape mirrors
       // portrait player positioning.
       const { x, y, side } = wallPerimPos(off, n, podBounds);
@@ -828,6 +852,9 @@ function tableShell(v, parts) {
     });
     const slots = infos.length
       ? infos.map(({ html, x, y, side }) => {
+          if (side === "pos-bottom") {
+            return `<div class="pod-slot pos-bottom" style="position:absolute;bottom:-8%;left:50%;transform:translateX(-50%);z-index:2">${html}</div>`;
+          }
           // Portrait: side pods anchor flush to the felt edge (narrow felt).
           // Landscape: bring side pods in off the wall so they read like the
           // portrait compass instead of hugging the far edges.
@@ -1472,20 +1499,20 @@ function wallPerimPos(off, n, b) {
 // Build a spatially-positioned trick div: each card placed on a circle,
 // equidistant from center, evenly spaced by angle.
 // `plays`  – [{card, seat, name?}]
-// `you`    – viewer's seat index (null = spectator → top centre)
+// `you`    – viewer's seat index (null = spectator → laid out from seat 0)
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
 function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, collecting = false } = {}) {
   const lsMobile = window.matchMedia("(max-height:500px) and (orientation:landscape)").matches;
+  const anchor = you ?? 0;
   const circleStyle = (seat) => {
-    if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
-    const off = (seat - you + n) % n;
+    const off = (seat - anchor + n) % n;
     let x, y;
     if (lsMobile) {
       // The user's own played card drops to the very bottom of the felt, just
       // above their hand (fixed; animation:none keeps dropinC's centring
-      // transform from shifting it).
-      if (off === 0) return "position:fixed;bottom:76px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none";
+      // transform from shifting it). A spectator has no hand: seat 0 rings in.
+      if (off === 0 && you != null) return "position:fixed;bottom:76px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none";
       // Everyone else: an orderly oval ring (like portrait), widened for the
       // short, wide landscape felt. The centre sits low (cy 55.5) so the top
       // card tucks just under the raised top pod (.pod-slot.pos-top in the
@@ -1494,6 +1521,8 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
       // 8-player: drop the bottom side row (off 1 = bottom-left, off n-1 =
       // bottom-right) a bit lower so those cards sit nearer their players.
       if (n === 8 && (off === 1 || off === n - 1)) y += 6;
+      // Spectator: seat 0's pod sits at the bottom of this short felt; clear it.
+      if (off === 0) y -= 16;
       // Top-pod card (player directly across, even tables): nudge up so its gap
       // from the top pod matches the user's card-to-hand gap.
       if (n % 2 === 0 && off === n / 2) y -= 4;
@@ -1507,8 +1536,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const cardRotation = (seat) => {
-    if (you == null) return 0;
-    const off = (seat - you + n) % n;
+    const off = (seat - anchor + n) % n;
     return Math.round(off / n * 360);
   };
   const halfH = mini ? 31 : 44;
@@ -1629,7 +1657,7 @@ function renderHLJ(v) {
       const scoreRows = [0, 1].map(t => {
         const letter = t === 0 ? "A" : "B";
         const delta = lh.deltaByTeam[t];
-        const total = v.scores[t];
+        const total = lh.finalScores?.[t] ?? v.scores[t];
         const sign = delta > 0 ? "+" : "";
         const isBidder = t === lh.bidderTeam;
         return `<div class="hlj-rr-scorerow${isBidder && !lh.made ? " setback" : ""}">
@@ -1709,11 +1737,11 @@ function renderHLJ(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
-            // Once the bid is taken (playing phase), the winner's pod shows the
-            // bid chip for the rest of the hand — replacing the dealer "D" chip
+            // Once the bid is taken (playing phase and its trick gates), the winner's
+            // pod shows the bid chip for the rest of the hand — replacing the dealer "D" chip
             // when the dealer won. Skip during the brief bid-reveal freeze, when
             // the floating chips are shown instead.
-            highBid: v.phase === "playing" && !S.hljBidHold && v.highBid?.seat === i && i !== v.you ? v.highBid.amount : null,
+            highBid: (v.phase === "playing" || v.phase === "trickComplete") && !S.hljBidHold && v.highBid?.seat === i && i !== v.you ? v.highBid.amount : null,
             signal: signalImg(i),
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
@@ -1739,8 +1767,10 @@ function renderHLJ(v) {
     const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
     const winName = v.trickWinner != null ? esc(seatName(v, v.trickWinner)) : null;
     const trickEl = trickHTML(trickPlays, you, v.seats.length, { mini: false, winSeat: v.trickWinner });
-    hljTrick = `<div class="trick-gate" data-action="advance-trick">${trickEl}`
-      + `<div class="trick-gate-hint">${winName ? `Won by ${winName} · ` : ""}Tap to continue</div></div>`;
+    // A spectator can't advance the gate: no tap target, no "Tap to continue".
+    const hint = [winName ? `Won by ${winName}` : "", you != null ? "Tap to continue" : ""].filter(Boolean).join(" · ");
+    hljTrick = `<div class="trick-gate"${you != null ? ` data-action="advance-trick"` : ` style="cursor:default"`}>${trickEl}`
+      + (hint ? `<div class="trick-gate-hint">${hint}</div>` : "") + `</div>`;
   } else if (v.phase === "playing" && v.currentTrick.length) {
     const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
     hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
@@ -1819,14 +1849,15 @@ function renderHLJ(v) {
   // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
-    const off = (seat - you + n) % n;
+    const off = (seat - (you ?? 0) + n) % n; // spectators: from seat 0's chair
     // User's own seat: raised so it clears the confidence chip row.
     // In mobile landscape, align it with the fixed bid chip bar (.hlj-felt-bid,
     // bottom:88px) so the token sits at the same height the picker chips did.
-    if (off === 0) return lsMobile
+    if (off === 0) return !lsMobile
+      ? "top:76%;left:50%;transform:translate(-50%,-50%)"
+      : you != null
       ? "position:fixed;bottom:88px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none"
-      : "top:76%;left:50%;transform:translate(-50%,-50%)";
+      : "top:62%;left:50%;transform:translate(-50%,-50%)"; // spectator: above seat 0's pod
     // Other seats: tighter bounds so chips appear inward from card backs
     const { x, y } = wallPerimPos(off, n, bidBounds);
     // Match the side-pod arc: higher side chips sit further toward center.
@@ -1854,11 +1885,12 @@ function renderHLJ(v) {
       const bh = S.hljBidHold;
       const holdPos = (seat) => {
         const n = bh.seats.length;
-        if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
-        const off = (seat - bh.you + n) % n;
-        if (off === 0) return lsMobile
+        const off = (seat - (bh.you ?? 0) + n) % n;
+        if (off === 0) return !lsMobile
+          ? "top:76%;left:50%;transform:translate(-50%,-50%)"
+          : bh.you != null
           ? "position:fixed;bottom:88px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none"
-          : "top:76%;left:50%;transform:translate(-50%,-50%)";
+          : "top:62%;left:50%;transform:translate(-50%,-50%)";
         const { x, y } = wallPerimPos(off, n, bidBounds);
         const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
         const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.15 : 0;
@@ -1902,17 +1934,25 @@ function renderHLJ(v) {
   const myTeamCls = you != null ? `t${you % 2 === 0 ? "A" : "B"}` : "";
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
-  const showSignalPicker = !!v.pendingSignal;
+  // The confidence-pick gate waits on one bidder (pendingSignalSeat): only they
+  // get the picker; everyone else (spectators too) sees who the table waits on.
+  const gateSeat = v.pendingSignal ? (v.pendingSignalSeat ?? null) : null;
+  const showSignalPicker = gateSeat != null && gateSeat === v.you;
+  const gateWait = gateSeat != null && !showSignalPicker
+    ? `<div class="hlj-felt-bid" style="pointer-events:none"><span style="font-family:Fraunces,serif;font-style:italic;font-size:13.5px;color:var(--ink-soft);white-space:nowrap">${esc(seatName(v, gateSeat))} is choosing a signal\u2026</span></div>`
+    : "";
 
   // Bid chips on the felt (hidden once player has bid).
   // Signal picker also on the felt, replacing the bid chips after player bids.
-  const feltBidPanel = v.phase === "bidding" && !handResultPending && v.you != null
+  const feltBidPanel = v.phase === "bidding" && !handResultPending && (v.you != null || gateWait)
     ? showSignalPicker
       ? `<div class="hlj-felt-bid">
           <div class="hlj-signal-felt">${signalLevels.map(lvl =>
             `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}" tabindex="-1"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
           ).join("")}</div>
         </div>`
+      : gateWait
+      ? gateWait
       : !userHasActed
         ? `<div class="hlj-felt-bid${v.yourTurn ? "" : " waiting"}">
             <div class="hlj-chips">
@@ -1956,7 +1996,7 @@ function renderHLJ(v) {
   // Your own signal (once given) sits beside your bid / dealer chip for the hand.
   const selfSignal = you != null && signalImg(you) ? `<span class="pod-dealer-badge signal">${signalImg(you)}</span>` : "";
   const selfMeta = you != null
-    ? selfSignal + (v.phase === "playing" && v.highBid?.seat === you
+    ? selfSignal + ((v.phase === "playing" || v.phase === "trickComplete") && v.highBid?.seat === you
         ? `<span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>`
         : isYouDealer ? `<span class="pod-dealer-badge">D</span>` : "")
     : `play to ${v.target}`;
@@ -1964,6 +2004,8 @@ function renderHLJ(v) {
     ? ""
     : v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
+    : showSignalPicker && v.phase === "bidding"
+    ? `<span class="turnflag">Your signal</span>`
     : v.toAct != null
     ? `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`
     : "";
@@ -1981,6 +2023,7 @@ function renderHLJ(v) {
       S.hljHandTimer = setTimeout(() => {
         S.hljHandAcked = handKey;
         S.hljHandTimer = null;
+        S.hljShowDealtHands = false; // an open dealt-hands sheet closes with its page
         render();
       }, 30000);
     }
@@ -2027,10 +2070,14 @@ function renderHLJ(v) {
     </div>`;
 
     const made = lh.made;
+    // A hand that wins a game mid-series is followed at once by the next game's
+    // deal (scores back to 0): show that hand's own totals and who won the game.
+    const gameWon = lh.gameWinner != null;
+    const wonA = v.gamesWon?.[0] ?? 0, wonB = v.gamesWon?.[1] ?? 0;
     const scoreRows = [0, 1].map(t => {
       const letter = t === 0 ? "A" : "B";
       const delta = lh.deltaByTeam[t];
-      const total = v.scores[t];
+      const total = lh.finalScores?.[t] ?? v.scores[t];
       const sign = delta > 0 ? "+" : "";
       const isBidder = t === lh.bidderTeam;
       return `<div class="hlj-rr-scorerow${isBidder && !made ? " setback" : ""}">
@@ -2072,7 +2119,9 @@ function renderHLJ(v) {
       <div class="hlj-result-felt">
         <div class="hlj-result-scroll">
           <div class="hlj-result-headline">
-            <div class="hlj-result-handover">Hand over</div>
+            ${gameWon
+              ? `<div class="hlj-result-handover hlj-result-gameover-banner t${lh.gameWinner === 0 ? "A" : "B"}">Team ${lh.gameWinner === 0 ? "A" : "B"} wins game ${wonA + wonB}</div>`
+              : `<div class="hlj-result-handover">Hand over</div>`}
             <div class="hlj-result-bidline">${bidderName} bid <b>${lh.bid}</b> for Team ${bidderTeamLetter}</div>
             <div class="hlj-result-verdict ${made ? "made" : "set"}">${made ? "Made it" : "Set back"}</div>
           </div>
@@ -2082,11 +2131,11 @@ function renderHLJ(v) {
           </div>
           ${kittySection ? `<div class="hlj-result-card">${kittySection}</div>` : ""}
           <div class="hlj-result-card hlj-result-scores">
-            <div class="hlj-rr-seclabel">Score</div>
+            <div class="hlj-rr-seclabel">${gameWon ? `Final score \u00b7 series A ${wonA} \u2013 B ${wonB}` : "Score"}</div>
             ${scoreRows}
           </div>
           ${dealtPile}
-          <button class="hlj-result-next-btn" data-action="hlj-ack-hand">Next hand →</button>
+          <button class="hlj-result-next-btn" data-action="hlj-ack-hand">${gameWon ? "Next game" : "Next hand"} →</button>
         </div>
       </div>
     </div>`;
@@ -2477,7 +2526,7 @@ function renderRummy(v) {
 
   const selRow = selCards.length
     ? `<div class="selrow">${selCards.map((c) => cardHTML(c, {
-        action: "toggle-card", id: c.id, sel: true,
+        action: "toggle-card", id: c.id, sel: true, style: "touch-action:none", // drag-to-play (see fanHand)
         must: c.id === v.mustMeldCardId,
       })).join("")}</div>`
     : "";
@@ -2822,8 +2871,10 @@ function renderHearts(v) {
       const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
       const winName = v.trickWinner != null ? esc(seatName(v, v.trickWinner)) : null;
       const trickEl = trickHTML(trickPlays, v.you, v.seats.length, { mini: false, winSeat: v.trickWinner });
-      heartsTrick = `<div class="trick-gate" data-action="advance-trick">${trickEl}`
-        + `<div class="trick-gate-hint">${winName ? `Won by ${winName} &middot; ` : ""}Tap to continue</div></div>`;
+      // A spectator can't advance the gate: no tap target, no "Tap to continue".
+      const hint = [winName ? `Won by ${winName}` : "", v.you != null ? "Tap to continue" : ""].filter(Boolean).join(" &middot; ");
+      heartsTrick = `<div class="trick-gate"${v.you != null ? ` data-action="advance-trick"` : ` style="cursor:default"`}>${trickEl}`
+        + (hint ? `<div class="trick-gate-hint">${hint}</div>` : "") + `</div>`;
       center = crests;
     } else {
       const showLast = v.currentTrick.length === 0 && v.lastTrick;
@@ -3408,7 +3459,7 @@ app.addEventListener("click", (e) => {
     case "toggle-tutorial": S.tutorial = !S.tutorial; return render();
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
     case "toggle-last-trick": if (S.party === "hearts") S.heartsLastTrickOpen = !S.heartsLastTrickOpen; else S.hljLastTrickOpen = !S.hljLastTrickOpen; return render();
-    case "advance-trick": return send({ t: "advance" });
+    case "advance-trick": return sendOnce({ t: "advance" });
     case "reveal-hand": {
       // Reveal only the seat the frame on screen belongs to; if it moved on,
       // re-target the hand-off screen to that seat instead.
@@ -3440,19 +3491,19 @@ app.addEventListener("click", (e) => {
     case "move-bid": {
       const amt = +t.dataset.amount;
       // Open confidence window if a teammate still has a turn; bots wait server-side.
-      return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
+      return sendOnce({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
     }
     case "hlj-bid-confirm": {
       const amt = +(document.getElementById("hlj-bid-slider")?.value ?? 2);
-      return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
+      return sendOnce({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
     }
-    case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
+    case "move-pass": return sendOnce({ t: "move", move: { type: "pass", seat: v.you } });
 
     case "signal":
       return send({ t: "aux", payload: t.dataset.level });
     case "play-card": {
       const c = v.yourHand.find((x) => cardKey(x) === t.dataset.key);
-      if (c) send({ t: "move", move: { type: "play", seat: v.you, card: c } });
+      if (c) sendOnce({ t: "move", move: { type: "play", seat: v.you, card: c } });
       return;
     }
     case "draw-stock": return send({ t: "move", move: { type: "drawStock", seat: v.you } });
@@ -3528,7 +3579,7 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "clear-pass": S.heartsPass.clear(); return render();
-    case "play-hearts": return send({ t: "move", move: { type: "play", seat: v.you, card: +t.dataset.cardid } });
+    case "play-hearts": return sendOnce({ t: "move", move: { type: "play", seat: v.you, card: +t.dataset.cardid } });
     case "pj-setplayers": return send({ t: "setConfig", config: lobbyConfig(v, { players: +t.dataset.count }) });
     case "pj-setmarbles": return send({ t: "setConfig", config: lobbyConfig(v, { marbles: +t.dataset.m }) });
     case "pj-pick-card": S.pjCard = S.pjCard === +t.dataset.cardid ? null : +t.dataset.cardid; return render();
@@ -3715,11 +3766,11 @@ function dptExecute(target) {
     // Drop anywhere on the center felt plays the card.
     if (target.closest(".felt-frame")) {
       const c = v.yourHand.find((x) => cardKey(x) === DPT.ckey);
-      if (c) send({ t: "move", move: { type: "play", seat: v.you, card: c } });
+      if (c) sendOnce({ t: "move", move: { type: "play", seat: v.you, card: c } });
     }
   } else if (DPT.game === "hearts") {
     if (target.closest(".felt-frame")) {
-      send({ t: "move", move: { type: "play", seat: v.you, card: DPT.cid } });
+      sendOnce({ t: "move", move: { type: "play", seat: v.you, card: DPT.cid } });
     }
   } else if (DPT.game === "rummy") {
     if (!v.yourTurn || v.turnPhase !== "play") return;
