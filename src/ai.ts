@@ -630,6 +630,8 @@ export function aiMove(
   personality: Personality = PERSONALITIES.balanced,
 ): Move {
   if (state.phase === "gameOver") throw new Error("game is over");
+  // A completed trick waiting on the table: the only move is to advance it.
+  if (state.phase === "trickComplete") return legalMoves(state)[0];
   const turnSeat = state.phase === "bidding" ? state.bidTurn : state.turn;
   if (turnSeat !== seat) throw new Error(`not seat ${seat}'s turn (it is seat ${turnSeat}'s)`);
 

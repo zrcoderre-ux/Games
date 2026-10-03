@@ -237,7 +237,7 @@ if (ROUND_ROBIN) {
       for (let j = i + 1; j < names.length; j++) {
         const X = makeSide(names[i], A, names[i]);
         const Y = makeSide(names[j], A, names[j]);
-        report(`  ${players}p`, names[i], names[j], runMatch(rules, X, Y, players, START, SEEDS));
+        report(`  ${players}p ${names[i]} vs ${names[j]}:`, names[i], names[j], runMatch(rules, X, Y, players, START, SEEDS));
       }
     }
   }

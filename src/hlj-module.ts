@@ -112,8 +112,10 @@ function hljEntries(prev: HljState, next: GameState, move: Move): Omit<LogEntry,
 
 // Assign each bot a personality derived from the game seed + seat so bots vary
 // naturally across games without needing UI controls.
-// Weights: 40% aggressive, 40% balanced, 20% conservative — competitive but not
-// uniformly hard (simulation shows aggressive wins ~68%, balanced ~53%, conservative ~28%).
+// Weights: 40% aggressive, 40% balanced, 20% conservative. The personalities now
+// differ mainly in how light a hand they bid and are close in strength (paired
+// round-robin, `node src/ai.battle.ts --roundrobin`: aggressive ~53%, balanced
+// ~50%, conservative ~48%), so the mix adds variety without a weak link.
 const PERSONALITY_TABLE: Personality[] = [
   PERSONALITIES.aggressive,
   PERSONALITIES.balanced,
