@@ -28,6 +28,7 @@ import {
   type HandSignal,
   type PlayerProfile,
 } from "./engine.ts";
+import { buildContext, evaluatePlays, cardsLeft, encodeCard, mulberry32, type HandStakes } from "./ai-sim.ts";
 
 // ---------- personality ----------
 
@@ -159,9 +160,10 @@ function expectedCapture(hand: Card[], suit: Suit, players: number): number {
   return Math.max(0, Math.min(6, s));
 }
 
-function bestSuit(hand: Card[], players: number): { suit: Suit; score: number } {
+function bestSuit(hand: Card[], players: number, allowed: (s: Suit) => boolean = () => true): { suit: Suit; score: number } {
   let best = { suit: SUITS[0], score: -Infinity };
   for (const suit of SUITS) {
+    if (!allowed(suit)) continue;
     const score = suitValue(hand, suit, players);
     if (score > best.score) best = { suit, score };
   }
@@ -338,15 +340,6 @@ function bestDiscard(cards: Card[], trump: Suit, low: number, p: Personality, my
 
 // ---------- bidding randomness ----------
 
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 function stateRng(state: GameState, seat: number): () => number {
   let h = (state.seed ^ Math.imul(seat + 1, 0x9e3779b1) ^ Math.imul(state.bidsActed + 1, 0x85ebca77)) >>> 0;
   for (const c of state.hands[seat]) h = (Math.imul(h, 31) + (isJoker(c) ? 53 : c.rank * 4 + SUITS.indexOf(c.suit))) >>> 0;
@@ -566,7 +559,7 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
   const kv = (c: Card) => keepValue(c, trump, low, p, myTeamAhead);
 
   const remaining = tricksRemaining(state, seat);
-  const unseenTrumps = unseenTrumpCount(state, trump, cards);
+  const unseenTrumps = unseenTrumpCount(state, trump, state.hands[seat]);
   const myTrumps = cards.filter((c) => isTrump(c, trump));
   const isLast = state.currentTrick.length === players - 1;
 
@@ -670,9 +663,9 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
   const winners = cards.filter((c) => wouldWin(c) && (!isJoker(c) || jokerSafe));
 
   if (partnerWinning) {
-    // Heuristic 6: read partner's signal to judge whether modest win is safe to load.
-    // Nearest same-team seat as a proxy for partner signal (good enough for any count).
-    const partnerSeat = (seat % 2 === 0 ? 1 : 0);
+    // Heuristic 6: read the winning teammate's signal to judge whether a modest
+    // win is safe to load.
+    const partnerSeat = winnerSeat;
     const partnerCalibrated = calibratedSignal(state.signals[partnerSeat], state.profiles[partnerSeat]);
     const winVal = trumpValue(winnerCard, trump);
     const partnerStrong = winVal !== null
@@ -708,6 +701,54 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
   return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
 }
 
+// ---------- Monte Carlo card play ----------
+
+// Rollout work per decision, in simulated card plays. Sized so a decision costs
+// about a millisecond in Node; worlds = budget / (candidates * cards left).
+const PLAY_BUDGET = 12000;
+const MIN_WORLDS = 12;
+const MAX_WORLDS = 120;
+// Extra utility for a hand that wins the game (and penalty for one that loses it).
+const END_BONUS = 15;
+
+function playRng(state: GameState, seat: number): () => number {
+  let h = (state.seed ^ Math.imul(seat + 1, 0x9e3779b1) ^ Math.imul(state.trickIndex * 8 + state.currentTrick.length + 1, 0x85ebca77)) >>> 0;
+  for (const c of state.hands[seat]) h = (Math.imul(h, 31) + encodeCard(c)) >>> 0;
+  return mulberry32(h);
+}
+
+function stakesFor(state: GameState, seat: number): HandStakes {
+  return {
+    myTeam: teamOf(seat),
+    bidderTeam: teamOf(state.winningBid!.seat),
+    bid: state.winningBid!.amount,
+    scores: state.scores,
+    target: state.target,
+    endBonus: END_BONUS,
+  };
+}
+
+// Pick a card by sampling worlds consistent with what this seat has seen and
+// playing each candidate out. The heuristic choice wins ties (and near-ties),
+// so the search only overrides it when it finds a clearly better card.
+function decidePlayMC(state: GameState, seat: number, p: Personality): Move {
+  const legal = legalMoves(state)
+    .filter((m): m is Extract<Move, { type: "play" }> => m.type === "play")
+    .map((m) => m.card);
+  const heuristic = decidePlay(state, seat, p);
+  if (legal.length === 1 || heuristic.type !== "play") return heuristic;
+
+  const ctx = buildContext(state, seat, state.trump!);
+  const cands = legal.map(encodeCard);
+  const worlds = clamp(Math.floor(PLAY_BUDGET / (cands.length * cardsLeft(ctx))), MIN_WORLDS, MAX_WORLDS);
+  const values = evaluatePlays(ctx, cands, stakesFor(state, seat), worlds, playRng(state, seat));
+
+  const h = cands.indexOf(encodeCard(heuristic.card));
+  let best = h;
+  for (let i = 0; i < cands.length; i++) if (values[i] > values[best] + 0.05) best = i;
+  return { type: "play", seat, card: legal[best] };
+}
+
 // ---------- public entry points ----------
 
 export function aiMove(
@@ -724,18 +765,18 @@ export function aiMove(
   if (state.trump === null) {
     // Lead the best trump card directly (establishes trump from the lead, matching Pitch rules).
     // Never use selectTrump — that would reveal trump before the first card is played.
-    const trump = bestSuit(state.hands[seat], state.players).suit;
+    // Only suits we hold a natural card in can be named this way (the joker
+    // can't be led to trick 1), so pick the best of those.
     const hand = state.hands[seat];
+    const trump = bestSuit(hand, state.players, (s) => hand.some((c) => !isJoker(c) && c.suit === s)).suit;
     const trumpCards = hand.filter((c): c is Extract<typeof c, { rank: number }> =>
       !isJoker(c) && c.suit === trump
     );
-    // Lead highest trump to assert High; fall back to any non-joker card in the hand.
-    const lead = trumpCards.length
-      ? trumpCards.reduce((a, b) => a.rank >= b.rank ? a : b)
-      : hand.filter((c) => !isJoker(c))[0];
+    // Lead highest trump to assert High.
+    const lead = trumpCards.reduce((a, b) => a.rank >= b.rank ? a : b);
     return { type: "play", seat, card: lead };
   }
-  return decidePlay(state, seat, personality);
+  return decidePlayMC(state, seat, personality);
 }
 
 export { suitValue, bestSuit };
