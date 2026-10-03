@@ -2,8 +2,9 @@
 //
 // Pure and runtime-independent (imports only Suit/SUITS from engine.ts and the
 // Game contract): no PartyServer, no I/O, randomness only via a seeded PRNG
-// threaded through state.seed, so it is deterministic, testable, and reusable
-// on the client for single-player. Same shape as rummy-module.ts.
+// threaded through state.seed (plus any fresh entropy the room folds in, see
+// reseed), so it is deterministic, testable, and reusable on the client for
+// single-player. Same shape as rummy-module.ts.
 //
 // SCOPE of this first cut (all are clean extension points, noted inline):
 //   - 3, 4, or 5 players, single 52-card deck with the standard even-deal
@@ -13,7 +14,9 @@
 //   - Scoring: each heart = 1, the Q(S) ("the Black Lady") = 13 — 26 points per
 //     hand. Shooting the moon (one seat takes all 26) scores that seat 0 and
 //     adds 26 to everyone else. Game ends when a seat reaches `target` (default
-//     100); LOWEST total wins.
+//     100); LOWEST total wins. If two or more seats share the lowest total at
+//     that point, play goes on hand by hand until one seat is alone at the
+//     bottom (see endHand).
 //   - Hearts "break" (become legal to lead) once a heart has been played to a
 //     trick. The Q(S) does not break hearts (a common house rule that does; it
 //     would be a one-line change in applyMove).
@@ -72,11 +75,23 @@ const handSize = (players: number): number => buildDeck(players).length / player
 const LOG_CAP = 120;
 const lc = (c: HeartsCard): LogCard => ({ rank: c.rank, suit: c.suit });
 
+// Canonical order for revealed hands (spades, hearts, diamonds, clubs, low to
+// high), as in the HLJ engine.
+const REVEAL_SUIT_ORDER: Record<Suit, number> = { S: 0, H: 1, D: 2, C: 3 };
+const sortCards = (cards: HeartsCard[]): HeartsCard[] =>
+  [...cards].sort((a, b) => REVEAL_SUIT_ORDER[a.suit] - REVEAL_SUIT_ORDER[b.suit] || a.rank - b.rank);
+
+// Same words as the client: one seat over is left/right, the seat straight
+// opposite (4p) is across, and the two middle offsets at 5p are "two to the
+// left" and "two to the right" so each names exactly one recipient.
+const PASS_COUNT = ["", "one", "two", "three"];
 function passDirLabel(offset: number, players: number): string {
   if (offset === 0) return "hold \u2014 no pass";
   if (offset === 1) return "passing left";
   if (offset === players - 1) return "passing right";
-  return "passing across";
+  if (offset * 2 === players) return "passing across";
+  const n = Math.min(offset, players - offset);
+  return `passing ${PASS_COUNT[n] ?? n} to the ${offset * 2 < players ? "left" : "right"}`;
 }
 
 // Append entries to `prev`'s log, returning `next` carrying the extended log.
@@ -102,8 +117,31 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function shuffle<T>(items: T[], seed: number): { shuffled: T[]; nextSeed: number } {
-  const rng = mulberry32(seed);
+// ---------- entropy-seeded PRNG (sfc32) ----------
+// 32 bits of seed can be brute-forced from the cards a player sees, so live
+// rooms fold fresh entropy into every deal (see reseed) and shuffle with this
+// 128-bit generator instead. (Also duplicated from the HLJ engine.)
+
+function sfc32(a: number, b: number, c: number, d: number): () => number {
+  const next = () => {
+    a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+    let t = (a + b) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    d = (d + 1) | 0;
+    t = (t + d) | 0;
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < 15; i++) next(); // mix the seed words before use
+  return next;
+}
+
+// With entropy (4 uint32 words) the shuffle draws from sfc32; without, from the
+// seed alone, so tests and harnesses replay exactly.
+function shuffle<T>(items: T[], seed: number, entropy?: number[]): { shuffled: T[]; nextSeed: number } {
+  const rng = entropy ? sfc32(seed ^ entropy[0], entropy[1], entropy[2], entropy[3]) : mulberry32(seed);
   const a = items.slice();
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -149,6 +187,13 @@ export type HeartsState = {
   // authoritative, append-only move log (rides through every { ...state } spread)
   log: LogEntry[];
   logSeq: number;
+
+  // Fresh entropy (4 uint32 words) folded into the next deal's shuffle; absent
+  // in seed-only (deterministic) play. See reseed.
+  entropy?: number[];
+  // True from createGame until the first reseed: the opening hand was shuffled
+  // from the seed alone, so that reseed deals it again.
+  seedOnlyDeal?: boolean;
 };
 
 export type HeartsMove =
@@ -170,6 +215,7 @@ export type HeartsView = {
 
   scores: number[];
   winner: number | null;
+  tiebreak: boolean; // target reached but the low score is shared: playing on until one seat is lowest
   handNo: number;
   passOffset: number; // 0 = hold; otherwise pass left/across/etc.
 
@@ -216,7 +262,7 @@ function lowestClubSeat(hands: HeartsCard[][]): number {
 }
 
 function dealHand(prev: HeartsState): HeartsState {
-  const { shuffled, nextSeed } = shuffle(buildDeck(prev.players), prev.seed);
+  const { shuffled, nextSeed } = shuffle(buildDeck(prev.players), prev.seed, prev.entropy);
   const hands: HeartsCard[][] = Array.from({ length: prev.players }, () => []);
   const hs = handSize(prev.players);
   let i = 0;
@@ -245,12 +291,14 @@ function dealHand(prev: HeartsState): HeartsState {
   return base;
 }
 
+// Validate the lobby options (throws with a message the lobby can show).
 function createGame(config: HeartsConfig, seed: number): HeartsState {
   if (![3, 4, 5].includes(config.players)) throw new Error(`Unsupported player count: ${config.players}`);
-  if (config.target <= 0) throw new Error("Target must be positive");
+  const target = config.target === undefined ? 100 : config.target;
+  if (!Number.isInteger(target) || target < 1 || target > 10000) throw new Error("Target must be a whole number from 1 to 10000");
   const base: HeartsState = {
     players: config.players,
-    target: config.target,
+    target,
     seed,
     phase: "passing",
     handNo: 0,
@@ -272,7 +320,20 @@ function createGame(config: HeartsConfig, seed: number): HeartsState {
     logSeq: 0,
   };
   const dealt = dealHand(base);
-  return attach(dealt, dealt, [{ seat: null, msg: `first hand \u2014 ${passDirLabel(dealt.passOffset, dealt.players)}` }]);
+  return { ...attach(dealt, dealt, [{ seat: null, msg: `first hand \u2014 ${passDirLabel(dealt.passOffset, dealt.players)}` }]), seedOnlyDeal: true };
+}
+
+// Fold fresh entropy (4 uint32 words from a CSPRNG) into the state: every later
+// deal shuffles from it rather than from the seed chain, so no deal can be
+// worked out from cards seen earlier. The room calls this right after
+// createGame — before anyone has seen the opening hand, which was shuffled
+// from the 32-bit seed alone — so that first call deals the hand again.
+function reseed(state: HeartsState, entropy: number[]): HeartsState {
+  if (!Array.isArray(entropy) || entropy.length < 4) return state;
+  const next: HeartsState = { ...state, entropy: entropy.slice(0, 4).map((w) => w >>> 0) };
+  const untouched = state.phase === "passing" && state.handNo === 0 && state.logSeq === 1 && state.lastHand === null;
+  if (!state.seedOnlyDeal || !untouched) return next;
+  return { ...dealHand(next), seedOnlyDeal: false };
 }
 
 // ---------- legality ----------
@@ -354,6 +415,19 @@ function trickWinner(cards: TrickPlay[]): number {
   return best.seat;
 }
 
+// Seats sharing the lowest total.
+const lowSeats = (scores: number[]): number[] => {
+  const min = Math.min(...scores);
+  return scores.flatMap((v, s) => (v === min ? [s] : []));
+};
+// Someone has reached the target, so the game ends as soon as the low is unique.
+const pastTarget = (s: HeartsState): boolean => Math.max(...s.scores) >= s.target;
+
+// The game ends once a seat reaches the target and the LOWEST total wins. A
+// shared low has no fair winner (seat order would pick one), so the usual rule
+// applies: deal another hand, and keep going until one seat is alone at the
+// bottom. Totals only grow, so every later hand is past the target too and the
+// first one that splits the low seats ends the game.
 function endHand(state: HeartsState): HeartsState {
   const points = state.points;
   const moon = points.findIndex((p) => p === 26); // took all 26: shot the moon
@@ -362,9 +436,9 @@ function endHand(state: HeartsState): HeartsState {
   const scores = state.scores.map((v, s) => v + delta[s]);
   const lastHand = { delta, shooter: moon >= 0 ? moon : null };
 
-  if (Math.max(...scores) >= state.target) {
-    const min = Math.min(...scores);
-    return { ...state, scores, phase: "gameOver", winner: scores.indexOf(min), lastHand }; // lowest wins
+  const low = lowSeats(scores);
+  if (Math.max(...scores) >= state.target && low.length === 1) {
+    return { ...state, scores, phase: "gameOver", winner: low[0], lastHand }; // lowest wins
   }
   return dealHand({ ...state, scores, lastHand, handNo: state.handNo + 1 });
 }
@@ -407,6 +481,12 @@ function applyMove(state: HeartsState, move: HeartsMove): HeartsState {
     if (scored.phase === "gameOver" && scored.winner !== null) {
       scoreEnt.push({ seat: scored.winner, msg: "wins the game — lowest score!" });
     } else {
+      if (pastTarget(scored)) {
+        // Target reached with the low shared: name the tied seats, then play on.
+        const low = lowSeats(scored.scores);
+        for (const s of low) scoreEnt.push({ seat: s, msg: `ties for the lowest score (${scored.scores[s]})` });
+        scoreEnt.push({ seat: null, msg: "no outright winner — playing another hand" });
+      }
       scoreEnt.push({ seat: null, msg: `next hand — ${passDirLabel(scored.passOffset, scored.players)}` });
     }
     return attach(scored, state, scoreEnt);
@@ -498,6 +578,7 @@ function redact(state: HeartsState, seat: number | null, meta: RoomMeta): Hearts
     disconnectedSeats: meta.disconnectedSeats,
     scores: state.scores,
     winner: state.winner,
+    tiebreak: state.phase !== "gameOver" && pastTarget(state),
     handNo: state.handNo,
     passOffset: state.passOffset,
     toAct,
@@ -530,6 +611,7 @@ function lobbyView(config: HeartsConfig, seat: number | null, meta: RoomMeta): H
     disconnectedSeats: meta.disconnectedSeats,
     scores: Array(config.players).fill(0),
     winner: null,
+    tiebreak: false,
     handNo: 0,
     passOffset: 0,
     toAct: null,
@@ -670,6 +752,7 @@ export const heartsModule: Game<HeartsState, HeartsMove, HeartsConfig, HeartsVie
   botStepMs: (s) => s.phase === "passing" ? 350 : Math.round(1600 * 4 / s.players),
   seatCount: (config) => config.players,
   createGame,
+  reseed,
   seatToAct,
   isLegal,
   legalMoves,
@@ -684,7 +767,9 @@ export const heartsModule: Game<HeartsState, HeartsMove, HeartsConfig, HeartsVie
     return {
       game: "hearts",
       target: next.target,
-      dealtHands: prev.dealtHands, // prev still holds this hand's deal; next has the new deal
+      // prev still holds this hand's deal (next has the new one); each hand is
+      // sorted so the record never shows the order the cards were dealt in.
+      dealtHands: prev.dealtHands ? prev.dealtHands.map(sortCards) : null,
       lastHand: next.lastHand,     // delta per seat + shooter (if moon)
       log: next.log,
       scores: next.scores,
