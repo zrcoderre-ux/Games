@@ -57,8 +57,13 @@ const S = {
   awaitingPass: false, // showing the privacy hand-off screen
   passTo: null, // seat we're passing the device to
   passReady: false, // hand-off delay elapsed; reveal button enabled
+  passTimer: null, // hand-off delay setTimeout handle
   connected: false,
   intentionalClose: false,
+  joinedOnline: false, // a socket to this room has opened at least once (drops then retry, never go offline)
+  connectSlow: false, // first join is taking a while: offer "Play offline"
+  retryMs: 0, // current reconnect backoff
+  retryTimer: null, // pending reconnect setTimeout handle
   view: null,
   rummySel: new Set(), // selected card ids
   rummyLayoff: null, // selected meld id for layoff
@@ -127,6 +132,7 @@ function morphNode(a, b) {
   // for unrelated state changes (e.g. picking a game) doesn't strip it for a
   // frame and cause a visible jump before the next rAF reapplies it.
   const keepStyle = a.classList && (a.classList.contains("hs-wm-wrap") || a.classList.contains("hs-wm"));
+  const prevValue = a.getAttribute("value"); // rendered value before this morph
   for (let i = a.attributes.length - 1; i >= 0; i--) {
     const n = a.attributes[i].name;
     if (keepStyle && n === "style") continue;
@@ -135,10 +141,12 @@ function morphNode(a, b) {
   for (const at of b.attributes) {
     if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
   }
-  // keep form fields usable: sync value/checked unless the user is editing it now
+  // keep form fields usable: sync value/checked unless the user is editing it now,
+  // and only when the rendered value actually changed — an unrelated re-render must
+  // not wipe what the user typed (e.g. a room code, then tapping a game card).
   if ((a.nodeName === "INPUT" || a.nodeName === "TEXTAREA" || a.nodeName === "SELECT") && a !== document.activeElement) {
     const bv = b.getAttribute("value");
-    if (bv != null && a.value !== bv) a.value = bv;
+    if (bv != null && bv !== prevValue && a.value !== bv) a.value = bv;
   }
   morphList(a, b);
 }
@@ -368,6 +376,18 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
+    // A game starting or ending (for every client, not just the host who dealt)
+    // drops the last game's client-side UI state; and in pass-and-play, when the
+    // device starts showing a different seat's hand, none of the previous seat's
+    // hand state may carry over.
+    if (prev && msg.view && (prev.phase === "lobby") !== (msg.view.phase === "lobby")) resetGameUi();
+    else if (prev && msg.view && prev.you !== msg.view.you) resetSeatUi(msg.view);
+    // Pass-and-play reservations only make sense on seats that are still open.
+    if (msg.view?.phase === "lobby") {
+      for (const k of Object.keys(S.hotseats)) {
+        if (+k >= msg.view.seats.length || msg.view.seats[+k].kind !== "empty") delete S.hotseats[k];
+      }
+    }
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
       if (S.hljBidHoldTimer) clearTimeout(S.hljBidHoldTimer);
@@ -405,7 +425,8 @@ function onFrame(e) {
     maybePromptPass();
     render();
     // Tutorial: arm on the lobby->game transition (single human only), then feed each
-    // frame. Works online or offline — gated on a lone human seat, not S.offline.
+    // frame. Gated on a lone human seat, not S.offline (a solo deal from an online
+    // lobby runs in a LocalRoom, but the gate shouldn't care where the game lives).
     if (S.tutorial && prev?.phase === "lobby" && S.view && S.view.phase !== "lobby"
         && S.view.seats && S.view.seats.filter((s) => s.kind === "human").length === 1) {
       window.Tutorial?.start(S.party);
@@ -422,6 +443,9 @@ let _autoPlayTimer = null;
 function maybeAutoPlay(v) {
   if (_autoPlayTimer) { clearTimeout(_autoPlayTimer); _autoPlayTimer = null; }
   if (!v || !v.yourTurn) return;
+  // Pass-and-play: never play for a seat whose owner hasn't taken the device yet —
+  // a move behind the hand-off screen would hand the view to the next person.
+  if (S.hotseat && (S.awaitingPass || v.you !== S.revealedSeat)) return;
   const legal = v.legalMoves || [];
   if (legal.length !== 1) return;
   const move = legal[0];
@@ -438,18 +462,76 @@ function maybeAutoPlay(v) {
 // human than the one currently looking, hide everything behind a hand-off
 // screen until they confirm they're ready. The view frame already holds the
 // next player's cards, but the interstitial renders none of them.
+// The gate keys off the seat the current frame shows (not a latched value): if
+// the view moves on while the screen is up, the screen re-targets that seat, so
+// it always names the person whose hand a reveal will actually show.
 function maybePromptPass() {
   const v = S.view;
   S.hotseat = S.offline && !!v && v.seats && v.seats.filter((s) => s.kind === "human").length >= 2;
-  if (!S.hotseat || S.awaitingPass) return;
-  if (!v || v.phase === "lobby" || v.phase === "gameOver") return;
-  if (v.you != null && v.yourTurn && v.you !== S.revealedSeat) {
-    S.passTo = v.you;
-    S.awaitingPass = true;
-    S.passReady = false;
-    // A short beat so the device can actually change hands before it unlocks.
-    setTimeout(() => { S.passReady = true; if (S.awaitingPass) render(); }, 1400);
+  if (!S.hotseat || v.phase === "lobby" || v.phase === "gameOver") {
+    // nothing private on screen: lobby / final scores
+    S.awaitingPass = false;
+    return;
   }
+  if (v.you == null) return;
+  if (S.awaitingPass ? v.you === S.passTo : v.you === S.revealedSeat) return;
+  S.passTo = v.you;
+  S.awaitingPass = true;
+  S.passReady = false;
+  // A short beat so the device can actually change hands before it unlocks.
+  clearTimeout(S.passTimer);
+  S.passTimer = setTimeout(() => { S.passTimer = null; S.passReady = true; if (S.awaitingPass) render(); }, 1400);
+}
+
+// Per-seat client caches (selection, hand order, "you drew this", received cards).
+// Cleared whenever the device starts showing a different seat's hand.
+function resetSeatUi(v) {
+  clearTimeout(S.rummyDrawnTimer);
+  S.rummyDrawnTimer = null;
+  S.rummyDrawnCard = null;
+  S.rummyPrevHandIds = new Set();
+  S.rummySel.clear();
+  S.rummyLayoff = null;
+  S.rummyMeldOpen = null;
+  S.discardOpen = false;
+  S.heartsPass.clear();
+  clearTimeout(S.heartsReceivedTimer);
+  S.heartsReceivedTimer = null;
+  S.heartsReceivedCards = [];
+  S.pjCard = null;
+  // Start the new seat's hand sorted, so nothing in it looks "just received".
+  const hand = v?.yourHand ?? [];
+  const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
+  const rank = (c) => (c.joker ? 100 : c.rank);
+  S.heartsOrder = [...hand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id);
+  S.rummyOrder = [...hand].sort(S.rummySort === "suit"
+    ? (a, b) => (!!a.joker - !!b.joker) || (suitOrder[a.suit] - suitOrder[b.suit]) || (rank(a) - rank(b))
+    : (a, b) => (rank(a) - rank(b)) || (suitOrder[a.suit] - suitOrder[b.suit])).map((c) => c.id);
+}
+
+// Everything a finished or abandoned game leaves behind on the client
+// (selections, open sheets, pending popups and their timers).
+function resetGameUi() {
+  for (const k of ["rummyRoundTimer", "hljHandTimer", "hljBidHoldTimer", "heartsHandTimer", "heartsReceivedTimer", "rummyDrawnTimer", "passTimer"]) {
+    clearTimeout(S[k]);
+    S[k] = null;
+  }
+  clearTimeout(_autoPlayTimer);
+  _autoPlayTimer = null;
+  resetSeatUi(null);
+  S.showLog = false;
+  S.logTab = "log";
+  S.logExpandedId = null;
+  S.lbySettingsOpen = false;
+  S.rummyRoundVisible = false;
+  S.hljBidHold = null;
+  S.hljShowDealtHands = false;
+  S.hljLastTrickOpen = false;
+  S.heartsLastTrickOpen = false;
+  S.heartsCollecting = null;
+  S.pjMoves = [];
+  S.awaitingPass = false;
+  S.passReady = false;
 }
 
 function joinOnOpen() {
@@ -460,75 +542,148 @@ function joinOnOpen() {
 function connect() {
   S.intentionalClose = false;
   if (S.offline) return connectLocal();
+  clearTimeout(S.retryTimer);
+  S.retryTimer = null;
 
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const url = `${proto}//${location.host}/parties/${S.party}/${encodeURIComponent(S.room)}`;
   const ws = new WebSocket(url);
   S.ws = ws;
+  S.connectSlow = false;
   let opened = false;
 
-  // If we can't reach the server, fall back to local play vs bots.
-  const fallback = (why) => {
-    if (opened || S.intentionalClose || S.offline) return;
-    clearTimeout(fbTimer);
-    try { ws.close(); } catch {}
-    toast(why || "No connection — playing offline vs bots.");
+  // Only the current socket may act: events from one we've already replaced
+  // (a retry, Leave, the hand-off to local play) are ignored.
+  const live = () => S.ws === ws && !S.intentionalClose && !S.offline;
+  // The socket failed before opening, or dropped after.
+  const failed = () => {
+    clearTimeout(slowTimer);
+    if (!live()) return;
+    S.connected = false;
+    // A room we've reached is never silently swapped for an offline bot game:
+    // keep retrying with backoff (the Reconnecting screen offers "Play offline").
+    if (S.joinedOnline) return scheduleReconnect();
+    // First join and the server is unreachable: play offline vs bots.
+    toast("No connection — playing offline vs bots.");
     connectLocal();
   };
-  const fbTimer = setTimeout(() => fallback(), 3500);
+  // A slow first join offers "Play offline" rather than switching on its own (a
+  // friend's invite link on a slow network); a reconnect that hangs is retried.
+  const slowTimer = setTimeout(() => {
+    if (opened || !live()) return;
+    if (!S.joinedOnline) { S.connectSlow = true; return render(); }
+    try { ws.close(); } catch {}
+    failed();
+  }, S.joinedOnline ? 8000 : 3500);
 
-  ws.onopen = () => { opened = true; clearTimeout(fbTimer); joinOnOpen(); };
-  ws.onmessage = onFrame;
-  ws.onclose = () => {
-    // Don't clobber S.connected if we've already switched to a local socket.
-    if (!S.offline) S.connected = false;
-    if (S.intentionalClose || S.offline) return;
-    if (!opened) return fallback();
-    render();
-    setTimeout(() => { if (!S.connected && !S.intentionalClose) connect(); }, 1500);
+  ws.onopen = () => {
+    if (S.ws !== ws) { try { ws.close(); } catch {} return; }
+    opened = true;
+    clearTimeout(slowTimer);
+    S.joinedOnline = true;
+    S.connectSlow = false;
+    S.retryMs = 0;
+    joinOnOpen();
   };
-  ws.onerror = () => { if (!opened) fallback(); };
+  ws.onmessage = (e) => { if (S.ws === ws) onFrame(e); };
+  ws.onclose = failed;
+  ws.onerror = () => { if (!opened) failed(); };
   render();
 }
 
+// Reconnect with backoff (1.5 s, 3 s, 6 s … capped at 15 s) while showing "Reconnecting…".
+function scheduleReconnect() {
+  if (S.retryTimer) return;
+  S.retryMs = Math.min(15000, S.retryMs ? S.retryMs * 2 : 1500);
+  S.retryTimer = setTimeout(() => {
+    S.retryTimer = null;
+    if (!S.connected && !S.intentionalClose && !S.offline && S.party) connect();
+  }, S.retryMs);
+  render();
+}
+// The network came back / the app returned to the foreground: retry right away.
+function reconnectNow() {
+  if (!S.joinedOnline || S.offline || S.intentionalClose || !S.party) return;
+  if (S.ws && S.ws.readyState <= 1) return; // connecting or open
+  S.retryMs = 0;
+  connect();
+}
+window.addEventListener("online", reconnectNow);
+
+// The user chose to stop waiting for the server: abandon the room (so a reload
+// doesn't land back in it) and play this game vs bots on the device.
+function doPlayOffline() {
+  const ws = S.ws;
+  S.ws = null; // its late events are now ignored
+  try { ws?.close(); } catch {}
+  clearTimeout(S.retryTimer);
+  S.retryTimer = null;
+  S.joinedOnline = false;
+  S.connectSlow = false;
+  S.connected = false;
+  S.view = null;
+  S.hotseats = {};
+  resetGameUi();
+  history.replaceState(null, "", `/?game=${S.party}`);
+  connectLocal();
+}
+
 let localMod = null;
-// serverSeats: if provided, replicate this seat layout and auto-start (Pass & Play / bot-only handoff).
-// startConfig: { target?, marbles?, botDifficulty? } mirroring the server lobby settings.
-async function connectLocal(serverSeats = null, startConfig = null) {
+// handoff: move a lobby into a fresh LocalRoom — { seats, you, config, start }.
+// `seats` is the source table and `you` this device's seat in it. The LocalRoom
+// seats the joiner at 0, so the layout is rotated to put `you` there (relative
+// order, and so partnerships, are kept). The table is sized from `config` first,
+// every other local human (pass-and-play guests and S.hotseats reservations) is
+// re-seated, and it is dealt with the full lobby `config` when `start` is set.
+async function connectLocal(handoff = null) {
   S.offline = true;
+  const hotseats = S.hotseats;
+  S.hotseats = {};
   try {
     if (!localMod) localMod = await import("/local.js?v=20260621f");
   } catch (err) {
+    // No offline bundle (e.g. never cached): back to the start screen, still
+    // prefilled with this game and room, rather than a dead "Connecting…".
+    S.offline = false;
+    S.connected = false;
+    S.view = null;
+    S.joinedOnline = false;
+    S.pickGame = S.party;
+    S.party = null;
+    history.replaceState(null, "", "/");
+    renderStart();
     return toast("Couldn't load offline mode.");
   }
+  if (!S.offline || !S.party) return; // left while the bundle was loading
   const sock = localMod.createLocalSocket(S.party);
   S.ws = sock;
   sock.onopen = () => {
+    if (S.ws !== sock) return;
     try {
       joinOnOpen();
-      // Place any pass-and-play humans first; start() auto-fills remaining seats with bots.
-      for (const [seat, name] of Object.entries(S.hotseats)) {
-        send({ t: "addHuman", seat: +seat, name });
-      }
-      S.hotseats = {};
-      if (serverSeats) {
-        // Auto-start using the config captured from the server lobby.
-        const players = serverSeats.length;
-        if (S.party === "pegs-and-jokers") {
-          send({ t: "start", config: { players, marbles: startConfig?.marbles ?? 5 } });
-        } else {
-          const cfg = { players, target: startConfig?.target ?? GAMES[S.party]?.target ?? 21 };
-          if (startConfig?.botDifficulty) cfg.botDifficulty = startConfig.botDifficulty;
-          send({ t: "start", config: cfg });
+      if (handoff) {
+        const n = handoff.seats.length;
+        const you = handoff.you ?? 0;
+        const at = (i) => (i - you + n) % n;
+        const config = { ...handoff.config, players: n };
+        if (Array.isArray(config.botDifficulty)) {
+          const bd = config.botDifficulty;
+          config.botDifficulty = Array.from({ length: n }, (_, j) => bd[(j + you) % n] ?? 2);
         }
+        send({ t: "setConfig", config });
+        handoff.seats.forEach((s, i) => {
+          const name = s.kind === "human" ? s.name || `Player ${at(i) + 1}` : s.kind === "empty" ? hotseats[i] : null;
+          if (i !== you && name) send({ t: "addHuman", seat: at(i), name });
+        });
+        if (handoff.start) send({ t: "start", config });
       }
     } catch (err) {
       console.error("connectLocal onopen failed:", err);
       toast("Couldn't start game: " + (err?.message || err));
     }
   };
-  sock.onmessage = onFrame;
-  sock.onclose = () => { S.connected = false; };
+  sock.onmessage = (e) => { if (S.ws === sock) onFrame(e); };
+  sock.onclose = () => { if (S.ws === sock) S.connected = false; };
   render();
 }
 
@@ -760,13 +915,20 @@ function render() {
 function renderConnecting() {
   const gameName = S.party && GAMES[S.party] ? esc(GAMES[S.party].label) : "Bonhomme";
   const suit = S.party && GAMES[S.party] ? GAMES[S.party].suit : "\u2663";
-  const sub = S.connected ? "Joined \u2014 dealing you in." : "Connecting\u2026";
+  const reconnecting = S.joinedOnline && !S.offline && !S.connected;
+  const sub = S.connected ? "Joined \u2014 dealing you in."
+    : reconnecting ? "Connection lost \u2014 reconnecting\u2026"
+    : S.connectSlow ? "Still connecting\u2026" : "Connecting\u2026";
+  // Going offline is always the player's explicit choice once a room is involved.
+  const offerOffline = !S.offline && !S.connected && (reconnecting || S.connectSlow);
   app.__set = `<div class="felt-screen">
     <div class="connect-card">
       <div class="connect-suit">${suit}</div>
       <div class="connect-name">${gameName}</div>
       <div class="connect-msg">${sub}</div>
       <div class="connect-dots"><span></span><span></span><span></span></div>
+      ${offerOffline ? `<button class="btn" style="width:100%;margin-top:22px" data-action="play-offline">Play offline vs bots</button>` : ""}
+      <button class="btn ghost sm" style="width:100%;margin-top:${offerOffline ? 10 : 22}px" data-action="leave">Leave</button>
     </div>
   </div>`;
 }
@@ -913,7 +1075,7 @@ window.matchMedia("(orientation:landscape)").addEventListener("change", () => re
 // layout follows the device's real orientation rather than a stale snapshot.
 const rerenderForViewport = () => { try { render(); } catch {} };
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) { rerenderForViewport(); setTimeout(rerenderForViewport, 300); }
+  if (!document.hidden) { rerenderForViewport(); setTimeout(rerenderForViewport, 300); reconnectNow(); }
 });
 window.addEventListener("pageshow", rerenderForViewport);
 // Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
@@ -960,28 +1122,38 @@ function renderLobby(v) {
   const n = v.seats.length;
   const you = v.you;
 
+  // Rummy bot level for a seat (applied on "change", sent with the full lobby config).
+  const diffPicker = (i) => {
+    const diff = v.botDifficulty?.[i] ?? 2;
+    return `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}" value="${diff}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`;
+  };
+  // Empty seats: the host may reserve one for a pass-and-play guest — but only
+  // while no other online player is seated, since that deal runs on this device.
+  // Everyone else (spectators too) can sit in one; so can the host once friends
+  // are here (e.g. to pick a partner in a team game).
+  const remoteHumans = S.offline ? 0 : v.seats.filter((s, i) => s.kind === "human" && i !== you).length;
+  const emptyAction = isHost && (S.offline || remoteHumans === 0) ? "reserve-hotseat" : S.offline ? null : "sit";
+
   // Build a pod for each non-self seat (same positions as gameplay pods).
   const lbyPod = (s, i) => {
     const isEmpty = s.kind === "empty";
     const isBot = s.kind === "bot";
-    const reserved = isHost && S.hotseats[i];
+    const reserved = isHost && isEmpty && S.hotseats[i];
     const tc = isTeamGame ? (i % 2 === 0 ? "tA" : "tB") : "";
     const name = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open" : esc(s.name || "Player");
-    const initial = isEmpty ? "+" : isBot && !reserved ? "B" : name.charAt(0).toUpperCase();
-    const avCls = isEmpty ? "empty" : reserved ? "local" : isBot ? "bot" : "human";
-    const role = isEmpty ? "tap to add" : reserved ? "pass &amp; play" : isBot ? "bot" : i === v.hostSeat ? "host" : "player";
-    const seatClick = isEmpty && isHost ? ` data-action="reserve-hotseat" data-seat="${i}" style="cursor:pointer"` : "";
+    const initial = isEmpty && !reserved ? "+" : isBot ? "B" : name.charAt(0).toUpperCase();
+    const avCls = reserved ? "local" : isEmpty ? "empty" : isBot ? "bot" : "human";
+    const role = reserved ? "pass &amp; play"
+      : isEmpty ? (emptyAction === "sit" ? "tap to sit" : emptyAction ? "tap to add" : "open")
+      : isBot ? "bot" : i === v.hostSeat ? "host" : "player";
+    const seatClick = isEmpty && !reserved && emptyAction ? ` data-action="${emptyAction}" data-seat="${i}" style="cursor:pointer"` : "";
 
     let removeBtn = "";
     if (reserved) {
       removeBtn = `<button class="lby-pod-remove" data-action="clear-hotseat" data-seat="${i}">✕</button>`;
     } else if (isBot && isHost) {
-      const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
-      const diffPicker = isRummyLobby
-        ? `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`
-        : "";
-      removeBtn = diffPicker + `<button class="lby-pod-remove" data-action="removebot" data-seat="${i}">✕</button>`;
-    } else if (S.offline && s.kind === "human") {
+      removeBtn = (isRummyLobby ? diffPicker(i) : "") + `<button class="lby-pod-remove" data-action="removebot" data-seat="${i}">✕</button>`;
+    } else if (S.offline && s.kind === "human" && i !== v.hostSeat) {
       removeBtn = `<button class="lby-pod-remove" data-action="clearseat" data-seat="${i}">✕</button>`;
     }
 
@@ -989,7 +1161,7 @@ function renderLobby(v) {
     if (isTeamGame || isRummyLobby || isHearts) {
       const isEmptyUnreserved = isEmpty && !reserved;
       const boxLabel = reserved ? name.toUpperCase().substring(0, 8)
-        : isEmpty ? "OPEN"
+        : isEmpty ? (emptyAction === "sit" ? "SIT" : "OPEN")
         : (isBot ? "BOT" : name.toUpperCase().substring(0, 8));
       const boxIcon = isEmptyUnreserved ? "+" : initial;
       return `<div class="lby-seat-box ${tc} ${isEmptyUnreserved ? "lby-seat-empty" : ""}"${seatClick}>
@@ -1071,8 +1243,9 @@ function renderLobby(v) {
     : "";
   const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
-  // Inline editable name in the selfbar
-  const nameInput = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
+  // Inline editable name in the selfbar (tableShell renders it twice — appbar for
+  // landscape, selfbar for portrait — so it carries a class, never an id)
+  const nameInput = `<div class="lby-name-row"><input class="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
   const selfExtra = "";
 
   // Joker watermark + corner suits for the felt
@@ -1086,9 +1259,9 @@ function renderLobby(v) {
     ? `<button class="btn lby-share-btn" data-action="share-link">Invite Players</button>`
     : "";
   // Tutorial: single human only (no pass-and-play), sits between Invite and Deal.
-  // Works online or offline — in production a solo "vs bots" game is a normal server
-  // room, not S.offline, and in the lobby the other seats are still empty (bots fill
-  // them on deal), so we gate on a lone human seat rather than the offline flag.
+  // Works online or offline — a solo "vs bots" deal from an online lobby moves the
+  // table into a LocalRoom (see doStart), and in the lobby the other seats are still
+  // empty (bots fill them on deal), so we gate on a lone human seat, not S.offline.
   const singlePlayer = !hasHotseats && v.seats.filter((s) => s.kind === "human").length === 1;
   const tutorialBtn = (isHost && singlePlayer)
     ? `<button class="btn ghost lby-tutorial-btn${S.tutorial ? " active" : ""}" data-action="toggle-tutorial" aria-pressed="${S.tutorial ? "true" : "false"}" title="Play a guided practice hand">${S.tutorial ? "Tutorial ✓" : "Tutorial"}</button>`
@@ -1118,12 +1291,17 @@ function renderLobby(v) {
             </div>` : ""}
             ${(isRummyLobby || isHearts) ? `<div class="lby-set-row">
               <span class="lby-set-label">Play to</span>
-              <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" />
-            </div>
-            <div class="lby-set-row">
+              <input class="lby-pts" id="f-target" type="number" min="1" max="10000" value="${v.target ?? GAMES[S.party].target}" />
+            </div>` : ""}
+            ${isRummyLobby ? `<div class="lby-set-row">
               <span class="lby-set-label">Must discard</span>
               <button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard">${v.requireDiscard ? "On" : "Off"}</button>
-            </div>` : ""}
+            </div>
+            ${v.seats.map((s, i) => s.kind === "bot" || (s.kind === "empty" && !S.hotseats[i])
+              ? `<div class="lby-set-row">
+              <span class="lby-set-label">Seat ${i + 1} bot</span>
+              ${diffPicker(i)}
+            </div>` : "").join("")}` : ""}
             ${!S.offline ? `<div class="lby-set-row">
               <label class="lby-set-toggle">
                 <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} />
@@ -1190,7 +1368,8 @@ function scoreList(rows) {
 }
 
 function renderGameOver(v, title, scoresHTML) {
-  const isHost = v.you !== null && v.you === v.hostSeat;
+  // Offline every seated human shares this device, so whoever holds it can redeal.
+  const isHost = v.you !== null && (v.you === v.hostSeat || S.offline);
   app.__set = `${appbar(v)}
     <div class="stage">
       <div class="panel cream" style="text-align:center">
@@ -1396,7 +1575,7 @@ function renderHLJ(v) {
   if (v.phase === "gameOver") {
     const w = v.winner;
     const you = v.you;
-    const isHost = you !== null && you === v.hostSeat;
+    const isHost = you !== null && (you === v.hostSeat || S.offline); // offline: shared device
     const winLabel = w == null ? "Game over" : `Team ${w === 0 ? "A" : "B"} wins!`;
     const winTeamCls = w != null ? `t${w === 0 ? "A" : "B"}` : "";
     const lh = v.lastHand;
@@ -2228,8 +2407,9 @@ function renderRummy(v) {
     ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld)).map((c) => c.id))
     : null; // null = no filtering
 
-  // Drawn card preview (shown above fan after drawing from stock)
-  const drawnPreview = S.rummyDrawnCard
+  // Drawn card preview (shown above fan after drawing from stock) — only while
+  // that card is in the hand on screen (pass-and-play switches hands)
+  const drawnPreview = S.rummyDrawnCard && v.yourHand.some((c) => c.id === S.rummyDrawnCard.id)
     ? `<div class="rummy-drawn-preview" data-action="dismiss-drawn">
         ${cardHTML(S.rummyDrawnCard, {})}
         <div class="rummy-drawn-label">You drew this</div>
@@ -2914,6 +3094,8 @@ function doConnect() {
   localStorage.setItem("cg_name", name);
   if (!room) room = Math.random().toString(36).slice(2, 7);
   S.room = room;
+  S.joinedOnline = false;
+  S.retryMs = 0;
   history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
   connect();
 }
@@ -2933,6 +3115,12 @@ function doLeave() {
   S.intentionalClose = true;
   if (!S.offline) send({ t: "leave" });
   try { S.ws?.close(); } catch {}
+  S.ws = null;
+  clearTimeout(S.retryTimer);
+  S.retryTimer = null;
+  S.retryMs = 0;
+  S.joinedOnline = false;
+  S.connectSlow = false;
   S.view = null;
   S.connected = false;
   S.party = null;
@@ -2940,32 +3128,74 @@ function doLeave() {
   S.tutorial = false;
   S.hotseat = false;
   S.hotseats = {};
-  S.awaitingPass = false;
   S.revealedSeat = null;
+  resetGameUi();
   history.replaceState(null, "", "/");
   renderStart();
 }
 
+// The FULL lobby config, read from the authoritative view (never the DOM), with
+// `over` on top. Every setConfig and start goes through here, so changing one
+// option can't silently reset the others.
+function lobbyConfig(v, over = {}) {
+  const players = over.players ?? v.players;
+  if (S.party === "pegs-and-jokers") return { players, marbles: v.marbles, ...over };
+  const c = { players, target: v.target ?? GAMES[S.party].target };
+  if (S.party === "high-low-jack") c.bestOf = Math.max(1, (v.winsNeeded ?? 1) * 2 - 1);
+  if (S.party === "rummy500") {
+    c.requireDiscard = !!v.requireDiscard;
+    c.botDifficulty = Array.from({ length: players }, (_, i) => v.botDifficulty?.[i] ?? 2);
+  }
+  return { ...c, ...over };
+}
+
 function doStart() {
-  S.revealedSeat = 0;
-  S.awaitingPass = false;
   const v = S.view;
+  if (!v) return;
+  const config = lobbyConfig(v);
   const hasHotseats = Object.keys(S.hotseats).length > 0;
-  // If the only human is the host (no remote humans) OR the host has added
-  // pass-and-play seats, drop the server and run locally.
-  const nonHostHumans = v.seats.filter((s, i) => s.kind === "human" && i !== v.you).length;
-  if (nonHostHumans === 0 || hasHotseats) {
+  const remoteHumans = S.offline ? 0 : v.seats.filter((s, i) => s.kind === "human" && i !== v.you).length;
+  // Pass & play runs on this device, so it can't take online players along.
+  if (hasHotseats && remoteHumans > 0) {
+    return toast("Pass & Play can't include online players — clear the reserved seats first.");
+  }
+  resetGameUi();
+  if (S.offline) {
+    // Already local: seat the new pass-and-play guests in this room (it keeps
+    // the last game's guests and is already sized to the table), then deal.
+    S.revealedSeat = v.you;
+    for (const [seat, name] of Object.entries(S.hotseats)) send({ t: "addHuman", seat: +seat, name });
+    S.hotseats = {};
+    return send({ t: "start", config });
+  }
+  if (remoteHumans === 0) {
+    // Solo vs bots or pass & play from an online lobby: the deal runs in a
+    // LocalRoom on this device. Give the seat back and point the URL away from
+    // the room first, so neither the server nor a reload is left holding it.
+    send({ t: "leave" });
     S.intentionalClose = true;
     try { S.ws?.close(); } catch {}
+    S.ws = null;
+    S.joinedOnline = false;
     S.connected = false;
     S.view = null;
-    const target = S.party === "high-low-jack" ? 21 : (parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party]?.target);
-    connectLocal(v.seats, { target, marbles: v.marbles, botDifficulty: v.botDifficulty });
-    return;
+    S.revealedSeat = 0; // the hand-off seats this device at 0
+    history.replaceState(null, "", `/?game=${S.party}`);
+    return connectLocal({ seats: v.seats, you: v.you, config, start: true });
   }
-  if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: v.players, marbles: v.marbles } });
-  const target = S.party === "high-low-jack" ? 21 : (parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target);
-  send({ t: "start", config: { players: v.players, target, botDifficulty: v.botDifficulty } });
+  send({ t: "start", config });
+}
+
+// Lobby rename: update this device's name and the seat everyone sees (a repeat
+// join for our pid renames the seat, on the server and in a LocalRoom alike).
+function renameFrom(inp) {
+  const newName = inp ? inp.value.trim().slice(0, 24) : "";
+  if (!newName) return;
+  S.name = newName;
+  localStorage.setItem("cg_name", newName);
+  inp.blur();
+  send({ t: "join", pid: S.pid, name: newName });
+  render();
 }
 
 function toggleSel(id) {
@@ -3008,7 +3238,13 @@ app.addEventListener("click", (e) => {
     case "close-discard": S.discardOpen = false; return render();
     case "sort-toggle": { const m = S.rummySort === "suit" ? "rank" : "suit"; S.rummySort = m; return rummySort(v.yourHand, m); }
     case "sort-hearts": { const suitOrder = { S: 0, H: 1, C: 2, D: 3 }; S.heartsOrder = [...v.yourHand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id); return render(); }
-    case "pick-game": S.pickGame = t.dataset.game; return renderStart();
+    case "pick-game": {
+      // keep what's been typed: the re-render redraws the fields from S
+      S.room = document.getElementById("f-room")?.value ?? S.room;
+      S.name = document.getElementById("f-name")?.value ?? S.name;
+      S.pickGame = t.dataset.game;
+      return renderStart();
+    }
     case "set-theme": {
       S.theme = t.dataset.t;
       localStorage.setItem("cg_theme", S.theme);
@@ -3031,15 +3267,10 @@ app.addEventListener("click", (e) => {
     case "connect": return doConnect();
     case "share-link": return shareLink();
     case "leave": return doLeave();
+    case "play-offline": return doPlayOffline();
     case "sit": return send({ t: "sit", seat: +t.dataset.seat });
     case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
-    case "set-bot-difficulty": {
-      const seat = +t.dataset.seat;
-      const diff = +t.value;
-      const cur = v.botDifficulty ? [...v.botDifficulty] : Array(v.players).fill(2);
-      cur[seat] = diff;
-      return send({ t: "setConfig", config: { players: v.players, target: v.target, botDifficulty: cur } });
-    }
+    case "set-bot-difficulty": return; // applied on "change" (see below); a click just opens the picker
     case "removebot": return send({ t: "removeBot", seat: +t.dataset.seat });
     case "addhuman": {
       const seat = +t.dataset.seat;
@@ -3059,39 +3290,43 @@ app.addEventListener("click", (e) => {
       delete S.hotseats[+t.dataset.seat];
       return render();
     }
-    case "lby-rename": {
-      const inp = document.getElementById("lby-name-input");
-      const newName = inp ? inp.value.trim() : "";
-      if (newName) { S.name = newName; localStorage.setItem("cg_name", newName); render(); }
-      return;
-    }
+    case "lby-rename": return renameFrom(t.closest(".lby-name-row")?.querySelector("input"));
     case "open-lby-settings": S.lbySettingsOpen = true; return render();
     case "close-lby-settings": S.lbySettingsOpen = false; return render();
-    case "lby-set-bestof": {
-      const n = +t.dataset.n;
-      return send({ t: "setConfig", config: { players: v.players, target: v.target, bestOf: n } });
-    }
+    case "lby-set-bestof": return send({ t: "setConfig", config: lobbyConfig(v, { bestOf: +t.dataset.n }) });
     case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
     case "toggle-tutorial": S.tutorial = !S.tutorial; return render();
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
     case "toggle-last-trick": if (S.party === "hearts") S.heartsLastTrickOpen = !S.heartsLastTrickOpen; else S.hljLastTrickOpen = !S.hljLastTrickOpen; return render();
     case "advance-trick": return send({ t: "advance" });
-    case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
-    case "setcount": {
-      const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-      const config = { players: +t.dataset.count, target };
-      if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
-      if (v.requireDiscard != null) config.requireDiscard = v.requireDiscard;
-      return send({ t: "setConfig", config });
+    case "reveal-hand": {
+      // Reveal only the seat the frame on screen belongs to; if it moved on,
+      // re-target the hand-off screen to that seat instead.
+      if (!v || v.you !== S.passTo) { maybePromptPass(); return render(); }
+      S.revealedSeat = S.passTo;
+      S.awaitingPass = false;
+      render();
+      return maybeAutoPlay(v);
     }
-    case "rummy-toggle-discard": {
-      const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-      const config = { players: v.players, target, requireDiscard: !v.requireDiscard };
-      if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
-      return send({ t: "setConfig", config });
-    }
+    case "setcount": return send({ t: "setConfig", config: lobbyConfig(v, { players: +t.dataset.count }) });
+    case "rummy-toggle-discard": return send({ t: "setConfig", config: lobbyConfig(v, { requireDiscard: !v.requireDiscard }) });
     case "start": return doStart();
-    case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
+    case "newgame": {
+      S.revealedSeat = null;
+      S.awaitingPass = false;
+      resetGameUi();
+      // Offline the game can end on a pass-and-play guest's seat, but the next
+      // lobby is the host's: rebuild it from the host's seat (guests kept, bots
+      // back to open seats, same settings) rather than one nobody can deal.
+      if (S.offline && v && v.hostSeat != null && v.you !== v.hostSeat) {
+        const seats = v.seats.map((s) => (s.kind === "bot" ? { kind: "empty", name: null } : s));
+        try { S.ws?.close(); } catch {}
+        S.connected = false;
+        S.view = null;
+        return connectLocal({ seats, you: v.hostSeat, config: lobbyConfig(v), start: false });
+      }
+      return send({ t: "newGame" });
+    }
     case "move-bid": {
       const amt = +t.dataset.amount;
       // Open confidence window if a teammate still has a turn; bots wait server-side.
@@ -3184,8 +3419,8 @@ app.addEventListener("click", (e) => {
     }
     case "clear-pass": S.heartsPass.clear(); return render();
     case "play-hearts": return send({ t: "move", move: { type: "play", seat: v.you, card: +t.dataset.cardid } });
-    case "pj-setplayers": return send({ t: "setConfig", config: { players: +t.dataset.count, marbles: v.marbles } });
-    case "pj-setmarbles": return send({ t: "setConfig", config: { players: v.players, marbles: +t.dataset.m } });
+    case "pj-setplayers": return send({ t: "setConfig", config: lobbyConfig(v, { players: +t.dataset.count }) });
+    case "pj-setmarbles": return send({ t: "setConfig", config: lobbyConfig(v, { marbles: +t.dataset.m }) });
     case "pj-pick-card": S.pjCard = S.pjCard === +t.dataset.cardid ? null : +t.dataset.cardid; return render();
     case "pj-move": {
       const m = S.pjMoves[+t.dataset.mi];
@@ -3398,20 +3633,27 @@ function dptExecute(target) {
   }
 }
 
-// keep the host's "play to" value in the shared lobby config (so re-renders don't lose it)
+// Lobby settings that are form fields: keep them in the shared lobby config (so
+// re-renders don't lose them), always sent as the full config.
 app.addEventListener("change", (e) => {
-  if (e.target.id === "f-target" && S.view && S.view.phase === "lobby") {
-    const target = parseInt(e.target.value, 10);
-    if (target > 0) {
-      const cfg = { players: S.view.players, target };
-      if (S.view.botDifficulty) cfg.botDifficulty = S.view.botDifficulty;
-      send({ t: "setConfig", config: cfg });
-    }
+  const v = S.view;
+  if (!v || v.phase !== "lobby") return;
+  // the host's "play to" value
+  if (e.target.id === "f-target") {
+    const target = Number(e.target.value);
+    if (Number.isInteger(target) && target >= 1 && target <= 10000) send({ t: "setConfig", config: lobbyConfig(v, { target }) });
+    else { e.target.value = v.target ?? ""; toast("Play to: pick a whole number from 1 to 10000."); }
+  }
+  // Rummy bot level for a seat ("change" is what a native picker fires on iOS)
+  if (e.target.matches?.(".difficulty-pick")) {
+    const botDifficulty = lobbyConfig(v).botDifficulty;
+    botDifficulty[+e.target.dataset.seat] = +e.target.value;
+    send({ t: "setConfig", config: lobbyConfig(v, { botDifficulty }) });
   }
 });
 
 app.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && e.target.id === "lby-name-input") dispatch("lby-rename");
+  if (e.key === "Enter" && e.target.classList?.contains("lby-name-input")) renameFrom(e.target);
 });
 
 // ---------- init ----------
@@ -3427,9 +3669,12 @@ function init() {
   const q = new URLSearchParams(location.search);
   const game = q.get("game");
   const room = q.get("room");
-  if (game && GAMES[game]) { S.party = game; S.pickGame = game; }
+  if (game && GAMES[game]) S.pickGame = game;
   if (room) S.room = room;
-  if (S.party && S.room && S.name) connect();
-  else { S.party = S.party || null; renderStart(); }
+  // Only a full link (game + room, and a name to join with) goes straight to the
+  // table; otherwise the start screen, prefilled — with no party set, so a later
+  // re-render can't strand it on "Connecting…" (e.g. /?game=x after a solo deal).
+  if (S.pickGame && S.room && S.name) { S.party = S.pickGame; connect(); }
+  else renderStart();
 }
 init();
