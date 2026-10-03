@@ -13,6 +13,7 @@ import {
   legalMoves,
   applyMove,
   setSignal,
+  signalGateSeat,
   type GameState,
   type Move,
   type Card,
@@ -58,6 +59,8 @@ export type PlayerView = {
 
   seats: SeatInfo[]; // who occupies each seat (public)
   hostSeat: number | null;
+  botReplacement: boolean; // the room auto-replaces disconnected players with bots
+  disconnectedSeats: number[]; // seats whose human has dropped their connection
 
   scores: [number, number];
   winner: number | null;
@@ -81,6 +84,7 @@ export type PlayerView = {
   currentTrick: TrickPlay[]; // cards on the table (public)
   trickWinner: number | null; // winner seat while phase === "trickComplete"; else null
   pendingSignal: boolean; // true while waiting for the bidder to pick confidence
+  pendingSignalSeat: number | null; // the bidder being waited on (only they see the picker)
   lastTrick: { winner: number; cards: Card[] } | null; // for animating the previous trick
   lastHand: HandResult | null; // scoring breakdown at hand end
   lastKitty: Card[] | null; // kitty revealed after the hand completes
@@ -93,11 +97,19 @@ export type PlayerView = {
 export function redact(
   state: GameState,
   seat: number | null,
-  meta: { seats: SeatInfo[]; hostSeat: number | null; phase?: PlayerView["phase"] },
+  meta: {
+    seats: SeatInfo[];
+    hostSeat: number | null;
+    phase?: PlayerView["phase"];
+    botReplacement?: boolean;
+    disconnectedSeats?: number[];
+  },
 ): PlayerView {
   const phase = meta.phase ?? state.phase;
   const playing = phase === "bidding" || phase === "playing";
-  const toAct = !playing ? null : state.phase === "bidding" ? state.bidTurn : state.turn;
+  // Nobody may act while the confidence-pick gate is open (see seatToAct).
+  const gated = !!state.pendingSignal;
+  const toAct = !playing || gated ? null : state.phase === "bidding" ? state.bidTurn : state.turn;
   const yourTurn = seat !== null && toAct === seat;
 
   const tricks = state.tricksWon;
@@ -112,6 +124,8 @@ export function redact(
     target: state.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement ?? false,
+    disconnectedSeats: meta.disconnectedSeats ?? [],
     scores: state.scores,
     winner: state.winner,
     gamesWon: state.gamesWon,
@@ -129,11 +143,12 @@ export function redact(
     signals: state.signals,
     currentTrick: state.currentTrick,
     trickWinner: state.phase === "trickComplete" ? (state.trickWinner ?? null) : null,
-    pendingSignal: state.pendingSignal ?? false,
+    pendingSignal: gated,
+    pendingSignalSeat: signalGateSeat(state),
     lastTrick,
     lastHand: state.lastHand,
-    lastKitty: state.lastHand ? state.lastHand.kitty : null,
-    lastDealtHands: state.lastHand ? state.lastHand.dealtHands : null,
+    lastKitty: state.lastHand?.kitty ?? null,
+    lastDealtHands: state.lastHand?.dealtHands ?? null,
     log: (state as { log?: LogEntry[] }).log ?? [],
   };
 }

@@ -67,10 +67,33 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+// ---------- Entropy-seeded PRNG (sfc32) ----------
+// 32 bits of seed can be brute-forced from the cards a player sees, so live
+// rooms fold fresh entropy into every deal (see reseed) and shuffle with this
+// 128-bit generator instead.
+
+function sfc32(a: number, b: number, c: number, d: number): () => number {
+  const next = () => {
+    a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+    let t = (a + b) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    d = (d + 1) | 0;
+    t = (t + d) | 0;
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < 15; i++) next(); // mix the seed words before use
+  return next;
+}
+
 // Deterministic shuffle. Returns the shuffled deck plus the next seed so the
 // caller can advance the PRNG across hands without mutating shared state.
-function shuffle<T>(items: T[], seed: number): { shuffled: T[]; nextSeed: number } {
-  const rng = mulberry32(seed);
+// With entropy (4 uint32 words) it draws from sfc32; without, from the seed
+// alone, so tests and harnesses replay exactly.
+function shuffle<T>(items: T[], seed: number, entropy?: number[]): { shuffled: T[]; nextSeed: number } {
+  const rng = entropy ? sfc32(seed ^ entropy[0], entropy[1], entropy[2], entropy[3]) : mulberry32(seed);
   const a = items.slice();
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -157,9 +180,14 @@ export type HandResult = {
     game: number | null; // null on a tie
     gameCount: [number, number]; // pip counts for both teams (for display)
   };
-  dealtHands: Card[][]; // each player's starting hand, revealed post-hand
-  kitty: Card[];        // kitty for this hand, revealed post-hand
+  dealtHands: Card[][]; // each player's starting hand (sorted), revealed post-hand
+  kitty: Card[];        // kitty for this hand (sorted), revealed post-hand
   lastTrick: { winner: number; cards: Card[] }; // final trick of the hand, for animation
+  // Scores after this hand, before a series resets them for the next game, and
+  // the team that won a game with this hand (null if play goes on). Optional:
+  // results saved by older deploys lack them.
+  finalScores?: [number, number];
+  gameWinner?: number | null;
 };
 
 // Per-seat statistics accumulated across hands, observable by the AI.
@@ -216,6 +244,14 @@ export type GameState = {
   dealtHands: Card[][] | null; // starting hands this round, revealed at end of hand
   bidHistory: { seat: number; type: "bid" | "pass"; amount?: number; implicit?: true }[];
   pendingSignal?: boolean; // true while waiting for bidder to pick confidence before bots advance
+  pendingSignalSeat?: number | null; // the bidder that gate waits on (see signalGateSeat)
+
+  // Fresh entropy (4 uint32 words) folded into the next deal's shuffle; absent
+  // in seed-only (deterministic) play. See reseed.
+  entropy?: number[];
+  // True from createGame until the first reseed: the opening hand was shuffled
+  // from the seed alone, so that reseed shuffles it again.
+  seedOnlyDeal?: boolean;
 
   // Cross-hand player profiles, updated after each hand scores.
   profiles: PlayerProfile[];
@@ -234,7 +270,7 @@ export type Move =
 
 // ---------- Setup / dealing ----------
 
-function emptyProfile(): PlayerProfile {
+export function emptyProfile(): PlayerProfile {
   return {
     handsPlayed: 0,
     signalRecord: {
@@ -281,14 +317,27 @@ export function createGame(players: PlayerCount, seed: number, target = 21, wins
     bidHistory: [],
     profiles: Array.from({ length: players }, emptyProfile),
   };
-  return deal(base);
+  return { ...deal(base), seedOnlyDeal: true };
+}
+
+// Fold fresh entropy (4 uint32 words from a CSPRNG) into the state: every later
+// deal shuffles from it rather than from the seed chain, so no deal can be
+// worked out from cards seen earlier. The room calls this right after
+// createGame — before anyone has seen the opening hand, which was shuffled
+// from the 32-bit seed alone — so that first call deals the hand again.
+export function reseed(state: GameState, entropy: number[]): GameState {
+  if (!Array.isArray(entropy) || entropy.length < 4) return state;
+  const next: GameState = { ...state, entropy: entropy.slice(0, 4).map((w) => w >>> 0) };
+  const untouched = state.phase === "bidding" && state.bidsActed === 0 && state.lastHand === null;
+  if (!state.seedOnlyDeal || !untouched) return next;
+  return { ...deal(next), seedOnlyDeal: false };
 }
 
 // Deal a fresh hand. Dealer is already set; the opening bidder is to the
 // dealer's left.
 function deal(state: GameState): GameState {
   const deck = buildDeck(state.players);
-  const { shuffled, nextSeed } = shuffle(deck, state.seed);
+  const { shuffled, nextSeed } = shuffle(deck, state.seed, state.entropy);
 
   const hands: Card[][] = Array.from({ length: state.players }, () => []);
   let i = 0;
@@ -318,18 +367,45 @@ function deal(state: GameState): GameState {
     trickIndex: 0,
     currentTrick: [],
     tricksWon: [],
+    pendingSignal: false,
+    pendingSignalSeat: null,
+    seedOnlyDeal: false,
   };
 }
+
+export const isHandSignal = (x: unknown): x is HandSignal => x === "weak" || x === "medium" || x === "strong";
 
 // Record (or change) a seat's public confidence signal. Allowed only during
 // bidding; outside that window there's nothing to signal about. Not a
 // turn-taking move — a player may set it whenever during the bidding phase.
 export function setSignal(state: GameState, seat: number, level: HandSignal): GameState {
   if (state.phase !== "bidding") throw new Error("Signals can only be set during bidding");
-  if (seat < 0 || seat >= state.players) throw new Error("No such seat");
+  if (!Number.isInteger(seat) || seat < 0 || seat >= state.players) throw new Error("No such seat");
+  if (!isHandSignal(level)) throw new Error("Invalid signal");
   const signals = state.signals.slice();
   signals[seat] = level;
   return { ...state, signals };
+}
+
+// The seat the confidence-pick gate (pendingSignal) waits on, or null when no
+// gate is open. Games saved before the seat was stored fall back to the last
+// real bid — the human bid that opened the gate.
+export function signalGateSeat(state: GameState): number | null {
+  if (!state.pendingSignal) return null;
+  if (state.pendingSignalSeat != null) return state.pendingSignalSeat;
+  const history = state.bidHistory ?? [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].type === "bid" && !history[i].implicit) return history[i].seat;
+  }
+  return null;
+}
+
+// Canonical order for revealed cards (spades, hearts, diamonds, clubs, low to
+// high, joker last), so a revealed hand never shows the order it was dealt in.
+const REVEAL_SUIT_ORDER: Record<Suit, number> = { S: 0, H: 1, D: 2, C: 3 };
+export function sortCards(cards: Card[]): Card[] {
+  const key = (c: Card) => (isJoker(c) ? 99 : REVEAL_SUIT_ORDER[c.suit] * 16 + c.rank);
+  return [...cards].sort((a, b) => key(a) - key(b));
 }
 
 // ---------- Legal moves ----------
@@ -618,9 +694,12 @@ export function scoreHand(state: GameState): GameState {
     made,
     deltaByTeam,
     detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam, gameCount },
-    dealtHands: state.dealtHands ?? [],
-    kitty: state.kitty,
+    // Sorted: the deal order would give away the shuffle.
+    dealtHands: (state.dealtHands ?? []).map(sortCards),
+    kitty: sortCards(state.kitty),
     lastTrick: { winner: finalTrickRaw.seat, cards: finalTrickRaw.plays.map((p) => p.card) },
+    finalScores: scores,
+    gameWinner: null,
   };
 
   // Win conditions.
@@ -638,6 +717,7 @@ export function scoreHand(state: GameState): GameState {
     else if (bidderOut) winner = bidderTeam;
     else if (otherOut) winner = other;
   }
+  result.gameWinner = winner;
 
   // Update per-seat profiles with this hand's observable data.
   const profiles = state.profiles.map((prof, seat): PlayerProfile => {
@@ -652,7 +732,7 @@ export function scoreHand(state: GameState): GameState {
       totalTeamPoints: prof.totalTeamPoints + pointsByTeam[teamOf(seat)],
     };
     const sig = state.signals[seat];
-    const level = sig ?? "medium";
+    const level = isHandSignal(sig) ? sig : "medium";
     if (seat === bidderSeat) {
       p.bidsWon++;
       if (made) p.bidsMade++;
