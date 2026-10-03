@@ -686,8 +686,9 @@ function scoreSuit(ranks: number, joker: boolean, tens: number, low: number): nu
   let score = 0;
   // High: you own the High point if you hold the top trump in play.
   score += has(14) ? 1.0 : has(13) ? 0.4 : has(12) ? 0.15 : 0;
-  // Jack — keepable with higher trumps (or the joker) to protect it.
-  if (has(11)) score += Math.min(0.9, 0.25 + 0.2 * (highCount + (joker ? 1 : 0)));
+  // Jack — keepable with higher trumps to protect it (not the joker: it's the
+  // lowest trump and can never cover the Jack's trick).
+  if (has(11)) score += Math.min(0.9, 0.25 + 0.2 * highCount);
   // Joker (2 pts): kept with trump control (Ace+joker synergy), else captured by strong trumps.
   if (joker) score += Math.min(2.2, 0.3 + 0.25 * (trumps - 1) + (has(14) ? 1.15 : 0));
   else score += Math.min(0.8, 0.15 * highCount);

@@ -33,6 +33,7 @@ import {
   teamOf,
   lowRankFor,
   ledInfo,
+  isHandSignal,
   SUITS,
   type GameState,
   type Move,
@@ -136,11 +137,17 @@ function bestSuit(hand: Card[], players: number, allowed: (s: Suit) => boolean =
 }
 
 // The bidder names trump by leading: the top card of its best suit (only suits
-// it holds a natural card in qualify — the joker can't be led to trick 1).
+// it holds a natural card in qualify — the joker can't be led to trick 1). When
+// that top card is the Jack it would be led bare into the Q/K/A, so lead a low
+// trump instead (the Low itself only as a last resort) and keep the Jack back.
 function openingLead(hand: Card[], players: number): Extract<Card, { rank: number }> {
   const naturals = hand.filter((c): c is Extract<Card, { rank: number }> => !isJoker(c));
   const suit = bestSuit(hand, players, (s) => naturals.some((c) => c.suit === s)).suit;
-  return naturals.filter((c) => c.suit === suit).reduce((a, b) => (a.rank >= b.rank ? a : b));
+  const inSuit = naturals.filter((c) => c.suit === suit).sort((a, b) => a.rank - b.rank);
+  const top = inSuit[inSuit.length - 1];
+  if (top.rank !== 11) return top;
+  const low = lowRankFor(players as 4 | 6 | 8);
+  return inSuit.find((c) => c.rank !== 11 && c.rank !== low) ?? inSuit.find((c) => c.rank === low) ?? top;
 }
 
 // ---------- public-information helpers ----------
@@ -159,6 +166,23 @@ function bossTrumpValue(state: GameState, trump: Suit): number {
   const seenVals = new Set(seen.map((c) => trumpValue(c, trump)));
   const unseen = all.map((c) => trumpValue(c, trump)!).filter((v) => !seenVals.has(v));
   return unseen.length ? Math.max(...unseen) : -1;
+}
+
+// Highest trump value nobody has shown and this seat doesn't hold (-1 if none):
+// a trump above it can't be beaten by anyone. Unlike bossTrumpValue, the cards
+// on the table count as shown, so a winning card can itself be unbeatable.
+function hiddenTopTrump(state: GameState, trump: Suit, myCards: Card[]): number {
+  const low = lowRankFor(state.players);
+  const known = new Set<number>();
+  const note = (c: Card) => {
+    const v = trumpValue(c, trump);
+    if (v !== null) known.add(v);
+  };
+  for (const t of state.tricksWon) for (const p of t.plays) note(p.card);
+  for (const p of state.currentTrick) note(p.card);
+  for (const c of myCards) note(c);
+  for (let r = 14; r >= low; r--) if (!known.has(r)) return r;
+  return known.has(0) ? -1 : 0; // only the joker (the lowest trump) left
 }
 
 // Count unseen trumps (not yet played and not in my hand).
@@ -212,8 +236,8 @@ function higherTrumpsAllAccountedFor(state: GameState, trump: Suit, card: Card, 
   }
   // Check that every trump with higher value is accounted for
   if (isJoker(card)) {
-    // Joker can't be beaten, but "safe to lead" = no other trump is floating in
-    // an opponent's hand — i.e. all non-joker trumps played or in own hand
+    // The Joker is the lowest trump, so it's safe to lead only when no other
+    // trump is floating in an opponent's hand — all played or in own hand.
     for (let r = low; r <= 14; r++) {
       const v = trumpValue({ rank: r, suit: trump }, trump)!;
       if (!playedOrOwned.has(v)) return false;
@@ -266,17 +290,25 @@ function keepValue(c: Card, trump: Suit, low: number, p: Personality, myTeamAhea
 }
 
 // How valuable it is to drop a card onto a trick the partner is winning.
-function loadValue(c: Card, trump: Suit): number {
+function loadValue(c: Card, trump: Suit, low: number): number {
   if (isJoker(c)) return 60; // secures the Bonhomme for our side
-  if (!isJoker(c) && c.suit === trump && c.rank === 11) return 30; // Jack point
+  if (c.suit === trump && c.rank === 11) return 30; // Jack point
+  if (c.suit === trump && c.rank === low) return 30; // Low point (goes to whoever captures it)
   return gameValue(c);
 }
 
 // How "expensive" a card is to spend winning a trick. Prefer cheapest winner.
 // Joker gets a very high cost so a regular trump is always preferred over it;
 // the Joker's 2 game-point value shouldn't be squandered when any other trump wins.
-const winCost = (c: Card, trump: Suit): number =>
-  isJoker(c) ? 1000 : isTrump(c, trump) ? trumpValue(c, trump)! : (c as { rank: number }).rank;
+// The trump Jack and Low are points too: while a later seat could still
+// over-trump them they cost more than any other winner (when playing last they
+// are safe, and winning with them banks the point).
+const winCost = (c: Card, trump: Suit, low: number, isLast: boolean): number => {
+  if (isJoker(c)) return 1000;
+  if (!isTrump(c, trump)) return (c as { rank: number }).rank;
+  const pointCard = c.rank === 11 || c.rank === low;
+  return c.rank + (pointCard && !isLast ? 200 : 0);
+};
 
 function pick<T>(items: T[], score: (t: T) => number, mode: "max" | "min"): T {
   return items.reduce((best, t) =>
@@ -329,8 +361,8 @@ const signalToNum = (sig: HandSignal | null): number => (sig === "strong" ? 2 : 
 // Reliability score for a signal level: fraction of times the player bid and
 // made it when they emitted that signal. Returns null if no data yet.
 function signalReliability(prof: PlayerProfile, level: "weak" | "medium" | "strong"): number | null {
-  const rec = prof.signalRecord[level];
-  return rec.bid >= 3 ? rec.made / rec.bid : null;
+  const rec = prof?.signalRecord?.[level];
+  return rec && rec.bid >= 3 ? rec.made / rec.bid : null;
 }
 
 // Calibrated signal strength [0..2]. Adjusts the raw signal up/down based on
@@ -340,7 +372,7 @@ function signalReliability(prof: PlayerProfile, level: "weak" | "medium" | "stro
 // Falls back to the raw signal when there's not enough data.
 function calibratedSignal(sig: HandSignal | null, prof: PlayerProfile): number {
   const raw = signalToNum(sig);
-  const level = sig ?? "medium";
+  const level = isHandSignal(sig) ? sig : "medium";
   const rel = signalReliability(prof, level);
   if (rel === null) return raw; // not enough history
 
@@ -426,12 +458,17 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
       }
 
       // Heuristic 2 (Low bait): if we don't hold Low and trumps need pulling,
-      // lead the second-lowest trump to force Low out.
+      // lead the second-lowest trump to force Low out — unless that is an
+      // unprotected Jack (Heuristic 3 still holds).
       const myLow = myTrumps.find((c) => !isJoker(c) && c.rank === low);
       if (!myLow && shouldPullTrumps && myTrumps.length >= 2) {
         const byVal = myTrumps.slice().sort((a, b) => trumpValue(a, trump)! - trumpValue(b, trump)!);
         // Second-lowest (index 1) baits Low without giving it away.
-        return asMove(byVal[1]);
+        const bait = byVal[1];
+        const bareJack = !isJoker(bait) && bait.rank === 11
+          && !myTrumps.some((c) => !isJoker(c) && c.rank > 11)
+          && !higherTrumpsAllAccountedFor(state, trump, bait, state.hands[seat]);
+        if (!bareJack) return asMove(bait);
       }
     }
 
@@ -454,18 +491,14 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
   //   – trump was led (trick is already a trump trick), OR
   //   – all opponents are known trump-void, OR
   //   – every other trump is accounted for in completed tricks or own hand, OR
-  //   – the current trick winner holds the boss trump — no one can play a higher trump
-  //     to beat the Joker regardless of what suit was led, OR
   //   – we are the last to play.
   const voids = trumpVoidSeats(state, trump);
   const allOpponentsVoid = [...Array(players).keys()]
     .filter((i) => i !== seat && teamOf(i) !== myTeam)
     .every((i) => voids.has(i));
-  const currentWinnerHoldsBoss = trumpValue(winnerCard, trump) === boss;
   const jokerSafe = trumpLedThisTrick
     || allOpponentsVoid
     || higherTrumpsAllAccountedFor(state, trump, { joker: true } as Card, cards)
-    || currentWinnerHoldsBoss
     || isLast;
 
   const wouldWin = (c: Card) => trickWinner([...state.currentTrick, { seat, card: c }], trump) === seat;
@@ -478,18 +511,21 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
     const partnerSeat = winnerSeat;
     const partnerCalibrated = calibratedSignal(state.signals[partnerSeat], state.profiles[partnerSeat]);
     const winVal = trumpValue(winnerCard, trump);
+    // A trump above every trump still hidden from us can't be beaten.
     const partnerStrong = winVal !== null
-      ? (winVal === boss || winVal! >= 12 || partnerCalibrated >= p.loadSignalThreshold)
+      ? (winVal > hiddenTopTrump(state, trump, state.hands[seat]) || winVal >= 12 || partnerCalibrated >= p.loadSignalThreshold)
       : partnerCalibrated >= p.loadSignalThreshold;
 
-    const safe = cards.filter((c) => !wouldWin(c));
+    // Don't overtake partner — except, playing last, with the Joker, Jack or
+    // Low: the trick is ours whoever takes it, so they bank their points.
+    const banks = (c: Card) => isJoker(c) || (c.suit === trump && (c.rank === 11 || c.rank === low));
+    const safe = cards.filter((c) => !wouldWin(c) || (isLast && banks(c)));
     const pool = safe.length ? safe : cards;
 
     if (partnerStrong || isLast) {
-      // Heuristic 3: if we're last but partner's win isn't strong, skip loading
-      // the Joker — an over-trump is impossible now (we're last) but the Joker
-      // is safe; load it freely. Just use standard load ordering.
-      return asMove(pick(pool, (c) => loadValue(c, trump), "max"));
+      // Load the most valuable card onto the trick (an over-trump is
+      // impossible once we're last).
+      return asMove(pick(pool, (c) => loadValue(c, trump, low), "max"));
     }
     // Partner winning but not strong: conserve, dump cheapest.
     return asMove(bestDiscard(pool, trump, low, p, myTeamAhead));
@@ -506,7 +542,7 @@ function decidePlay(state: GameState, seat: number, p: Personality): Move {
       // Opponent is very strong but we can only beat with a non-trump — skip it.
       return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
     }
-    return asMove(pick(winners, (c) => winCost(c, trump), "min"));
+    return asMove(pick(winners, (c) => winCost(c, trump, low, isLast), "min"));
   }
   return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
 }
