@@ -558,6 +558,7 @@ function decidePlayMC(state: GameState, seat: number, rng: () => number, p: Pers
 const BID_BUDGET = 12000; // simulated card plays per estimate
 const BID_MIN_WORLDS = 100;
 const BID_MAX_WORLDS = 250;
+const DEALER_WORLD_SHARE = 0.6;
 // Extra margin a non-dealer needs to outbid its own partner.
 const PARTNER_PREMIUM = 4;
 
@@ -588,7 +589,10 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
   const hand = state.hands[seat];
   const lead = openingLead(hand, state.players);
   const ctx = buildContext(state, seat, lead.suit);
-  const worlds = clamp(Math.floor(BID_BUDGET / cardsLeft(ctx)), BID_MIN_WORLDS, BID_MAX_WORLDS);
+  // A dealer facing a bid runs two estimates; on shared worlds the comparison
+  // is less noisy, so each can use fewer of them.
+  const share = isDealer && high !== null ? DEALER_WORLD_SHARE : 1;
+  const worlds = Math.round(share * clamp(Math.floor(BID_BUDGET / cardsLeft(ctx)), BID_MIN_WORLDS, BID_MAX_WORLDS));
   const seed = Math.floor(rng() * 0x100000000);
   const outlook = pointHistogram(ctx, encodeCard(lead), worlds, mulberry32(seed));
   const value = (bid: number) =>

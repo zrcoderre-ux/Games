@@ -289,20 +289,28 @@ function safeFrom(team: number, pos: number, wTv: number, wRank: number): boolea
   return true;
 }
 
-function isLegal(seat: number, c: number): boolean {
-  if (tLen === 0) return c !== JOKER || trickIdx > 0;
+// Follow-suit restriction for the seat about to play, set by setLegality():
+// 0 = anything goes, 1 = must play trump, 2 = must play the led suit or trump.
+let mustFollow = 0;
+
+function setLegality(seat: number): void {
+  mustFollow = 0;
+  if (tLen === 0) return;
   const o = seat * HAND;
-  if (trumpLed) {
-    if (tv(c) > 0) return true;
-    for (let i = 0; i < len[seat]; i++) if (tv(hand[o + i]) > 0) return false;
-    return true;
-  }
-  if (tv(c) > 0 || c >> 4 === ledSuit) return true;
   for (let i = 0; i < len[seat]; i++) {
-    const h = hand[o + i];
-    if (h !== JOKER && h >> 4 === ledSuit) return false;
+    const c = hand[o + i];
+    if (trumpLed ? tv(c) > 0 : c !== JOKER && c >> 4 === ledSuit) {
+      mustFollow = trumpLed ? 1 : 2;
+      return;
+    }
   }
-  return true;
+}
+
+// Is card c legal for the seat setLegality() was last called for?
+function isLegal(c: number): boolean {
+  if (tLen === 0) return c !== JOKER || trickIdx > 0;
+  if (mustFollow === 0 || tv(c) > 0) return true;
+  return mustFollow === 2 && c >> 4 === ledSuit;
 }
 
 // How much a seat hates giving a card away (dumping it on a lost trick).
@@ -340,6 +348,7 @@ function choose(seat: number): number {
   const o = seat * HAND;
   const n = len[seat];
   const team = seat & 1;
+  setLegality(seat);
 
   // ---- leading ----
   if (tLen === 0) {
@@ -363,7 +372,7 @@ function choose(seat: number): number {
     let best = -1, bestCost = 1e9;
     for (let i = 0; i < n; i++) {
       const c = hand[o + i];
-      if (!isLegal(seat, c)) continue;
+      if (!isLegal(c)) continue;
       const v = tv(c);
       const cost = v > 0 ? 200 + (c === JOKER ? 50 : v) + keepCost(c) : keepCost(c);
       if (cost < bestCost) { bestCost = cost; best = c; }
@@ -379,7 +388,7 @@ function choose(seat: number): number {
       let best = -1, bestV = -1e9;
       for (let i = 0; i < n; i++) {
         const c = hand[o + i];
-        if (!isLegal(seat, c)) continue;
+        if (!isLegal(c)) continue;
         const lv = loadValue(c);
         if (lv > bestV) { bestV = lv; best = c; }
       }
@@ -390,7 +399,7 @@ function choose(seat: number): number {
     let best = -1, bestCost = 1e9;
     for (let i = 0; i < n; i++) {
       const c = hand[o + i];
-      if (!isLegal(seat, c)) continue;
+      if (!isLegal(c)) continue;
       const v = tv(c);
       const beats = v > winTv || (winTv === 0 && v === 0 && c >> 4 === ledSuit && (c & 15) > winRank);
       if (!beats) continue;
@@ -411,7 +420,7 @@ function choose(seat: number): number {
   let best = -1, bestCost = 1e9;
   for (let i = 0; i < n; i++) {
     const c = hand[o + i];
-    if (!isLegal(seat, c)) continue;
+    if (!isLegal(c)) continue;
     const kc = keepCost(c);
     if (kc < bestCost) { bestCost = kc; best = c; }
   }
@@ -611,8 +620,7 @@ const EVIDENCE_TRIES = 20;
 const pool = new Int8Array(64);
 
 function evidenceLikelihood(ev: HandEvidence, cards: Int8Array, n: number): number {
-  let best = 0;
-  for (let s = 0; s < 4; s++) best = Math.max(best, suitScore(cards, n, s, LOW));
+  const best = bestSuitScore(cards, n, LOW);
   let l = 1;
   if (ev.signal >= 0 && signalLevel(best) !== ev.signal) l *= SIGNAL_MISMATCH;
   if (ev.action !== 0) l /= 1 + Math.exp((ev.action * (BID_STRENGTH - best)) / BID_STRENGTH_SPREAD);
@@ -665,41 +673,61 @@ function sampleWorld(ctx: SearchContext, rng: () => number): void {
 
 // ---------- hand strength (shared with ai.ts) ----------
 
-// Estimate of how many of the 6 points `cards[0..n)` can take with `suit` as
-// trump — the classic heuristic behind bot bidding signals. `low` is the
+// Estimate of how many of the 6 points a hand can take with a given trump suit
+// — the classic heuristic behind bot bidding signals. `ranks` is the bitmask
+// (bit r set) of the trump suit's natural ranks in the hand, `joker` whether
+// it holds the joker, `tens` how many tens it holds in any suit, and `low` the
 // lowest rank in the deck.
-export function suitScore(cards: ArrayLike<number>, n: number, suit: number, low: number): number {
-  let trumps = 0, tens = 0, highCount = 0;
-  let hasA = false, hasK = false, hasQ = false, hasJ = false, hasJoker = false, hasLow = false;
-  for (let i = 0; i < n; i++) {
-    const c = cards[i];
-    if (c === JOKER) { trumps++; hasJoker = true; continue; }
-    const r = c & 15;
-    if (r === 10) tens++;
-    if (c >> 4 !== suit) continue;
-    trumps++;
-    if (r >= 12) highCount++;
-    if (r === 14) hasA = true;
-    else if (r === 13) hasK = true;
-    else if (r === 12) hasQ = true;
-    else if (r === 11) hasJ = true;
-    if (r === low) hasLow = true;
-  }
+function scoreSuit(ranks: number, joker: boolean, tens: number, low: number): number {
+  const has = (r: number) => (ranks >> r) & 1;
+  let trumps = joker ? 1 : 0;
+  for (let m = ranks; m; m &= m - 1) trumps++;
+  const highCount = has(12) + has(13) + has(14);
   let score = 0;
   // High: you own the High point if you hold the top trump in play.
-  score += hasA ? 1.0 : hasK ? 0.4 : hasQ ? 0.15 : 0;
+  score += has(14) ? 1.0 : has(13) ? 0.4 : has(12) ? 0.15 : 0;
   // Jack — keepable with higher trumps (or the joker) to protect it.
-  if (hasJ) score += Math.min(0.9, 0.25 + 0.2 * ((hasA ? 1 : 0) + (hasK ? 1 : 0) + (hasQ ? 1 : 0) + (hasJoker ? 1 : 0)));
+  if (has(11)) score += Math.min(0.9, 0.25 + 0.2 * (highCount + (joker ? 1 : 0)));
   // Joker (2 pts): kept with trump control (Ace+joker synergy), else captured by strong trumps.
-  if (hasJoker) score += Math.min(2.2, 0.3 + 0.25 * (trumps - 1) + (hasA ? 1.15 : 0));
+  if (joker) score += Math.min(2.2, 0.3 + 0.25 * (trumps - 1) + (has(14) ? 1.15 : 0));
   else score += Math.min(0.8, 0.15 * highCount);
   // Low (captured rule): the Ace or King forces it out.
-  score += Math.min(0.7, 0.12 * trumps + (hasLow ? 0.15 : 0) + (hasA ? 0.65 : hasK ? 0.25 : 0));
+  score += Math.min(0.7, 0.12 * trumps + (has(low) ? 0.15 : 0) + (has(14) ? 0.65 : has(13) ? 0.25 : 0));
   // Game: tens are gold; the Ace guarantees a pip trick.
-  score += Math.min(1.0, 0.1 * trumps + 0.15 * tens + (hasA ? 0.5 : 0));
+  score += Math.min(1.0, 0.1 * trumps + 0.15 * tens + (has(14) ? 0.5 : 0));
   // Sheer bulk of trumps is control.
   score += 0.1 * Math.max(0, trumps - 3);
   return score;
+}
+
+const suitRanks = new Int32Array(4);
+
+// Collect per-suit rank bitmasks of cards[0..n) into suitRanks; returns
+// [holds the joker, number of tens] packed as joker * 16 + tens.
+function scanHand(cards: ArrayLike<number>, n: number): number {
+  suitRanks.fill(0);
+  let joker = 0, tens = 0;
+  for (let i = 0; i < n; i++) {
+    const c = cards[i];
+    if (c === JOKER) { joker = 1; continue; }
+    if ((c & 15) === 10) tens++;
+    suitRanks[c >> 4] |= 1 << (c & 15);
+  }
+  return joker * 16 + tens;
+}
+
+// suitScore of cards[0..n) with `suit` as trump.
+export function suitScore(cards: ArrayLike<number>, n: number, suit: number, low: number): number {
+  const jt = scanHand(cards, n);
+  return scoreSuit(suitRanks[suit], jt >= 16, jt & 15, low);
+}
+
+// The best suitScore over all four suits, in one pass over the cards.
+function bestSuitScore(cards: ArrayLike<number>, n: number, low: number): number {
+  const jt = scanHand(cards, n);
+  let best = 0;
+  for (let s = 0; s < 4; s++) best = Math.max(best, scoreSuit(suitRanks[s], jt >= 16, jt & 15, low));
+  return best;
 }
 
 // The hand-confidence signal a bot sends for a hand whose best suitScore is
