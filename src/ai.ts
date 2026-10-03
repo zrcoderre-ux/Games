@@ -555,8 +555,11 @@ function decidePlayMC(state: GameState, seat: number, rng: () => number, p: Pers
 
 // ---------- Monte Carlo bidding ----------
 
-const BID_BUDGET = 12000; // simulated card plays per estimate
-const BID_MIN_WORLDS = 100;
+// Worlds per estimate: about BID_BUDGET simulated card plays, kept within
+// [200, 250] — fewer measurably weakened bidding, more bought nothing. That is
+// 250 worlds with 4 players and 200 with 6 or 8.
+const BID_BUDGET = 7200;
+const BID_MIN_WORLDS = 200;
 const BID_MAX_WORLDS = 250;
 const DEALER_WORLD_SHARE = 0.6;
 // Extra margin a non-dealer needs to outbid its own partner.
