@@ -262,6 +262,21 @@ function avatarHTML(name, o = {}) {
   return `<div class="avatar${o.big ? " big" : ""}${teamCls}"${style}>${label}${o.host && !o.team ? `<span class="crown">\u265B</span>` : ""}</div>`;
 }
 
+// "away" chip and the host's Replace button for a seat whose human dropped.
+// Shared by the table pods and the Rummy phone ledger, so every layout can
+// unstick a game that is waiting on a disconnected player.
+function seatPresence(v, i) {
+  const away = !!(v.disconnectedSeats && v.disconnectedSeats.includes(i));
+  const isHost = v.you === v.hostSeat && v.you !== null;
+  return {
+    away,
+    badge: away ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "",
+    replaceBtn: away && isHost && !S.offline
+      ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
+      : "",
+  };
+}
+
 // opponent pod
 function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
@@ -273,12 +288,12 @@ function podHTML(v, i, o = {}) {
       : `<span class="mb"></span>`
   );
   const mb = mbArr.join("");
-  const isDisconnected = v.disconnectedSeats && v.disconnectedSeats.includes(i);
-  const isHost = v.you === v.hostSeat && v.you !== null;
-  const replaceBtn = isDisconnected && isHost && !S.offline
-    ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
+  const { away: isDisconnected, badge: disconnectedBadge, replaceBtn } = seatPresence(v, i);
+  // HLJ confidence signal: a small badge on the card stack's lower outer corner,
+  // apart from the dealer / bid chip slot.
+  const signalEl = o.signal
+    ? `<span class="pod-dealer-badge signal pod-signal" style="position:absolute;top:auto;right:auto;bottom:-6px;left:-6px;width:22px;height:22px;margin:0;transform:none;z-index:3">${o.signal}</span>`
     : "";
-  const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
   const mainBlock = o.avatar
     ? `<div class="pod-av-id" style="--avseat:${i}">
         <span class="pod-av">${(esc(name)[0] || "?").toUpperCase()}</span>
@@ -287,11 +302,12 @@ function podHTML(v, i, o = {}) {
       </div>`
     : `<div class="ministack">
         ${mb}
+        ${signalEl}
         <span class="back-name">${esc(name)}${disconnectedBadge}</span>
       </div>`;
   return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""} ${o.extraClass || ""}">
     ${mainBlock}
-    ${o.highBid != null ? `<div class="pod-dealer-badge bid">${o.highBid}</div>` : o.signalIcon != null ? `<div class="pod-dealer-badge signal">${o.signalIcon}</div>` : o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
+    ${o.highBid != null ? `<div class="pod-dealer-badge bid">${o.highBid}</div>` : o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
     ${o.pts != null || o.count != null ? `<div class="pod-info">
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
       ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
@@ -1367,19 +1383,22 @@ function scoreList(rows) {
     .join("")}</div>`;
 }
 
-function renderGameOver(v, title, scoresHTML) {
+// `lastHTML` (optional) is the deciding hand/round's breakdown, shown above the
+// totals; the log stays reachable so the whole final hand can be reviewed.
+function renderGameOver(v, title, scoresHTML, lastHTML = "") {
   // Offline every seated human shares this device, so whoever holds it can redeal.
   const isHost = v.you !== null && (v.you === v.hostSeat || S.offline);
-  app.__set = `${appbar(v)}
+  app.__set = `${appbar(v, { log: true })}
     <div class="stage">
       <div class="panel cream" style="text-align:center">
         <div class="hero"><div class="logo">\u2660</div><h1>${esc(title)}</h1><p class="sub">Good game.</p></div>
       </div>
+      ${lastHTML}
       <div class="panel"><h2 style="margin-bottom:10px">Final scores</h2>${scoresHTML}</div>
       <div class="panel" style="text-align:center">${
         isHost ? `<button class="btn" data-action="newgame">Deal a new game</button>` : `<p class="sub">Waiting for the host to deal again…</p>`
       }</div>
-    </div>`;
+    </div>${logSheet()}`;
 }
 
 // Perimeter layout: map t∈[0,1] to a point on the felt rectangle.
@@ -1646,13 +1665,17 @@ function renderHLJ(v) {
       ? `<button class="hlj-result-next-btn" data-action="newgame">New game</button>`
       : `<p class="sub" style="text-align:center;padding:10px 0">Waiting for the host to deal again…</p>`;
 
+    // The app bar (Log / Leave) sits inside the full-screen page, so nobody is
+    // stuck on the final scores waiting for a host who may never deal again.
     app.__set = `<div class="hlj-result-page">
+      <div style="padding-top:env(safe-area-inset-top)">${appbar(v, { log: true })}</div>
       <div class="hlj-result-felt">
         <div class="hlj-result-scroll">
           ${handSection}
           ${nextBtn}
         </div>
       </div>
+      ${logSheet()}
     </div>`;
     return;
   }
@@ -1671,6 +1694,12 @@ function renderHLJ(v) {
   // would throw mid-render and freeze the table.
   const SIGNAL_SRCS = { weak: "/low-signal.webp", medium: "/medium-signal.webp", strong: "/high-signal.webp" };
   const SIGNAL_LABELS = { weak: "Weak", medium: "Medium", strong: "Strong" };
+  // Signals are public for the whole hand (bots read every seat's), so each
+  // seat that has signalled shows its badge through bidding and play.
+  const signalImg = (i) => {
+    const lvl = v.signals?.[i];
+    return SIGNAL_SRCS[lvl] ? `<img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img">` : "";
+  };
 
   // pods (everyone but you), tagged with their team
   const pods = v.seats
@@ -1685,9 +1714,7 @@ function renderHLJ(v) {
             // when the dealer won. Skip during the brief bid-reveal freeze, when
             // the floating chips are shown instead.
             highBid: v.phase === "playing" && !S.hljBidHold && v.highBid?.seat === i && i !== v.you ? v.highBid.amount : null,
-            signalIcon: v.phase === "bidding" && v.highBid?.seat === i && v.signals?.[i]
-              ? `<img src="${SIGNAL_SRCS[v.signals[i]]}" alt="${SIGNAL_LABELS[v.signals[i]]}" class="signal-img">`
-              : null,
+            signal: signalImg(i),
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             backs: v.handCounts[i],
@@ -1899,7 +1926,7 @@ function renderHLJ(v) {
                 const legal = n >= minBid;
                 return `<button class="hlj-chip ${myTeamCls}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${(!legal || !v.yourTurn) ? "disabled" : ""}>${n}</button>`;
               }).join("")}
-              <button class="hlj-pass-btn" data-action="move-pass" ${!v.yourTurn ? "disabled" : ""}>Pass</button>
+              <button class="hlj-pass-btn" data-action="move-pass" ${!v.yourTurn || !canPass ? "disabled" : ""}${v.yourTurn && !canPass ? ` title="Everyone passed \u2014 the dealer must bid"` : ""}>Pass</button>
             </div>
           </div>`
         : ""
@@ -1926,10 +1953,10 @@ function renderHLJ(v) {
 
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfTeam = you != null ? (you % 2 === 0 ? "A" : "B") : null;
+  // Your own signal (once given) sits beside your bid / dealer chip for the hand.
+  const selfSignal = you != null && signalImg(you) ? `<span class="pod-dealer-badge signal">${signalImg(you)}</span>` : "";
   const selfMeta = you != null
-    ? (v.phase === "bidding" && v.highBid?.seat === you && curSignal
-        ? `<span class="pod-dealer-badge signal"><img src="${SIGNAL_SRCS[curSignal]}" alt="${SIGNAL_LABELS[curSignal]}" class="signal-img"></span>`
-        : v.phase === "playing" && v.highBid?.seat === you
+    ? selfSignal + (v.phase === "playing" && v.highBid?.seat === you
         ? `<span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>`
         : isYouDealer ? `<span class="pod-dealer-badge">D</span>` : "")
     : `play to ${v.target}`;
@@ -2081,10 +2108,12 @@ function renderHLJ(v) {
 // ---------- Rummy 500: client-side rule mirror ----------
 // These mirror rummy-module.ts so the UI can disable illegal actions outright
 // (the server still re-validates). Jokers are wild in both sets and runs.
+// A set is 3-4 cards of one rank, each natural a different suit (even with two decks).
 function rIsSet(cards) {
-  if (cards.length < 3) return false;
+  if (cards.length < 3 || cards.length > 4) return false;
   const nat = cards.filter((c) => !c.joker);
-  return nat.length > 0 && nat.every((c) => c.rank === nat[0].rank);
+  return nat.length > 0 && nat.every((c) => c.rank === nat[0].rank)
+    && new Set(nat.map((c) => c.suit)).size === nat.length;
 }
 function rIsRun(cards) {
   if (cards.length < 3) return false;
@@ -2170,30 +2199,48 @@ function resolveJokers(meld) {
   return cards.map(() => null);
 }
 
-// Can card `c` join the current selection and still potentially form a valid meld/layoff?
-function rCompatible(sel, c, layMeld) {
+// Can card `c` join the current selection and still potentially form a valid
+// meld/layoff? `pool` is the rest of the hand (unselected cards other than c):
+// its cards may still fill a run's gaps, so the answer doesn't depend on the
+// order the cards were tapped (3\u2663 then 5\u2663 is fine while 4\u2663 is in hand).
+function rCompatible(sel, c, layMeld, pool = []) {
   if (c.joker) return true;
   if (!sel.length) return true;
-  if (layMeld) return rCanLayoff(layMeld, [...sel, c]);
-  const naturals = sel.filter((s) => !s.joker);
-  if (!naturals.length) return true; // only jokers selected so far
-  const jokerCount = sel.filter((s) => s.joker).length;
-  // Set: same rank, no duplicate suit
-  const setRank = naturals[0].rank;
-  if (naturals.every((s) => s.rank === setRank) && c.rank === setRank && !sel.some((s) => s.suit === c.suit))
-    return true;
-  // Run: same suit, rank fits in range with available jokers as gap-fill.
-  // Try both ace interpretations (low=1, high=14) to match rIsRun.
-  const runSuit = naturals[0].suit;
-  if (naturals.every((s) => s.suit === runSuit) && c.suit === runSuit) {
-    const hasAce = naturals.some((s) => s.rank === 14) || c.rank === 14;
-    for (const aceRank of hasAce ? [1, 14] : [14]) {
-      const allRanks = [...naturals.map((s) => s.rank === 14 ? aceRank : s.rank), c.rank === 14 ? aceRank : c.rank].sort((a, b) => a - b);
-      if (new Set(allRanks).size !== allRanks.length) continue;
-      const lo = allRanks[0], hi = allRanks[allRanks.length - 1];
-      const gaps = hi - lo + 1 - allRanks.length;
-      if (gaps >= 0 && gaps <= jokerCount) return true;
+  const cards = [...sel, c];
+  if (layMeld) {
+    // Adding cards never repairs a set, so a set lay-off must hold as it is.
+    if (layMeld.kind === "set") return rCanLayoff(layMeld, cards);
+    return rRunFillable([...layMeld.cards, ...cards], pool);
+  }
+  const naturals = cards.filter((s) => !s.joker);
+  // Set: same rank, distinct suits (jokers carry no suit of their own), at most 4.
+  if (cards.length <= 4 && naturals.every((s) => s.rank === c.rank)
+      && new Set(naturals.map((s) => s.suit)).size === naturals.length) return true;
+  return rRunFillable(cards, pool);
+}
+
+// Could `cards` become (part of) one run once gaps are filled from `pool`?
+// Gaps take the jokers already in `cards` first; any left over must still fit
+// at the ends. Mirrors rIsRun's ace-low / ace-high handling.
+function rRunFillable(cards, pool) {
+  const naturals = cards.filter((s) => !s.joker);
+  const jokers = cards.length - naturals.length;
+  if (!naturals.length) return true;
+  const suit = naturals[0].suit;
+  if (!naturals.every((s) => s.suit === suit)) return false;
+  const poolJokers = pool.filter((p) => p.joker).length;
+  for (const ace of [1, 14]) {
+    const ranks = naturals.map((s) => (s.rank === 14 ? ace : s.rank)).sort((a, b) => a - b);
+    if (new Set(ranks).size !== ranks.length) continue;
+    const lo = ranks[0], hi = ranks[ranks.length - 1];
+    const gaps = hi - lo + 1 - ranks.length;
+    if (jokers >= gaps) {
+      if ((lo - 1) + (14 - hi) >= jokers - gaps) return true;
+      continue;
     }
+    // Gap ranks the pool holds in this suit (an ace is never inside a run).
+    const fill = new Set(pool.filter((p) => !p.joker && p.suit === suit && p.rank > lo && p.rank < hi && !ranks.includes(p.rank)).map((p) => p.rank)).size;
+    if (gaps - jokers <= fill + poolJokers) return true;
   }
   return false;
 }
@@ -2246,8 +2293,14 @@ function rummyLedgerRows(v, ctx) {
     const ribbon = myMelds.length
       ? `<div class="ledger-ribbon">${myMelds.map((m) => ctx.meldTile(m)).join("")}</div>`
       : `<div class="ledger-empty">no melds yet</div>`;
-    return `<div class="ledger-row${active ? " active" : ""}${you ? " you" : ""}">
+    // Same "away" chip and host Replace button the table pods carry.
+    const presence = seatPresence(v, i);
+    const presenceEl = presence.away
+      ? `<div class="ledger-away" style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:none">${presence.badge}${presence.replaceBtn}</div>`
+      : "";
+    return `<div class="ledger-row${active ? " active" : ""}${you ? " you" : ""}${presence.away ? " disconnected" : ""}">
       <div class="ledger-id">${nameplate}${badge}</div>
+      ${presenceEl}
       ${ribbon}
     </div>`;
   });
@@ -2295,7 +2348,13 @@ function renderRummy(v) {
 
   if (v.phase === "gameOver") {
     const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
-    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
+    // The deciding round goes straight to game over, so its breakdown lives here.
+    const lr = v.lastRound;
+    const lastHTML = lr
+      ? `<div class="panel"><h2 style="margin-bottom:10px">Last round \u2014 ${lr.outSeat != null ? `${esc(seatName(v, lr.outSeat))} went out` : "stock exhausted"}</h2>
+          <div style="display:flex;flex-direction:column;gap:12px">${rummyRoundPlayers(v, lr)}</div></div>`
+      : "";
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows), lastHTML);
   }
 
   const lm = v.yourTurn ? v.legalMoves : [];
@@ -2404,7 +2463,7 @@ function renderRummy(v) {
 
   // Determine which unselected cards are compatible with the current selection
   const compatibleIds = inPlay && selCards.length
-    ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld)).map((c) => c.id))
+    ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld, ordered.filter((p) => p !== c && !S.rummySel.has(p.id)))).map((c) => c.id))
     : null; // null = no filtering
 
   // Drawn card preview (shown above fan after drawing from stock) — only while
@@ -2536,6 +2595,76 @@ function rummyRoundModal(v) {
   return "";
 }
 
+// Seat that placed each card melded this round (card id -> seat). A melded card
+// scores for whoever put it down (lay-offs score for the layer, not the meld's
+// owner), so the round summary lists cards by placer. Uses the engine's per-card
+// `by` when present, else this round's "melded" / "laid off" log rows; a card
+// neither covers (log trimmed) falls back to its meld's owner.
+function rummyPlacers(v, lr) {
+  const by = new Map();
+  for (const m of lr.lastMelds ?? []) for (const c of m.cards) if (c.by != null) by.set(c.id, c.by);
+  // This round's rows lie between the previous round-end row and this one's
+  // (card ids repeat every round, so older rows must not count).
+  const log = v.log ?? [];
+  const isEnd = (e) => /^(goes out\b|Stock exhausted)/.test(e.msg || "");
+  let end = log.length - 1;
+  while (end >= 0 && !isEnd(log[end])) end--;
+  let start = end - 1;
+  while (start >= 0 && !isEnd(log[start])) start--;
+  for (let k = start + 1; k < end; k++) {
+    const e = log[k];
+    if (e.msg !== "melded" && e.msg !== "laid off") continue;
+    for (const c of e.cards ?? []) if (!by.has(c.id)) by.set(c.id, e.seat);
+  }
+  return by;
+}
+
+// Per-player round breakdown: melded points (cards they placed, grouped by meld)
+// minus the cards caught in hand. Shared by the round summary and game over.
+function rummyRoundPlayers(v, lr) {
+  const placers = rummyPlacers(v, lr);
+  return v.seats.map((_, i) => {
+    const name = esc(seatName(v, i));
+    const net = lr.delta[i] ?? 0;
+    const netStr = net >= 0 ? `+${net}` : `${net}`;
+    const total = v.scores[i];
+    const wentOut = i === lr.outSeat;
+
+    // How the delta is made up (the engine's own split).
+    const breakdown = lr.meldedPts && lr.heldPts
+      ? `<div class="rhc-breakdown" style="font-size:12px;color:var(--ink-soft);margin:-4px 0 6px">melded +${lr.meldedPts[i]} \u2212 held ${lr.heldPts[i]}</div>`
+      : "";
+
+    // Cards this player placed (green border), one group per meld they added to
+    const meldsEl = (lr.lastMelds ?? []).map((m) => {
+      const jokerRes = resolveJokers(m);
+      const mine = m.cards
+        .map((c, ci) => ({ c, as: jokerRes[ci] }))
+        .filter(({ c }) => (placers.get(c.id) ?? m.owner) === i);
+      return mine.length
+        ? `<div class="rhc-meld">${mine.map(({ c, as }) => cardHTML(c, { mini: true, jokerAs: as ?? undefined })).join("")}</div>`
+        : "";
+    }).join("");
+
+    // Held cards (red border)
+    const heldCards = lr.heldCards?.[i] ?? [];
+    const heldEl = heldCards.length
+      ? `<div class="rhc-cards rhc-held">${heldCards.map((c) => cardHTML(c, { mini: true })).join("")}</div>`
+      : "";
+
+    return `<div class="rhc-player${wentOut ? " rhc-went-out" : ""}">
+      <div class="rhc-player-hdr">
+        <span class="rhc-player-name">${name}${wentOut ? ` <span class='rr-badge'>went out</span>` : ""}</span>
+        <span class="rhc-delta ${net >= 0 ? "pos" : "neg"}">${netStr}</span>
+        <span class="rhc-total">/ ${total}</span>
+      </div>
+      ${breakdown}
+      ${meldsEl ? `<div class="rhc-melds" style="margin-bottom:6px">${meldsEl}</div>` : ""}
+      ${heldEl}
+    </div>`;
+  }).join("");
+}
+
 // Full-screen hand-complete overlay shown when phase === "handComplete".
 function rummyHandCompleteScreen(v) {
   const lr = v.lastRound;
@@ -2545,39 +2674,7 @@ function rummyHandCompleteScreen(v) {
     ? `${esc(seatName(v, lr.outSeat))} went out`
     : "Stock exhausted";
 
-  const playerSections = v.seats.map((_, i) => {
-    const name = esc(seatName(v, i));
-    const net = lr.delta[i] ?? 0;
-    const netStr = net >= 0 ? `+${net}` : `${net}`;
-    const total = v.scores[i];
-    const wentOut = i === lr.outSeat;
-
-    // Held cards (red border)
-    const heldCards = lr.heldCards?.[i] ?? [];
-    const heldEl = heldCards.length
-      ? `<div class="rhc-cards rhc-held">${heldCards.map((c) => cardHTML(c, { mini: true })).join("")}</div>`
-      : "";
-
-    // This player's melds (green border), grouped
-    const playerMelds = (lr.lastMelds ?? []).filter((m) => m.owner === i);
-    const meldsEl = playerMelds.length
-      ? playerMelds.map((m) => {
-          const jokerRes = resolveJokers(m);
-          const meldCards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined })).join("");
-          return `<div class="rhc-meld">${meldCards}</div>`;
-        }).join("")
-      : "";
-
-    return `<div class="rhc-player${wentOut ? " rhc-went-out" : ""}">
-      <div class="rhc-player-hdr">
-        <span class="rhc-player-name">${name}${wentOut ? ` <span class='rr-badge'>went out</span>` : ""}</span>
-        <span class="rhc-delta ${net >= 0 ? "pos" : "neg"}">${netStr}</span>
-        <span class="rhc-total">/ ${total}</span>
-      </div>
-      ${heldEl}
-      ${meldsEl ? `<div class="rhc-melds">${meldsEl}</div>` : ""}
-    </div>`;
-  }).join("");
+  const playerSections = rummyRoundPlayers(v, lr);
 
   const canAdvance = v.you != null;
   const nextBtn = canAdvance
@@ -2671,8 +2768,16 @@ function renderHearts(v) {
 
   if (v.phase === "gameOver") {
     const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
+    // The game-ending hand never gets its own result screen, so show what it
+    // scored (and a moon shot) above the totals.
+    const lh = v.lastHand;
+    const lastHTML = lh
+      ? `<div class="panel"><h2 style="margin-bottom:4px">Last hand</h2>${
+          lh.shooter != null ? `<p class="sub">${esc(seatName(v, lh.shooter))} shot the moon!</p>` : ""
+        }${scoreList(v.seats.map((s, i) => ({ name: seatName(v, i), score: `${lh.delta[i] > 0 ? "+" : ""}${lh.delta[i]}`, you: i === v.you })))}</div>`
+      : "";
     // Lowest score wins, so the title still points at v.winner (server picks the min).
-    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows), lastHTML);
   }
 
   const passing = v.phase === "passing";
@@ -2844,9 +2949,14 @@ function renderHearts(v) {
 
   const you = v.you;
   const selfMeta = you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`;
+  // Nobody is to act during the trick gate (toAct is null): name the trick's winner.
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
-    : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
+    : v.toAct != null
+    ? `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`
+    : v.phase === "trickComplete" && v.trickWinner != null
+    ? `<span class="waitflag">Trick to ${esc(seatName(v, v.trickWinner))}</span>`
+    : "";
 
   const ledSuit = (v.currentTrick?.length && !passing)
     ? v.currentTrick[0].card?.suit
