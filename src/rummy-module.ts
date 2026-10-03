@@ -2,24 +2,30 @@
 //
 // Pure and runtime-independent (imports only Suit/SUITS from engine.ts and the
 // Game contract): no PartyServer, no I/O, randomness only via a seeded PRNG
-// threaded through state.seed, so it is deterministic, testable, and reusable
-// on the client for single-player.
+// threaded through state.seed (plus any fresh entropy the room folds in, see
+// reseed), so it is deterministic, testable, and reusable on the client for
+// single-player.
 //
-// SCOPE (remaining extension point: wild/joker cards, noted inline):
-//   - 2-8 players, NO wild/joker cards. One 52-card deck for 2-4 players, two
-//     decks (104 cards) for 5-8 — every card has a unique id, so duplicates
-//     across decks are unambiguous. With two decks a set may exceed four cards
-//     and repeat a suit; a run still forbids duplicate ranks.
-//   - Scoring: A = 15, 10/J/Q/K = 10, 2-9 = pip value. Melded cards score for
-//     whoever placed them (lay-offs score for the layer, not the meld owner);
-//     cards left in hand at round end score against you.
+// SCOPE:
+//   - 2-8 players. One deck (52 cards + 2 wild jokers) for 2-4 players, two
+//     decks (108 cards) for 5-8 — every card has a unique id, so duplicates
+//     across decks are unambiguous. A set is 3-4 cards of one rank in distinct
+//     suits, even with two decks; a run is 3+ cards of one suit in sequence
+//     (Ace low or high, never both). Jokers fill in for any card.
+//   - Scoring: A = 15, 10/J/Q/K = 10, 2-9 = pip value, joker = 15. Melded
+//     cards score for whoever placed them (lay-offs score for the layer, not
+//     the meld owner); cards left in hand at round end score against you.
 //   - A round ends when a player goes out (empties their hand) OR the stock is
-//     exhausted; then the next round is dealt automatically. Game ends when a
-//     player reaches `target` (default 500); highest total wins.
+//     exhausted; the next round is dealt after the handComplete pause. The game
+//     ends when one player alone leads with at least `target` (default 500); a
+//     tie for that lead is played out with another round.
 //
 // A TURN is several moves by the same seat (seatToAct stays put until a discard
-// advances it): draw -> any number of meld/layoff -> discard. A card drawn from
-// the discard pile MUST be melded or laid off before that turn's discard.
+// advances it): draw -> any number of meld/layoff -> discard. Taking just the
+// top discard carries no obligation (it may even go straight back). Taking a
+// deeper card sweeps every card above it too, and that deepest card MUST be
+// melded or laid off before the turn's discard. With requireDiscard a player
+// must go out by discarding, so no meld or layoff may empty the hand.
 
 import { SUITS, type Suit } from "./engine.ts";
 import type { Game, RoomMeta, LogEntry } from "./game.ts";
@@ -62,8 +68,31 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function shuffle<T>(items: T[], seed: number): { shuffled: T[]; nextSeed: number } {
-  const rng = mulberry32(seed);
+// ---------- entropy-seeded PRNG (sfc32) ----------
+// 32 bits of seed can be brute-forced from the cards a player sees, so live
+// rooms fold fresh entropy into every deal (see reseed) and shuffle with this
+// 128-bit generator instead. (Also duplicated from the HLJ engine.)
+
+function sfc32(a: number, b: number, c: number, d: number): () => number {
+  const next = () => {
+    a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+    let t = (a + b) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    d = (d + 1) | 0;
+    t = (t + d) | 0;
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < 15; i++) next(); // mix the seed words before use
+  return next;
+}
+
+// With entropy (4 uint32 words) the shuffle draws from sfc32; without, from the
+// seed alone, so tests and harnesses replay exactly.
+function shuffle<T>(items: T[], seed: number, entropy?: number[]): { shuffled: T[]; nextSeed: number } {
+  const rng = entropy ? sfc32(seed ^ entropy[0], entropy[1], entropy[2], entropy[3]) : mulberry32(seed);
   const a = items.slice();
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -75,9 +104,13 @@ function shuffle<T>(items: T[], seed: number): { shuffled: T[]; nextSeed: number
 
 // ---------- meld validity ----------
 
-// A run treats an Ace as low (A-2-3) OR high (Q-K-A), never wrapping (K-A-2).
+// A run treats an Ace as low (A-2-3) OR high (Q-K-A), never wrapping (K-A-2)
+// and never both at once, so the longest run is 13 cards (A-K or 2-A).
 // Jokers are wild: they fill internal gaps and extend either end. A run must
 // still contain at least one natural card.
+// Slots one Ace reading allows: ace low covers A(1)..K(13), ace high 2..A(14).
+const minSlot = (aceRank: number): number => (aceRank === 1 ? 1 : 2);
+const maxSlot = (aceRank: number): number => (aceRank === 1 ? 13 : 14);
 function isRun(cards: RummyCard[]): boolean {
   if (cards.length < 3) return false;
   const naturals = cards.filter((c) => !c.joker);
@@ -93,8 +126,7 @@ function isRun(cards: RummyCard[]): boolean {
     const gaps = high - low + 1 - ranks.length; // interior slots a joker must fill
     if (gaps < 0 || gaps > jokers) continue;
     const extra = jokers - gaps; // leftover jokers extend the ends
-    if (high - low + 1 + extra > 14) continue; // can't grow past a 14-rank span
-    if ((low - 1) + (14 - high) < extra) continue; // not enough room at the ends
+    if ((low - minSlot(aceRank)) + (maxSlot(aceRank) - high) < extra) continue; // not enough room at the ends
     return true;
   }
   return false;
@@ -142,44 +174,91 @@ function orderRunCards(cards: RummyCard[]): RummyCard[] {
 
 const validMeld = (cards: RummyCard[]): boolean => isSet(cards) || isRun(cards);
 
-// Can `target` be the bottom card of an immediate meld, given a pool of cards
-// available this turn (used to validate a discard-pile draw)?
-function canRunWith(pool: RummyCard[], target: RummyCard): boolean {
-  if (target.joker) return false;
-  const inSuit = pool.filter((c) => c.suit === target.suit && !c.joker);
-  const jokers = pool.filter((c) => c.joker).length;
+// ---------- the forced card (deep discard pickup) ----------
+// Sweeping the pile below its top card obliges the player to meld or lay off
+// that deepest card before discarding. The pickup, and every meld or layoff
+// made while the card is pending, is allowed only if some single move can
+// still put it down — and, with requireDiscard, leave a card to discard. So a
+// seat with a forced card always has a legal move.
+
+// A three-card meld of `f` plus two of `others`, or null.
+function trioWith(others: RummyCard[], f: RummyCard): RummyCard[] | null {
+  if (f.joker) {
+    // A joker melds with any two related naturals, or a second joker and any natural.
+    const nats = others.filter((c) => !c.joker);
+    const jk = others.find((c) => c.joker);
+    if (jk && nats.length) return [f, jk, nats[0]];
+    for (let i = 0; i < nats.length; i++)
+      for (let j = i + 1; j < nats.length; j++) if (validMeld([f, nats[i], nats[j]])) return [f, nats[i], nats[j]];
+    return null;
+  }
+  const pool = [f, ...others];
+  const set = findSetContaining(pool, f)?.slice(0, 3) ?? null;
+  if (set && isSet(set)) return set;
+  const run = findRunContaining(pool, f);
+  return run && run.length === 3 && isRun(run) ? run : null;
+}
+
+// The fewest `pool` cards that let `f` join the run `run`: none if it fits
+// alone, else naturals of the suit on the ranks between the run and f, then
+// jokers. null if it can't reach the run.
+function runBridge(run: RummyCard[], f: RummyCard, pool: RummyCard[]): RummyCard[] | null {
+  if (isRun([...run, f])) return [];
+  const nat = run.filter((c) => !c.joker);
+  if (f.joker || !nat.length || nat[0].suit !== f.suit) return null;
+  const runJokers = run.length - nat.length;
+  let best: RummyCard[] | null = null;
   for (const aceRank of [1, 14]) {
-    const ranks = new Set(inSuit.map((c) => (c.rank === 14 ? aceRank : c.rank)));
-    const tr = target.rank === 14 ? aceRank : target.rank;
-    ranks.add(tr);
-    for (let start = tr - 2; start <= tr; start++) {
-      let ok = true, need = 0;
-      for (let k = 0; k < 3; k++) { const r = start + k; if (r < 1 || r > 14) { ok = false; break; } if (!ranks.has(r)) need++; }
-      if (ok && need <= jokers) return true;
+    const eff = (c: RummyCard) => (c.rank === 14 ? aceRank : c.rank);
+    const ranks = new Set(nat.map(eff));
+    if (ranks.has(eff(f))) continue; // a run can't hold a rank twice
+    ranks.add(eff(f));
+    const lo = Math.min(...ranks), hi = Math.max(...ranks);
+    const holes: number[] = [];
+    for (let r = lo + 1; r < hi; r++) if (!ranks.has(r)) holes.push(r);
+    const need = holes.length - runJokers; // the run's own jokers fill the rest
+    const bridge: RummyCard[] = [];
+    for (const r of holes) {
+      if (bridge.length >= need) break;
+      const c = pool.find((x) => !x.joker && x.suit === f.suit && eff(x) === r);
+      if (c) bridge.push(c);
+    }
+    for (const j of pool) if (j.joker && bridge.length < need) bridge.push(j);
+    if (bridge.length < need || !isRun([...run, f, ...bridge])) continue;
+    if (!best || bridge.length < best.length) best = bridge;
+  }
+  return best;
+}
+
+// One-move ways to put `f` down from `hand` (which holds it) onto `melds`: a
+// new three-card meld (meldId null) or a layoff, each listing the hand cards
+// it plays.
+function forcedPlays(hand: RummyCard[], f: RummyCard, melds: Meld[]): { meldId: number | null; cards: RummyCard[] }[] {
+  const others = hand.filter((c) => c.id !== f.id);
+  const out: { meldId: number | null; cards: RummyCard[] }[] = [];
+  const trio = trioWith(others, f);
+  if (trio) out.push({ meldId: null, cards: trio });
+  for (const m of melds) {
+    if (m.kind === "set") {
+      if (isSet([...m.cards, f])) out.push({ meldId: m.id, cards: [f] });
+    } else {
+      const bridge = runBridge(m.cards, f, others);
+      if (bridge) out.push({ meldId: m.id, cards: [f, ...bridge] });
     }
   }
-  return false;
+  return out;
 }
 
-function canFormMeldWith(pool: RummyCard[], target: RummyCard): boolean {
-  if (target.joker) return false;
-  // Set check: target + other same-rank cards with distinct suits + jokers.
-  // Each suit may appear at most once, so count distinct other suits available.
-  const otherSuits = new Set(pool.filter((c) => !c.joker && c.rank === target.rank && c.suit !== target.suit).map((c) => c.suit));
-  const jokers = pool.filter((c) => c.joker).length;
-  if (1 + otherSuits.size + jokers >= 3) return true;
-  return canRunWith(pool, target);
-}
-
-function canLayoff(state: RummyState, target: RummyCard): boolean {
-  return state.melds.some((m) =>
-    m.kind === "set" ? isSet([...m.cards, target]) : isRun([...m.cards, target]),
-  );
-}
+// Can `f` still be put down in one move (keeping a card back to discard when
+// requireDiscard is on)?
+const forcedPlayable = (hand: RummyCard[], f: RummyCard, melds: Meld[], requireDiscard: boolean): boolean =>
+  forcedPlays(hand, f, melds).some((p) => !requireDiscard || p.cards.length < hand.length);
 
 // ---------- state, moves, config, view ----------
 
-export type Meld = { id: number; kind: "set" | "run"; cards: RummyCard[] };
+// `owner` is the seat that put the meld down; it stays put when others lay off
+// onto it (cards[0] of a run changes as cards are laid off at its low end).
+export type Meld = { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] };
 
 export type RummyState = {
   players: number;
@@ -208,6 +287,13 @@ export type RummyState = {
   nextMeldId: number;
   log: LogEntry[]; // authoritative move log
   logSeq: number; // monotonic id source for log entries
+
+  // Fresh entropy (4 uint32 words) folded into the next deal's shuffle; absent
+  // in seed-only (deterministic) play. See reseed.
+  entropy?: number[];
+  // True from createGame until the first reseed: the opening hand was shuffled
+  // from the seed alone, so that reseed deals it again.
+  seedOnlyDeal?: boolean;
 };
 
 export type RummyMove =
@@ -259,7 +345,7 @@ export type RummyView = {
 const handSize = (players: number): number => (players === 2 ? 13 : 7);
 
 function dealRound(prev: RummyState): RummyState {
-  const { shuffled, nextSeed } = shuffle(buildDeck(decksFor(prev.players)), prev.seed);
+  const { shuffled, nextSeed } = shuffle(buildDeck(decksFor(prev.players)), prev.seed, prev.entropy);
   const hands: RummyCard[][] = Array.from({ length: prev.players }, () => []);
   const hs = handSize(prev.players);
   let i = 0;
@@ -283,15 +369,26 @@ function dealRound(prev: RummyState): RummyState {
   };
 }
 
+// Per-seat bot level 0-3. Anything else (missing, out of range, not a whole
+// number) becomes 2 (Hard), so a bad lobby value can't break a bot.
+const botLevels = (players: number, raw: unknown): number[] =>
+  Array.from({ length: players }, (_, i) => {
+    const d = Array.isArray(raw) ? raw[i] : undefined;
+    return Number.isInteger(d) && d >= 0 && d <= 3 ? d : 2;
+  });
+
+// Validate the lobby options (throws with a message the lobby can show).
 function createGame(config: RummyConfig, seed: number): RummyState {
-  if (config.players < 2 || config.players > 8) throw new Error(`Unsupported player count: ${config.players}`);
-  if (config.target <= 0) throw new Error("Target must be positive");
-  // Default all seats to Hard (2 = Aggressive) when not specified.
-  const botDifficulty = Array.from({ length: config.players }, (_, i) => config.botDifficulty?.[i] ?? 2);
+  const players = config.players;
+  if (!Number.isInteger(players) || players < 2 || players > 8) throw new Error(`Unsupported player count: ${players}`);
+  const target = config.target === undefined ? 500 : config.target;
+  if (!Number.isInteger(target) || target < 1 || target > 10000) throw new Error("Target must be a whole number from 1 to 10000");
+  const requireDiscard = config.requireDiscard ?? false;
+  if (typeof requireDiscard !== "boolean") throw new Error("Must discard to go out must be on or off");
   const base: RummyState = {
-    players: config.players,
-    target: config.target,
-    requireDiscard: config.requireDiscard ?? false,
+    players,
+    target,
+    requireDiscard,
     seed,
     phase: "playing",
     dealerSeat: 0,
@@ -303,16 +400,46 @@ function createGame(config: RummyConfig, seed: number): RummyState {
     melds: [],
     cardOwner: {},
     mustMeldCardId: null,
-    scores: Array(config.players).fill(0),
+    scores: Array(players).fill(0),
     winner: null,
     lastRound: null,
-    botDifficulty,
+    botDifficulty: botLevels(players, config.botDifficulty),
     nextMeldId: 0,
     log: [],
     logSeq: 0,
   };
   const dealt = dealRound(base);
-  return attachRummy(dealt, [], 0, [{ seat: dealt.dealerSeat, msg: "deals the first hand" }]);
+  return { ...attachRummy(dealt, [], 0, [{ seat: dealt.dealerSeat, msg: "deals the first hand" }]), seedOnlyDeal: true };
+}
+
+// Fold fresh entropy (4 uint32 words from a CSPRNG) into the state: every later
+// deal shuffles from it rather than from the seed chain, so no deal can be
+// worked out from cards seen earlier. The room calls this right after
+// createGame — before anyone has seen the opening hand, which was shuffled
+// from the 32-bit seed alone — so that first call deals the hand again.
+function reseed(state: RummyState, entropy: number[]): RummyState {
+  if (!Array.isArray(entropy) || entropy.length < 4) return state;
+  const next: RummyState = { ...state, entropy: entropy.slice(0, 4).map((w) => w >>> 0) };
+  const untouched = state.phase === "playing" && state.logSeq === 1 && state.lastRound === null;
+  if (!state.seedOnlyDeal || !untouched) return next;
+  return { ...dealRound(next), seedOnlyDeal: false };
+}
+
+// Saved games from older deploys: fill in fields added since (meld owners,
+// the move log) and normalize the options.
+function migrate(raw: unknown): RummyState {
+  const s = raw as RummyState;
+  if (!s || typeof s !== "object" || !Number.isInteger(s.players) || s.players < 2 || s.players > 8) throw new Error("Not a Rummy 500 game");
+  const log = Array.isArray(s.log) ? s.log : [];
+  return {
+    ...s,
+    // Older melds took their owner from cards[0]; that's the best guess left.
+    melds: (s.melds ?? []).map((m) => ({ ...m, owner: m.owner ?? s.cardOwner?.[m.cards[0]?.id] ?? -1 })),
+    requireDiscard: s.requireDiscard === true,
+    botDifficulty: botLevels(s.players, s.botDifficulty),
+    log,
+    logSeq: Number.isInteger(s.logSeq) ? s.logSeq : log.reduce((m, e) => Math.max(m, e.id), 0),
+  };
 }
 
 // ---------- move log ----------
@@ -362,7 +489,11 @@ function rummyEntries(prev: RummyState, next: RummyState, move: RummyMove): Omit
     if (lr.outSeat != null) out.push({ seat: lr.outSeat, msg: `goes out (+${lr.delta[lr.outSeat]} this round)` });
     else out.push({ seat: null, msg: "Stock exhausted \u2014 round scored" });
     if (next.phase === "gameOver" && next.winner !== null) out.push({ seat: next.winner, msg: "wins the game!" });
-    else if (next.dealerSeat !== prev.dealerSeat) out.push({ seat: next.dealerSeat, msg: "deals a new round" });
+    else if (next.dealerSeat !== prev.dealerSeat) {
+      const max = Math.max(...next.scores); // past the target without a winner: a tie
+      if (max >= next.target) out.push({ seat: null, msg: `Tied for the lead at ${max} \u2014 another round decides` });
+      out.push({ seat: next.dealerSeat, msg: "deals a new round" });
+    }
   }
 
   return out;
@@ -377,17 +508,24 @@ function meldedValue(state: RummyState, seat: number): number {
 }
 const heldValue = (state: RummyState, seat: number): number =>
   state.hands[seat].reduce((a, c) => a + cardValue(c), 0);
+// Suit, then rank, jokers last.
+const cardOrder = (a: RummyCard, b: RummyCard): number =>
+  Number(!!a.joker) - Number(!!b.joker) || SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit) || a.rank - b.rank || a.id - b.id;
 
 function endRound(state: RummyState, outSeat: number | null): RummyState {
   const meldedPts = state.scores.map((_, s) => meldedValue(state, s));
   const heldPts = state.scores.map((_, s) => heldValue(state, s));
   const delta = state.scores.map((_, s) => meldedPts[s] - heldPts[s]);
-  const heldCards = state.hands.map((h) => [...h]);
+  // Held cards are shown sorted, so they reveal nothing of the deal order.
+  const heldCards = state.hands.map((h) => [...h].sort(cardOrder));
   const scores = state.scores.map((v, s) => v + delta[s]);
-  const lastMelds = state.melds.map((m) => ({ ...m, owner: state.cardOwner[m.cards[0]?.id] ?? -1 }));
+  const lastMelds = state.melds.map((m) => ({ ...m }));
   const lastRound = { delta, outSeat, meldedPts, heldPts, heldCards, lastMelds };
+  // The game ends once ONE player leads with at least the target. A tie for
+  // that lead isn't broken by seat order: another round is played, and so on
+  // until a single leader stands at or past the target.
   const max = Math.max(...scores);
-  if (max >= state.target) {
+  if (max >= state.target && scores.filter((v) => v === max).length === 1) {
     return { ...state, scores, phase: "gameOver", winner: scores.indexOf(max), lastRound };
   }
   const nextDealer = (state.dealerSeat + 1) % state.players;
@@ -414,10 +552,8 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
       // The top card may always be taken, even if it can't be played this turn.
       if (idx === state.discard.length - 1) return true;
       // Taking deeper sweeps everything above too; the bottom card taken must be
-      // immediately meldable/layable (with hand + everything taken).
-      const taken = state.discard.slice(idx);
-      const target = state.discard[idx];
-      return canFormMeldWith([...hand, ...taken], target) || canLayoff(state, target);
+      // playable in one move from hand + everything taken (see forcedPlayable).
+      return forcedPlayable([...hand, ...state.discard.slice(idx)], state.discard[idx], state.melds, state.requireDiscard);
     }
     case "meld": {
       if (state.turnPhase !== "play" || !move.cards || move.cards.length < 3) return false;
@@ -426,19 +562,16 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
       if (objs.some((o) => !o)) return false;
       if (!validMeld(objs as RummyCard[])) return false;
       // If a deep-pile pickup is outstanding, this meld must not strand the forced card —
-      // after removing these cards from hand the forced card must still be meldable or
-      // layable (on any existing meld OR on the meld we're about to place).
+      // afterwards it must still be playable in one move (on any existing meld OR on
+      // the meld we're about to place).
       if (state.mustMeldCardId != null && !move.cards.includes(state.mustMeldCardId)) {
         const mustCard = hand.find((c) => c.id === state.mustMeldCardId);
         if (mustCard) {
           const remainHand = hand.filter((c) => !move.cards.includes(c.id));
           const newMeldCards = objs as RummyCard[];
           const newMeldKind: "set" | "run" = isSet(newMeldCards) ? "set" : "run";
-          const allMelds = [...state.melds, { id: -1, kind: newMeldKind, cards: newMeldCards }];
-          const canStillPlay =
-            canFormMeldWith(remainHand, mustCard) ||
-            allMelds.some((m) => m.kind === "set" ? isSet([...m.cards, mustCard]) : isRun([...m.cards, mustCard]));
-          if (!canStillPlay) return false;
+          const allMelds = [...state.melds, { id: -1, kind: newMeldKind, owner: move.seat, cards: newMeldCards }];
+          if (!forcedPlayable(remainHand, mustCard, allMelds, state.requireDiscard)) return false;
         }
       }
       // requireDiscard: block going out via meld alone (must keep ≥1 card to discard)
@@ -465,10 +598,7 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
           const remainHand = hand.filter((c) => !move.cards.includes(c.id));
           const updatedMeldCards = m.kind === "run" ? orderRunCards(combined) : combined;
           const updatedMelds = state.melds.map((x) => x.id === move.meldId ? { ...x, cards: updatedMeldCards } : x);
-          const canStillPlay =
-            canFormMeldWith(remainHand, mustCard) ||
-            updatedMelds.some((mx) => mx.kind === "set" ? isSet([...mx.cards, mustCard]) : isRun([...mx.cards, mustCard]));
-          if (!canStillPlay) return false;
+          if (!forcedPlayable(remainHand, mustCard, updatedMelds, state.requireDiscard)) return false;
         }
       }
       // requireDiscard: block going out via layoff alone
@@ -524,7 +654,7 @@ function applyMoveCore(state: RummyState, move: RummyMove): RummyState {
       const objs = move.cards.map((id) => state.hands[seat].find((c) => c.id === id)!);
       const newHand = state.hands[seat].filter((c) => !move.cards.includes(c.id));
       const kind = isSet(objs) ? "set" : "run";
-      const meld: Meld = { id: state.nextMeldId, kind, cards: kind === "run" ? orderRunCards(objs) : objs };
+      const meld: Meld = { id: state.nextMeldId, kind, owner: seat, cards: kind === "run" ? orderRunCards(objs) : objs };
       const cardOwner = { ...state.cardOwner };
       for (const id of move.cards) cardOwner[id] = seat;
       const ns: RummyState = {
@@ -591,26 +721,33 @@ function legalMoves(state: RummyState): RummyMove[] {
     // Whole-pile pickup: any non-top card is legal if it can be immediately melded/laid off
     // using the hand plus all cards swept above it.
     for (let i = 0; i < state.discard.length - 1; i++) {
-      const target = state.discard[i];
-      const taken = state.discard.slice(i);
-      if (canFormMeldWith([...hand, ...taken], target) || canLayoff(state, target))
-        moves.push({ type: "drawDiscard", seat, cardId: target.id });
+      const move: RummyMove = { type: "drawDiscard", seat, cardId: state.discard[i].id };
+      if (isLegal(state, move)) moves.push(move);
     }
     return moves;
   }
 
+  moves.push(...forcedMoves(state, seat)); // always one, while a forced card is pending
   const set = findSet(hand);
   if (set) moves.push({ type: "meld", seat, cards: set.map((c) => c.id) });
   const run = findRun(hand);
   if (run) moves.push({ type: "meld", seat, cards: run.map((c) => c.id) });
   for (const m of state.melds)
-    for (const c of hand) {
-      const combined = [...m.cards, c];
-      if (m.kind === "set" ? isSet(combined) : isRun(combined))
-        moves.push({ type: "layoff", seat, meldId: m.id, cards: [c.id] });
-    }
-  if (state.mustMeldCardId == null) for (const c of hand) moves.push({ type: "discard", seat, cardId: c.id });
-  return moves;
+    for (const c of hand) moves.push({ type: "layoff", seat, meldId: m.id, cards: [c.id] });
+  for (const c of hand) moves.push({ type: "discard", seat, cardId: c.id });
+  return moves.filter((m) => isLegal(state, m));
+}
+
+// The legal moves that put down the pending forced card, if any.
+function forcedMoves(state: RummyState, seat: number): RummyMove[] {
+  const hand = state.hands[seat];
+  const mc = hand.find((c) => c.id === state.mustMeldCardId);
+  if (!mc) return [];
+  const moves: RummyMove[] = forcedPlays(hand, mc, state.melds).map((p) => {
+    const cards = p.cards.map((c) => c.id);
+    return p.meldId == null ? { type: "meld", seat, cards } : { type: "layoff", seat, meldId: p.meldId, cards };
+  });
+  return moves.filter((m) => isLegal(state, m));
 }
 
 // ---------- redaction ----------
@@ -638,7 +775,7 @@ function redact(state: RummyState, seat: number | null, meta: RoomMeta): RummyVi
     handCounts: state.hands.map((h) => h.length),
     stockCount: state.stock.length,
     discard: state.discard,
-    melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: state.cardOwner[m.cards[0].id] ?? -1, cards: m.cards })),
+    melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: m.owner, cards: m.cards })),
     mustMeldCardId: yours ? state.mustMeldCardId : null,
     lastRound: state.lastRound,
     requireDiscard: state.requireDiscard,
@@ -672,8 +809,8 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
     melds: [],
     mustMeldCardId: null,
     lastRound: null,
-    requireDiscard: config.requireDiscard ?? false,
-    botDifficulty: Array.from({ length: players }, (_, i) => config.botDifficulty?.[i] ?? 2),
+    requireDiscard: config.requireDiscard === true,
+    botDifficulty: botLevels(players, config.botDifficulty),
     log: [],
   };
 }
@@ -739,8 +876,7 @@ const PILE_OUT = 0.5;
 export const DIFFICULTY_LABELS = ["Easy", "Medium", "Hard", "Expert"] as const;
 
 function aiLevel(state: RummyState, seat: number): AiLevel {
-  const d = state.botDifficulty?.[seat] ?? 2;
-  return AI_LEVELS[d >= 0 && d < AI_LEVELS.length ? d : 2];
+  return AI_LEVELS[botLevels(state.players, state.botDifficulty)[seat] ?? 2];
 }
 
 // ---------- deterministic per-decision RNG ----------
@@ -800,6 +936,7 @@ function bestRunInSuit(naturals: RummyCard[], jokers: RummyCard[]): RummyCard[] 
     if (!byRank.size) continue;
     for (let lo = 1; lo <= 12; lo++) {
       for (let hi = lo + 2; hi <= 14; hi++) {
+        if (lo === 1 && hi === 14) break; // the ace can't sit at both ends
         const span = hi - lo + 1;
         let nat = 0;
         for (let r = lo; r <= hi; r++) if (byRank.has(r)) nat++;
@@ -890,7 +1027,7 @@ function meldInfo(cards: RummyCard[], run: boolean, id: number): MeldInfo {
 
 // Run validity on a bitmask of natural ranks (ace = bit 14) plus wild jokers,
 // mirroring isRun: ace low or high, interior gaps filled by jokers, leftover
-// jokers extend the ends within the 14-rank span. Returns the covered span of
+// jokers extend the ends up to 13 cards in all. Returns the covered span of
 // natural cards as a bitmask of effective ranks (ace low = bit 1), or 0.
 function runSpan(nat: number, jokers: number): number {
   if (nat === 0) return 0;
@@ -905,7 +1042,7 @@ function runSpan(nat: number, jokers: number): number {
     const gaps = hi - lo + 1 - popcount(m);
     if (gaps > jokers) continue;
     const extra = jokers - gaps;
-    if (hi - lo + 1 + extra > 14 || lo - 1 + (14 - hi) < extra) continue;
+    if (hi - lo + 1 + extra > 13) continue;
     return ((1 << (hi + 1)) - 1) & ~((1 << lo) - 1);
   }
   return 0;
@@ -1650,10 +1787,10 @@ function chooseDraw(ctx: AiCtx): RummyMove {
     // melded or laid off this turn.
     for (let i = Math.max(0, pile.length - ctx.lv.pickupDepth); i < pile.length - 1; i++) {
       const target = pile[i];
-      const taken = pile.slice(i);
-      if (!canFormMeldWith([...hand, ...taken], target) && !canLayoff(state, target)) continue;
-      const dp = planTurn(ctx, [...hand, ...taken], target.id, DEEP_LEAVES);
-      if (dp) consider({ type: "drawDiscard", seat, cardId: target.id }, planValue(ctx, dp));
+      const move: RummyMove = { type: "drawDiscard", seat, cardId: target.id };
+      if (!isLegal(state, move)) continue;
+      const dp = planTurn(ctx, [...hand, ...pile.slice(i)], target.id, DEEP_LEAVES);
+      if (dp) consider(move, planValue(ctx, dp));
     }
   }
   return bestMove ?? { type: "drawStock", seat };
@@ -1699,8 +1836,8 @@ function choosePlay(ctx: AiCtx, rng: () => number): RummyMove | null {
   return { type: "discard", seat, cardId: pick.card.id };
 }
 
-// Last resort when the planner has nothing legal: resolve a forced card with
-// the simple finders, else discard the costliest non-joker, else any legal move.
+// Last resort when the planner has nothing legal: put a forced card down (the
+// rules guarantee a way), else discard the costliest non-joker, else any legal move.
 function fallbackMove(state: RummyState, seat: number): RummyMove {
   const hand = state.hands[seat];
   const legal = (m: RummyMove) => isLegal(state, m);
@@ -1708,17 +1845,8 @@ function fallbackMove(state: RummyState, seat: number): RummyMove {
     const stock: RummyMove = { type: "drawStock", seat };
     if (legal(stock)) return stock;
   } else {
-    const mc = hand.find((c) => c.id === state.mustMeldCardId);
-    if (mc) {
-      for (const g of [findSetContaining(hand, mc), findRunContaining(hand, mc)]) {
-        const m: RummyMove | null = g ? { type: "meld", seat, cards: g.map((c) => c.id) } : null;
-        if (m && legal(m)) return m;
-      }
-      for (const t of state.melds) {
-        const m: RummyMove = { type: "layoff", seat, meldId: t.id, cards: [mc.id] };
-        if (legal(m)) return m;
-      }
-    }
+    const forced = forcedMoves(state, seat);
+    if (forced.length) return forced[0];
     const costly = hand.filter((c) => !c.joker).sort((a, b) => cardValue(b) - cardValue(a))[0] ?? hand[0];
     if (costly) {
       const m: RummyMove = { type: "discard", seat, cardId: costly.id };
@@ -1748,6 +1876,8 @@ export const rummy500Module: Game<RummyState, RummyMove, RummyConfig, RummyView>
   botStepMs: 900,
   seatCount: (config) => config.players,
   createGame,
+  reseed,
+  migrate,
   seatToAct,
   isLegal,
   legalMoves,
