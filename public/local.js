@@ -32,13 +32,10 @@ function pickBotName(taken) {
   while (taken.has(`Bot ${i}`)) i++;
   return `Bot ${i}`;
 }
+var randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
+var freshEntropy = () => Array.from(crypto.getRandomValues(new Uint32Array(4)));
+var UNSAFE_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 var LocalRoom = class {
-  constructor(game, config, emit) {
-    this.game = game;
-    this.config = config;
-    this.emit = emit;
-    this.seats = emptySeats(game.seatCount(config));
-  }
   state = null;
   seats;
   hostSeat = null;
@@ -46,6 +43,17 @@ var LocalRoom = class {
   // the seat whose view we currently emit
   name = "You";
   botTimer = null;
+  // Plain fields rather than constructor parameter properties, so Node's
+  // type stripping can load this file directly (the tests do).
+  game;
+  config;
+  emit;
+  constructor(game, config, emit) {
+    this.game = game;
+    this.config = config;
+    this.emit = emit;
+    this.seats = emptySeats(game.seatCount(config));
+  }
   // Single entry point, matching the wire protocol the client already speaks
   // (plus the two pass-and-play lobby extras).
   handle(msg) {
@@ -147,61 +155,92 @@ var LocalRoom = class {
     this.seats[seat] = { kind: "empty", name: null };
     this.broadcast();
   }
-  setConfig(config) {
-    if (this.state) throw new Error("Can't resize the table once the game has started");
+  // The client's fields merged over the current config, accepted only if the
+  // table size is supported and the module can deal it (a dry-run createGame
+  // throws with the module's own message). Mutates nothing.
+  mergedConfig(patch) {
+    const next = { ...this.config };
+    if (patch && typeof patch === "object" && !Array.isArray(patch)) {
+      for (const [k, v] of Object.entries(patch)) if (!UNSAFE_KEYS.has(k)) next[k] = v;
+    }
+    const config = next;
     const n = this.game.seatCount(config);
     if (!this.game.meta.supportedPlayerCounts.includes(n)) {
       throw new Error(`${this.game.meta.name} doesn't support ${n} players`);
     }
+    this.game.createGame(config, 1);
+    return config;
+  }
+  // Seats for an n-seat table without losing anyone, like the server: seats
+  // below n keep their occupant, and each human beyond the new size moves to
+  // the first empty seat (or displaces a bot). Throws if they can't all fit.
+  // `moved` maps each moved human's old seat to the new one.
+  resizedSeats(n) {
     const seats = emptySeats(n);
     for (let s = 0; s < Math.min(n, this.seats.length); s++) seats[s] = this.seats[s];
-    if (this.hostSeat !== null && this.hostSeat >= n) {
-      const h = seats.findIndex((x) => x.kind === "human");
-      this.hostSeat = h === -1 ? null : h;
+    const moved = /* @__PURE__ */ new Map();
+    for (let s = n; s < this.seats.length; s++) {
+      if (this.seats[s].kind !== "human") continue;
+      let free = seats.findIndex((x) => x.kind === "empty");
+      if (free === -1) free = seats.findIndex((x) => x.kind === "bot");
+      if (free === -1) throw new Error(`Not enough seats for everyone at ${n} players`);
+      seats[free] = this.seats[s];
+      moved.set(s, free);
     }
-    if (this.viewSeat !== null && this.viewSeat >= n) {
-      const v = seats.findIndex((x) => x.kind === "human");
-      this.viewSeat = v === -1 ? null : v;
-    }
-    this.config = config;
+    return { seats, moved };
+  }
+  // Commit a resize; the host and the viewed seat follow their human.
+  commitSeats(seats, moved) {
+    const where = (s) => s === null || s < seats.length ? s : moved.get(s) ?? null;
+    this.hostSeat = where(this.hostSeat);
+    this.viewSeat = where(this.viewSeat);
     this.seats = seats;
+  }
+  setConfig(patch) {
+    if (this.state) throw new Error("Can't resize the table once the game has started");
+    const config = this.mergedConfig(patch);
+    const { seats, moved } = this.resizedSeats(this.game.seatCount(config));
+    this.config = config;
+    this.commitSeats(seats, moved);
     this.broadcast();
   }
-  start(config) {
+  start(patch) {
     if (this.state) throw new Error("Game already in progress");
+    const config = this.mergedConfig(patch);
     const n = this.game.seatCount(config);
-    const seats = emptySeats(n);
-    const taken = /* @__PURE__ */ new Set();
+    const { seats, moved } = this.resizedSeats(n);
+    const taken = new Set(seats.map((s) => s.name).filter((x) => !!x));
     for (let s = 0; s < n; s++) {
-      const e = this.seats[s];
-      if (e && (e.kind === "human" || e.kind === "bot") && e.name) taken.add(e.name);
+      if (seats[s].kind !== "empty") continue;
+      const name = pickBotName(taken);
+      taken.add(name);
+      seats[s] = { kind: "bot", name };
     }
-    for (let s = 0; s < n; s++) {
-      const e = this.seats[s];
-      if (e && (e.kind === "human" || e.kind === "bot")) {
-        seats[s] = e;
-      } else {
-        const name = pickBotName(taken);
-        taken.add(name);
-        seats[s] = { kind: "bot", name };
-      }
-    }
-    this.config = config;
-    this.seats = seats;
     const rawDealer = config.dealerSeat;
-    const seed = rawDealer !== void 0 ? (rawDealer < 0 ? n + rawDealer : rawDealer) % n : config.seed !== void 0 ? config.seed : (Date.now() ^ Math.random() * 4294967295) >>> 0;
-    this.state = this.game.createGame(config, seed);
+    const seed = rawDealer !== void 0 ? (rawDealer < 0 ? n + rawDealer : rawDealer) % n : config.seed !== void 0 ? config.seed : randomSeed();
+    let state = this.game.createGame(config, seed);
     if (config.ensureAce) {
       let s = seed;
       for (let i = 0; i < 200; i++) {
-        const hands = this.state.hands;
+        const hands = state.hands;
         if (hands?.[0]?.some((c) => !("joker" in c) && c["rank"] === 14)) break;
         s += n;
-        this.state = this.game.createGame(config, s);
+        state = this.game.createGame(config, s);
       }
     }
+    this.config = config;
+    this.commitSeats(seats, moved);
+    this.state = this.reseeded(state);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
+  }
+  // Fresh shuffle entropy for the module, when it takes any.
+  reseeded(state) {
+    return this.game.reseed ? this.game.reseed(state, freshEntropy()) : state;
+  }
+  // Every transition (human, bot, or pacing advance) goes through here.
+  transition(state, move) {
+    return this.game.applyMove(this.reseeded(state), move);
   }
   move(move) {
     if (!this.state) throw new Error("No game in progress");
@@ -211,7 +250,7 @@ var LocalRoom = class {
     if (move.seat !== seat) throw new Error("Seat mismatch");
     if (!this.game.isLegal(this.state, move)) throw new Error("Illegal move");
     const prev = this.state;
-    const afterMove = this.game.applyMove(this.state, move);
+    const afterMove = this.transition(this.state, move);
     this.state = this.game.openHumanGate?.(afterMove, move) ?? afterMove;
     this.logHandIfComplete(prev, this.state);
     this.syncViewSeat();
@@ -271,12 +310,14 @@ var LocalRoom = class {
   }
   // A human stack-tap during a pacing gate (e.g. Pitch's trickComplete): apply the
   // gate's advance move immediately instead of waiting for the auto-advance timer.
+  // A stale tap, or one on a gate owned by another seat (advanceSeat), is ignored.
   advance() {
-    if (!this.state) throw new Error("No game in progress");
+    if (!this.state || this.game.isOver(this.state)) return;
     const pace = this.game.pacing ? this.game.pacing(this.state) : null;
-    if (!pace || !pace.move) throw new Error("Nothing to advance");
+    if (!pace || !pace.move) return;
+    if (pace.advanceSeat != null && pace.advanceSeat !== this.viewSeat) return;
     const prev = this.state;
-    this.state = this.game.applyMove(this.state, pace.move);
+    this.state = this.transition(this.state, pace.move);
     this.logHandIfComplete(prev, this.state);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
@@ -287,7 +328,7 @@ var LocalRoom = class {
     const s = this.state;
     if (!s || this.game.isOver(s)) return;
     if (this.game.seatToAct(s) !== null) return;
-    this.state = this.game.applyMove(s, move);
+    this.state = this.transition(s, move);
     this.logHandIfComplete(s, this.state);
     this.syncViewSeat();
     this.broadcast();
@@ -329,7 +370,7 @@ var LocalRoom = class {
       if (a != null) ns = this.game.aux.apply(ns, seat, a);
     }
     const prevNs = ns;
-    ns = this.game.applyMove(ns, this.game.aiMove(ns, seat));
+    ns = this.transition(ns, this.game.aiMove(ns, seat));
     this.state = ns;
     this.logHandIfComplete(prevNs, ns);
     this.syncViewSeat();
@@ -368,8 +409,26 @@ function mulberry32(seed) {
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
-function shuffle(items, seed) {
-  const rng = mulberry32(seed);
+function sfc32(a, b, c, d) {
+  const next = () => {
+    a >>>= 0;
+    b >>>= 0;
+    c >>>= 0;
+    d >>>= 0;
+    let t = a + b | 0;
+    a = b ^ b >>> 9;
+    b = c + (c << 3) | 0;
+    c = c << 21 | c >>> 11;
+    d = d + 1 | 0;
+    t = t + d | 0;
+    c = c + t | 0;
+    return (t >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < 15; i++) next();
+  return next;
+}
+function shuffle(items, seed, entropy) {
+  const rng = entropy ? sfc32(seed ^ entropy[0], entropy[1], entropy[2], entropy[3]) : mulberry32(seed);
   const a = items.slice();
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -400,14 +459,14 @@ function ledInfo(leadCard, trump) {
   return { ledSuit: leadCard.suit, trumpLed: leadCard.suit === trump };
 }
 function trickWinner(plays, trump) {
-  const { ledSuit } = ledInfo(plays[0].card, trump);
+  const { ledSuit: ledSuit2 } = ledInfo(plays[0].card, trump);
   const trumps = plays.filter((p) => isTrump(p.card, trump));
   if (trumps.length) {
     return trumps.reduce(
       (best, p) => trumpValue(p.card, trump) > trumpValue(best.card, trump) ? p : best
     ).seat;
   }
-  const followers = plays.filter((p) => !isJoker(p.card) && p.card.suit === ledSuit);
+  const followers = plays.filter((p) => !isJoker(p.card) && p.card.suit === ledSuit2);
   return followers.reduce(
     (best, p) => p.card.rank > best.card.rank ? p : best
   ).seat;
@@ -459,11 +518,18 @@ function createGame(players, seed, target = 21, winsNeeded = 1) {
     bidHistory: [],
     profiles: Array.from({ length: players }, emptyProfile)
   };
-  return deal(base);
+  return { ...deal(base), seedOnlyDeal: true };
+}
+function reseed(state, entropy) {
+  if (!Array.isArray(entropy) || entropy.length < 4) return state;
+  const next = { ...state, entropy: entropy.slice(0, 4).map((w) => w >>> 0) };
+  const untouched = state.phase === "bidding" && state.bidsActed === 0 && state.lastHand === null;
+  if (!state.seedOnlyDeal || !untouched) return next;
+  return { ...deal(next), seedOnlyDeal: false };
 }
 function deal(state) {
   const deck = buildDeck(state.players);
-  const { shuffled, nextSeed } = shuffle(deck, state.seed);
+  const { shuffled, nextSeed } = shuffle(deck, state.seed, state.entropy);
   const hands = Array.from({ length: state.players }, () => []);
   let i = 0;
   for (let c = 0; c < 6; c++) {
@@ -490,15 +556,34 @@ function deal(state) {
     leaderSeat: firstBidder,
     trickIndex: 0,
     currentTrick: [],
-    tricksWon: []
+    tricksWon: [],
+    pendingSignal: false,
+    pendingSignalSeat: null,
+    seedOnlyDeal: false
   };
 }
+var isHandSignal = (x) => x === "weak" || x === "medium" || x === "strong";
 function setSignal(state, seat, level) {
   if (state.phase !== "bidding") throw new Error("Signals can only be set during bidding");
-  if (seat < 0 || seat >= state.players) throw new Error("No such seat");
+  if (!Number.isInteger(seat) || seat < 0 || seat >= state.players) throw new Error("No such seat");
+  if (!isHandSignal(level)) throw new Error("Invalid signal");
   const signals = state.signals.slice();
   signals[seat] = level;
   return { ...state, signals };
+}
+function signalGateSeat(state) {
+  if (!state.pendingSignal) return null;
+  if (state.pendingSignalSeat != null) return state.pendingSignalSeat;
+  const history = state.bidHistory ?? [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].type === "bid" && !history[i].implicit) return history[i].seat;
+  }
+  return null;
+}
+var REVEAL_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
+function sortCards(cards) {
+  const key = (c) => isJoker(c) ? 99 : REVEAL_SUIT_ORDER[c.suit] * 16 + c.rank;
+  return [...cards].sort((a, b) => key(a) - key(b));
 }
 function legalMoves(state) {
   if (state.phase === "trickComplete") return [{ type: "advance", seat: state.trickWinner ?? 0 }];
@@ -515,30 +600,30 @@ function legalMoves(state) {
     return moves;
   }
   const seat = state.turn;
-  const hand = state.hands[seat];
+  const hand2 = state.hands[seat];
   if (state.trump === null) {
     const declares = SUITS.map((suit) => ({ type: "selectTrump", seat, suit }));
-    const leads = hand.filter((c) => !isJoker(c)).map((card) => ({ type: "play", seat, card }));
+    const leads = hand2.filter((c) => !isJoker(c)).map((card) => ({ type: "play", seat, card }));
     return [...declares, ...leads];
   }
   const trump = state.trump;
   const leading = state.currentTrick.length === 0;
   let playable;
   if (leading) {
-    playable = hand.slice();
+    playable = hand2.slice();
     if (state.trickIndex === 0) playable = playable.filter((c) => !isJoker(c));
   } else {
-    const { ledSuit, trumpLed } = ledInfo(state.currentTrick[0].card, trump);
-    if (trumpLed) {
-      const trumps = hand.filter((c) => isTrump(c, trump));
-      playable = trumps.length ? trumps : hand.slice();
+    const { ledSuit: ledSuit2, trumpLed: trumpLed2 } = ledInfo(state.currentTrick[0].card, trump);
+    if (trumpLed2) {
+      const trumps = hand2.filter((c) => isTrump(c, trump));
+      playable = trumps.length ? trumps : hand2.slice();
     } else {
-      const ofLed = hand.filter((c) => !isJoker(c) && c.suit === ledSuit && c.suit !== trump);
+      const ofLed = hand2.filter((c) => !isJoker(c) && c.suit === ledSuit2 && c.suit !== trump);
       if (ofLed.length) {
-        const trumps = hand.filter((c) => isTrump(c, trump));
+        const trumps = hand2.filter((c) => isTrump(c, trump));
         playable = [...ofLed, ...trumps];
       } else {
-        playable = hand.slice();
+        playable = hand2.slice();
       }
     }
   }
@@ -709,9 +794,12 @@ function scoreHand(state) {
     made,
     deltaByTeam,
     detail: { high: highTeam, low: lowTeam, jack: jackTeam, bonhomme: bonhommeTeam, game: gameTeam, gameCount },
-    dealtHands: state.dealtHands ?? [],
-    kitty: state.kitty,
-    lastTrick: { winner: finalTrickRaw.seat, cards: finalTrickRaw.plays.map((p) => p.card) }
+    // Sorted: the deal order would give away the shuffle.
+    dealtHands: (state.dealtHands ?? []).map(sortCards),
+    kitty: sortCards(state.kitty),
+    lastTrick: { winner: finalTrickRaw.seat, cards: finalTrickRaw.plays.map((p) => p.card) },
+    finalScores: scores,
+    gameWinner: null
   };
   const autoWin = bid === 6 && made && preScore >= 0;
   let winner = null;
@@ -724,6 +812,7 @@ function scoreHand(state) {
     else if (bidderOut) winner = bidderTeam;
     else if (otherOut) winner = other;
   }
+  result.gameWinner = winner;
   const profiles = state.profiles.map((prof, seat) => {
     const p = {
       ...prof,
@@ -736,7 +825,7 @@ function scoreHand(state) {
       totalTeamPoints: prof.totalTeamPoints + pointsByTeam[teamOf(seat)]
     };
     const sig = state.signals[seat];
-    const level = sig ?? "medium";
+    const level = isHandSignal(sig) ? sig : "medium";
     if (seat === bidderSeat) {
       p.bidsWon++;
       if (made) p.bidsMade++;
@@ -773,12 +862,704 @@ function scoreHand(state) {
   return deal(next);
 }
 
+// src/ai-sim.ts
+var JOKER = 64;
+var encodeCard = (c) => isJoker(c) ? JOKER : SUITS.indexOf(c.suit) * 16 + c.rank;
+var PIP = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 1, 2, 3, 4];
+var MAXP = 8;
+var HAND = 6;
+var TRUMP_VOID = 16;
+function mulberry322(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = a + 1831565813 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+var HAND_OUTCOMES = [
+  [6, 0, 0, 0.257],
+  [6, 0, 1, 0.112],
+  [5, 1, 0, 0.115],
+  [5, 0, 0, 0.046],
+  [4, 2, 0, 0.074],
+  [4, 0, 0, 0.036],
+  [4, 1, 0, 0.012],
+  [3, 3, 0, 7e-3],
+  [3, 1, 0, 4e-3],
+  [3, 2, 0, 2e-3],
+  [-4, 3, 0, 0.06],
+  [-4, 4, 0, 0.036],
+  [-4, 2, 0, 0.022],
+  [-4, 1, 0, 0.017],
+  [-4, 5, 0, 0.011],
+  [-4, 0, 0, 4e-3],
+  [-5, 2, 0, 0.025],
+  [-5, 3, 0, 0.016],
+  [-5, 0, 0, 0.014],
+  [-5, 4, 0, 0.012],
+  [-5, 1, 0, 9e-3],
+  [-5, 5, 0, 6e-3],
+  [-5, 6, 0, 3e-3],
+  [-6, 1, 0, 0.033],
+  [-6, 0, 0, 0.021],
+  [-6, 2, 0, 0.017],
+  [-6, 3, 0, 7e-3],
+  [-6, 4, 0, 5e-3],
+  [-3, 4, 0, 5e-3],
+  [-3, 5, 0, 4e-3],
+  [-3, 3, 0, 2e-3],
+  [-3, 2, 0, 2e-3],
+  [-4, 6, 0, 2e-3]
+];
+var MAX_NEED = 32;
+var winTables = /* @__PURE__ */ new Map();
+function winProb(needMe, needOpp, target) {
+  let V = winTables.get(target);
+  if (!V) {
+    V = solveWinTable(target);
+    winTables.set(target, V);
+  }
+  const a = Math.min(MAX_NEED, Math.max(1, needMe));
+  const b = Math.min(MAX_NEED, Math.max(1, needOpp));
+  return V[a * (MAX_NEED + 1) + b];
+}
+winProb(1, 1, 21);
+function solveWinTable(target) {
+  const W = MAX_NEED + 1;
+  const n = HAND_OUTCOMES.length;
+  const dBid = new Int8Array(n), dOther = new Int8Array(n), six = new Uint8Array(n), p = new Float64Array(n);
+  const total = HAND_OUTCOMES.reduce((sum, o) => sum + o[3], 0);
+  HAND_OUTCOMES.forEach((o, i) => {
+    dBid[i] = o[0];
+    dOther[i] = o[1];
+    six[i] = o[2];
+    p[i] = 0.5 * o[3] / total;
+  });
+  const V = new Float64Array(W * W).fill(0.5);
+  const cap2 = (x) => x > MAX_NEED ? MAX_NEED : x;
+  for (let sweep = 0; sweep < 100; sweep++) {
+    let change = 0;
+    for (let a = 1; a <= MAX_NEED; a++) {
+      for (let b = 1; b <= MAX_NEED; b++) {
+        let v = 0;
+        for (let i = 0; i < n; i++) {
+          const ma = a - dBid[i], mb = b - dOther[i];
+          v += p[i] * (six[i] && a <= target ? 1 : ma <= 0 ? 1 : mb <= 0 ? 0 : V[cap2(ma) * W + cap2(mb)]);
+          const ta = a - dOther[i], tb = b - dBid[i];
+          v += p[i] * (six[i] && b <= target ? 0 : tb <= 0 ? 0 : ta <= 0 ? 1 : V[cap2(ta) * W + cap2(tb)]);
+        }
+        const d = v - V[a * W + b];
+        if (d > change) change = d;
+        else if (-d > change) change = -d;
+        V[a * W + b] = v;
+      }
+    }
+    if (change < 1e-4) break;
+  }
+  return V;
+}
+function handUtility(st, pts0, pts1) {
+  const bt = st.bidderTeam;
+  const pts = bt === 0 ? pts0 : pts1;
+  const other = bt === 0 ? pts1 : pts0;
+  const made = pts >= st.bid;
+  const nBid = st.scores[bt] + (made ? pts : -st.bid);
+  const nOther = st.scores[1 - bt] + other;
+  let bidderWins;
+  if (st.bid === 6 && made && st.scores[bt] >= 0) bidderWins = true;
+  else if (nBid >= st.target) bidderWins = true;
+  else if (nOther >= st.target) bidderWins = false;
+  else {
+    const v = winProb(st.target - nBid, st.target - nOther, st.target);
+    return 100 * (st.myTeam === bt ? v : 1 - v);
+  }
+  return st.myTeam === bt === bidderWins ? 100 : 0;
+}
+var P = 4;
+var T = 0;
+var LOW = 8;
+var lowCard = 0;
+var jackCard = 0;
+var startTrick = 0;
+var hand = new Int8Array(MAXP * HAND);
+var len = new Int8Array(MAXP);
+var worldHand = new Int8Array(MAXP * HAND);
+var worldLen = new Int8Array(MAXP);
+var inKitty = new Uint8Array(65);
+var cap = new Int8Array(65);
+var baseCap = new Int8Array(65);
+var pips0 = 0;
+var pips1 = 0;
+var basePips0 = 0;
+var basePips1 = 0;
+var tSeat = new Int8Array(MAXP);
+var tCard = new Int8Array(MAXP);
+var tLen = 0;
+var ledSuit = 0;
+var trumpLed = false;
+var winSeat = 0;
+var winTv = 0;
+var winRank = 0;
+var trickIdx = 0;
+var tv = (c) => c === JOKER ? 1 : c >> 4 === T ? c & 15 : 0;
+var pip = (c) => c === JOKER ? 0 : PIP[c & 15];
+function removeFromHand(seat, c) {
+  const o = seat * HAND;
+  const n = len[seat];
+  for (let i = 0; i < n; i++) {
+    if (hand[o + i] === c) {
+      hand[o + i] = hand[o + n - 1];
+      len[seat] = n - 1;
+      return;
+    }
+  }
+}
+function playCard(seat, c) {
+  removeFromHand(seat, c);
+  const v = tv(c);
+  if (tLen === 0) {
+    trumpLed = v > 0;
+    ledSuit = c === JOKER ? T : c >> 4;
+    winSeat = seat;
+    winTv = v;
+    winRank = c & 15;
+  } else if (v > winTv) {
+    winSeat = seat;
+    winTv = v;
+    winRank = c & 15;
+  } else if (winTv === 0 && v === 0 && c >> 4 === ledSuit && (c & 15) > winRank) {
+    winSeat = seat;
+    winRank = c & 15;
+  }
+  tSeat[tLen] = seat;
+  tCard[tLen] = c;
+  tLen++;
+}
+function resolveTrick() {
+  const team = winSeat & 1;
+  for (let i = 0; i < tLen; i++) {
+    const c = tCard[i];
+    if (team === 0) pips0 += pip(c);
+    else pips1 += pip(c);
+    if (tv(c) > 0) cap[c] = team;
+  }
+  tLen = 0;
+  trickIdx++;
+  return winSeat;
+}
+function finalPoints(out) {
+  out[0] = 0;
+  out[1] = 0;
+  const base = T * 16;
+  for (let r = 14; r >= LOW; r--) {
+    if (!inKitty[base + r]) {
+      out[cap[base + r]]++;
+      break;
+    }
+  }
+  for (let r = LOW; r <= 14; r++) {
+    if (!inKitty[base + r]) {
+      out[cap[base + r]]++;
+      break;
+    }
+  }
+  if (!inKitty[jackCard]) out[cap[jackCard]]++;
+  if (!inKitty[JOKER]) out[cap[JOKER]] += 2;
+  if (pips0 > pips1) out[0]++;
+  else if (pips1 > pips0) out[1]++;
+}
+function maxTvOf(q) {
+  let m = 0;
+  const o = q * HAND;
+  for (let i = 0; i < len[q]; i++) {
+    const v = tv(hand[o + i]);
+    if (v > m) m = v;
+  }
+  return m;
+}
+function canBeat(q, wTv, wRank) {
+  const o = q * HAND;
+  for (let i = 0; i < len[q]; i++) {
+    const c = hand[o + i];
+    const v = tv(c);
+    if (wTv > 0) {
+      if (v > wTv) return true;
+    } else if (v > 0 || c >> 4 === ledSuit && (c & 15) > wRank) {
+      return true;
+    }
+  }
+  return false;
+}
+function safeFrom(team, pos, wTv, wRank) {
+  const lead = tLen > 0 ? tSeat[0] : -1;
+  for (let k = pos + 1; k < P; k++) {
+    const q = (lead + k) % P;
+    if ((q & 1) !== team && canBeat(q, wTv, wRank)) return false;
+  }
+  return true;
+}
+var mustFollow = 0;
+function setLegality(seat) {
+  mustFollow = 0;
+  if (tLen === 0) return;
+  const o = seat * HAND;
+  for (let i = 0; i < len[seat]; i++) {
+    const c = hand[o + i];
+    if (trumpLed ? tv(c) > 0 : c !== JOKER && c >> 4 === ledSuit) {
+      mustFollow = trumpLed ? 1 : 2;
+      return;
+    }
+  }
+}
+function isLegal(c) {
+  if (tLen === 0) return c !== JOKER || trickIdx > 0;
+  if (mustFollow === 0 || tv(c) > 0) return true;
+  return mustFollow === 2 && c >> 4 === ledSuit;
+}
+function keepCost(c) {
+  if (c === JOKER) return 100;
+  if (c === jackCard) return 90;
+  if (c === lowCard) return 70;
+  const v = tv(c);
+  if (v > 0) return 30 + v;
+  const r = c & 15;
+  return r === 10 ? 40 : r >= 11 ? r : r * 0.3;
+}
+function loadValue(c) {
+  if (c === JOKER) return 25;
+  if (c === jackCard) return 15;
+  if (c === lowCard) return 12;
+  const v = tv(c);
+  if (v > 0) return -v;
+  return pip(c) - (c & 15) * 0.01;
+}
+function winCost(c) {
+  if (c === JOKER) return -20;
+  if (c === jackCard) return -10;
+  if (c === lowCard) return -8;
+  const v = tv(c);
+  if (v > 0) return v;
+  return -pip(c) + (c & 15) * 0.05;
+}
+function choose(seat) {
+  const o = seat * HAND;
+  const n = len[seat];
+  const team = seat & 1;
+  setLegality(seat);
+  if (tLen === 0) {
+    let myTop = 0, myTopCard = -1;
+    for (let i = 0; i < n; i++) {
+      const v = tv(hand[o + i]);
+      if (v > myTop) {
+        myTop = v;
+        myTopCard = hand[o + i];
+      }
+    }
+    if (myTop > 1 || myTop === 1 && trickIdx > 0) {
+      let otherTop = 0, oppHasTrump = false;
+      for (let q = 0; q < P; q++) {
+        if (q === seat) continue;
+        const m = maxTvOf(q);
+        if (m > otherTop) otherTop = m;
+        if (m > 0 && (q & 1) !== team) oppHasTrump = true;
+      }
+      if (myTop > otherTop && oppHasTrump) return myTopCard;
+    }
+    let best2 = -1, bestCost2 = 1e9;
+    for (let i = 0; i < n; i++) {
+      const c = hand[o + i];
+      if (!isLegal(c)) continue;
+      const v = tv(c);
+      const cost = v > 0 ? 200 + (c === JOKER ? 50 : v) + keepCost(c) : keepCost(c);
+      if (cost < bestCost2) {
+        bestCost2 = cost;
+        best2 = c;
+      }
+    }
+    return best2;
+  }
+  const pos = tLen;
+  if ((winSeat & 1) === team) {
+    if (safeFrom(team, pos, winTv, winRank)) {
+      let best2 = -1, bestV = -1e9;
+      for (let i = 0; i < n; i++) {
+        const c = hand[o + i];
+        if (!isLegal(c)) continue;
+        const lv = loadValue(c);
+        if (lv > bestV) {
+          bestV = lv;
+          best2 = c;
+        }
+      }
+      return best2;
+    }
+  } else {
+    let best2 = -1, bestCost2 = 1e9;
+    for (let i = 0; i < n; i++) {
+      const c = hand[o + i];
+      if (!isLegal(c)) continue;
+      const v = tv(c);
+      const beats = v > winTv || winTv === 0 && v === 0 && c >> 4 === ledSuit && (c & 15) > winRank;
+      if (!beats) continue;
+      if (!safeFrom(team, pos, v, v > 0 ? 0 : c & 15)) continue;
+      const wc = winCost(c);
+      if (wc < bestCost2) {
+        bestCost2 = wc;
+        best2 = c;
+      }
+    }
+    if (best2 >= 0) {
+      let value = 0;
+      for (let i = 0; i < tLen; i++) {
+        const c = tCard[i];
+        value += pip(c) + (c === JOKER ? 20 : c === jackCard || c === lowCard ? 10 : 0);
+      }
+      if (value > 0 || bestCost2 < 5) return best2;
+    }
+  }
+  let best = -1, bestCost = 1e9;
+  for (let i = 0; i < n; i++) {
+    const c = hand[o + i];
+    if (!isLegal(c)) continue;
+    const kc = keepCost(c);
+    if (kc < bestCost) {
+      bestCost = kc;
+      best = c;
+    }
+  }
+  return best;
+}
+function playOut(next) {
+  for (; ; ) {
+    while (tLen < P) {
+      const c = choose(next);
+      playCard(next, c);
+      next = (next + 1) % P;
+    }
+    next = resolveTrick();
+    if (trickIdx >= HAND) return;
+  }
+}
+function buildContext(state, seat, trump) {
+  const T0 = SUITS.indexOf(trump);
+  const low = lowRankFor(state.players);
+  const seen = new Uint8Array(65);
+  const myHand = state.hands[seat].map(encodeCard);
+  for (const c of myHand) seen[c] = 1;
+  const voids = new Array(state.players).fill(0);
+  const captured = new Int8Array(65).fill(-1);
+  const pips = [0, 0];
+  const noteVoids = (plays) => {
+    if (!plays.length) return;
+    const { ledSuit: led, trumpLed: tl } = ledInfo(plays[0].card, trump);
+    const ledIdx = SUITS.indexOf(led);
+    for (let i = 1; i < plays.length; i++) {
+      const c = encodeCard(plays[i].card);
+      const isT = c === JOKER || c >> 4 === T0;
+      if (tl) {
+        if (!isT) voids[plays[i].seat] |= TRUMP_VOID;
+      } else if (!isT && c >> 4 !== ledIdx) {
+        voids[plays[i].seat] |= 1 << ledIdx;
+      }
+    }
+  };
+  for (const t of state.tricksWon) {
+    const team = t.seat % 2;
+    for (const p of t.plays) {
+      const c = encodeCard(p.card);
+      seen[c] = 1;
+      pips[team] += pip(c);
+      if (c === JOKER || c >> 4 === T0) captured[c] = team;
+    }
+    noteVoids(t.plays);
+  }
+  for (const p of state.currentTrick) seen[encodeCard(p.card)] = 1;
+  noteVoids(state.currentTrick);
+  const unseen = [];
+  for (let s = 0; s < 4; s++) for (let r = low; r <= 14; r++) if (!seen[s * 16 + r]) unseen.push(s * 16 + r);
+  if (!seen[JOKER]) unseen.push(JOKER);
+  return {
+    seat,
+    players: state.players,
+    trump: T0,
+    unseen,
+    counts: state.hands.map((h) => h.length),
+    voids,
+    myHand,
+    trickIndex: state.trickIndex,
+    trick: state.currentTrick.map((p) => ({ seat: p.seat, card: encodeCard(p.card) })),
+    captured,
+    pips,
+    evidence: state.phase === "bidding" ? auctionEvidence(state) : null
+  };
+}
+function auctionEvidence(state) {
+  const ev = state.signals.map((sig) => ({
+    signal: sig === "strong" ? 2 : sig === "medium" ? 1 : sig === "weak" ? 0 : -1,
+    action: 0
+  }));
+  for (const b of state.bidHistory) {
+    if (b.type === "bid") ev[b.seat].action = 1;
+    else if (!b.implicit) ev[b.seat].action = -1;
+  }
+  return ev;
+}
+var order = new Int16Array(64);
+var sorted = new Int16Array(64);
+var keyOf = new Int8Array(64);
+var voidBit = new Int8Array(65);
+var holderRoom = new Int8Array(MAXP + 1);
+var anyVoids = false;
+var eligible = (ctx, c, q) => (ctx.voids[q] & voidBit[c]) === 0;
+function dealWorld(ctx, rng) {
+  const U = ctx.unseen;
+  const nU = U.length;
+  const kittySlot = P;
+  const me = ctx.seat;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const useVoids = anyVoids && attempt < 5;
+    for (let i = 0; i < nU; i++) order[i] = i;
+    for (let i = nU - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const t = order[i];
+      order[i] = order[j];
+      order[j] = t;
+    }
+    if (useVoids) {
+      for (let i = 0; i < nU; i++) {
+        const c = U[order[i]];
+        let k = 0;
+        for (let q = 0; q < P; q++) if (q !== me && ctx.counts[q] > 0 && eligible(ctx, c, q)) k++;
+        keyOf[i] = k;
+      }
+      let n = 0;
+      for (let k = 0; k <= P; k++) for (let i = 0; i < nU; i++) if (keyOf[i] === k) sorted[n++] = order[i];
+    } else {
+      sorted.set(order.subarray(0, nU));
+    }
+    let others = 0;
+    for (let q = 0; q < P; q++) {
+      holderRoom[q] = q === me ? 0 : ctx.counts[q];
+      others += holderRoom[q];
+      worldLen[q] = 0;
+    }
+    holderRoom[kittySlot] = nU - others;
+    inKitty.fill(0);
+    let ok = true;
+    for (let i = 0; i < nU; i++) {
+      const c = U[sorted[i]];
+      let total = holderRoom[kittySlot];
+      for (let q = 0; q < P; q++) if (holderRoom[q] > 0 && (!useVoids || eligible(ctx, c, q))) total += holderRoom[q];
+      if (total === 0) {
+        ok = false;
+        break;
+      }
+      let x = rng() * total;
+      let pickQ = kittySlot;
+      for (let q = 0; q < P; q++) {
+        if (holderRoom[q] > 0 && (!useVoids || eligible(ctx, c, q))) {
+          x -= holderRoom[q];
+          if (x < 0) {
+            pickQ = q;
+            break;
+          }
+        }
+      }
+      holderRoom[pickQ]--;
+      if (pickQ === kittySlot) inKitty[c] = 1;
+      else worldHand[pickQ * HAND + worldLen[pickQ]++] = c;
+    }
+    if (ok) break;
+  }
+  worldLen[me] = ctx.myHand.length;
+  for (let i = 0; i < ctx.myHand.length; i++) worldHand[me * HAND + i] = ctx.myHand[i];
+}
+var SIGNAL_MISMATCH = 0.15;
+var BID_STRENGTH = 2.4;
+var BID_STRENGTH_SPREAD = 0.35;
+var EVIDENCE_TRIES = 20;
+var pool = new Int8Array(64);
+function evidenceLikelihood(ev, cards, n) {
+  const best = bestSuitScore(cards, n, LOW);
+  let l = 1;
+  if (ev.signal >= 0 && signalLevel(best) !== ev.signal) l *= SIGNAL_MISMATCH;
+  if (ev.action !== 0) l /= 1 + Math.exp(ev.action * (BID_STRENGTH - best) / BID_STRENGTH_SPREAD);
+  return l;
+}
+function dealFromEvidence(ctx, rng) {
+  const ev = ctx.evidence;
+  let nPool = ctx.unseen.length;
+  for (let i = 0; i < nPool; i++) pool[i] = ctx.unseen[i];
+  const deal2 = (q) => {
+    const o = q * HAND;
+    for (let k = 0; k < HAND; k++) {
+      const j = Math.floor(rng() * (nPool - k));
+      const t = pool[j];
+      pool[j] = pool[nPool - 1 - k];
+      pool[nPool - 1 - k] = t;
+      worldHand[o + k] = pool[nPool - 1 - k];
+    }
+    worldLen[q] = HAND;
+  };
+  const hasEvidence = (q) => ev[q].signal >= 0 || ev[q].action !== 0;
+  for (let q = 0; q < P; q++) {
+    if (q === ctx.seat || !hasEvidence(q)) continue;
+    for (let t = 0; t < EVIDENCE_TRIES; t++) {
+      deal2(q);
+      if (rng() < evidenceLikelihood(ev[q], worldHand.subarray(q * HAND, q * HAND + HAND), HAND)) break;
+    }
+    nPool -= HAND;
+  }
+  for (let q = 0; q < P; q++) {
+    if (q === ctx.seat || hasEvidence(q)) continue;
+    deal2(q);
+    nPool -= HAND;
+  }
+  inKitty.fill(0);
+  for (let i = 0; i < nPool; i++) inKitty[pool[i]] = 1;
+  worldLen[ctx.seat] = ctx.myHand.length;
+  for (let i = 0; i < ctx.myHand.length; i++) worldHand[ctx.seat * HAND + i] = ctx.myHand[i];
+}
+function sampleWorld(ctx, rng) {
+  if (ctx.evidence) dealFromEvidence(ctx, rng);
+  else dealWorld(ctx, rng);
+  lowCard = findLowCard();
+}
+function scoreSuit(ranks, joker, tens, low) {
+  const has = (r) => ranks >> r & 1;
+  let trumps = joker ? 1 : 0;
+  for (let m = ranks; m; m &= m - 1) trumps++;
+  const highCount = has(12) + has(13) + has(14);
+  let score = 0;
+  score += has(14) ? 1 : has(13) ? 0.4 : has(12) ? 0.15 : 0;
+  if (has(11)) score += Math.min(0.9, 0.25 + 0.2 * highCount);
+  if (joker) score += Math.min(2.2, 0.3 + 0.25 * (trumps - 1) + (has(14) ? 1.15 : 0));
+  else score += Math.min(0.8, 0.15 * highCount);
+  score += Math.min(0.7, 0.12 * trumps + (has(low) ? 0.15 : 0) + (has(14) ? 0.65 : has(13) ? 0.25 : 0));
+  score += Math.min(1, 0.1 * trumps + 0.15 * tens + (has(14) ? 0.5 : 0));
+  score += 0.1 * Math.max(0, trumps - 3);
+  return score;
+}
+var suitRanks = new Int32Array(4);
+function scanHand(cards, n) {
+  suitRanks.fill(0);
+  let joker = 0, tens = 0;
+  for (let i = 0; i < n; i++) {
+    const c = cards[i];
+    if (c === JOKER) {
+      joker = 1;
+      continue;
+    }
+    if ((c & 15) === 10) tens++;
+    suitRanks[c >> 4] |= 1 << (c & 15);
+  }
+  return joker * 16 + tens;
+}
+function suitScore(cards, n, suit, low) {
+  const jt = scanHand(cards, n);
+  return scoreSuit(suitRanks[suit], jt >= 16, jt & 15, low);
+}
+function bestSuitScore(cards, n, low) {
+  const jt = scanHand(cards, n);
+  let best = 0;
+  for (let s = 0; s < 4; s++) best = Math.max(best, scoreSuit(suitRanks[s], jt >= 16, jt & 15, low));
+  return best;
+}
+var signalLevel = (best) => best >= 3 ? 2 : best >= 1.5 ? 1 : 0;
+function initSearch(ctx) {
+  P = ctx.players;
+  T = ctx.trump;
+  LOW = lowRankFor(P);
+  jackCard = T * 16 + 11;
+  startTrick = ctx.trickIndex;
+  baseCap.set(ctx.captured);
+  basePips0 = ctx.pips[0];
+  basePips1 = ctx.pips[1];
+  for (let c = 0; c < 64; c++) voidBit[c] = c >> 4 === T ? TRUMP_VOID : 1 << (c >> 4);
+  voidBit[JOKER] = TRUMP_VOID;
+  anyVoids = ctx.voids.some((m) => m !== 0);
+}
+function findLowCard() {
+  for (let r = LOW; r <= 14; r++) if (!inKitty[T * 16 + r]) return T * 16 + r;
+  return -1;
+}
+var ptsOut = new Int32Array(2);
+function rollout(ctx, seat, card) {
+  hand.set(worldHand);
+  len.set(worldLen);
+  cap.set(baseCap);
+  pips0 = basePips0;
+  pips1 = basePips1;
+  trickIdx = startTrick;
+  tLen = 0;
+  for (const p of ctx.trick) playCard(p.seat, p.card);
+  playCard(seat, card);
+  let next = (seat + 1) % P;
+  if (tLen === P) next = resolveTrick();
+  if (trickIdx < HAND) playOut(next);
+  finalPoints(ptsOut);
+}
+function evaluatePlays(ctx, candidates, stakes, worlds, rng) {
+  initSearch(ctx);
+  const totals = new Array(candidates.length).fill(0);
+  for (let w = 0; w < worlds; w++) {
+    sampleWorld(ctx, rng);
+    for (let k = 0; k < candidates.length; k++) {
+      rollout(ctx, ctx.seat, candidates[k]);
+      totals[k] += handUtility(stakes, ptsOut[0], ptsOut[1]);
+    }
+  }
+  return totals.map((t) => t / worlds);
+}
+function pointHistogram(ctx, card, worlds, rng) {
+  initSearch(ctx);
+  const hist = new Float64Array(49);
+  for (let w = 0; w < worlds; w++) {
+    sampleWorld(ctx, rng);
+    rollout(ctx, ctx.seat, card);
+    hist[ptsOut[0] * 7 + ptsOut[1]]++;
+  }
+  return hist;
+}
+function otherBidderHistogram(ctx, bidder, worlds, rng) {
+  initSearch(ctx);
+  const hist = new Float64Array(49);
+  const o = bidder * HAND;
+  for (let w = 0; w < worlds; w++) {
+    sampleWorld(ctx, rng);
+    let suit = -1, bestScore = -1;
+    for (let s = 0; s < 4; s++) {
+      let natural = false;
+      for (let i = 0; i < worldLen[bidder]; i++) if (worldHand[o + i] >> 4 === s && worldHand[o + i] !== JOKER) natural = true;
+      if (!natural) continue;
+      const score = suitScore(worldHand.subarray(o, o + worldLen[bidder]), worldLen[bidder], s, LOW);
+      if (score > bestScore) {
+        bestScore = score;
+        suit = s;
+      }
+    }
+    let lead = -1;
+    for (let i = 0; i < worldLen[bidder]; i++) {
+      const c = worldHand[o + i];
+      if (c !== JOKER && c >> 4 === suit && c > lead) lead = c;
+    }
+    T = suit;
+    jackCard = suit * 16 + 11;
+    lowCard = findLowCard();
+    rollout(ctx, bidder, lead);
+    hist[ptsOut[0] * 7 + ptsOut[1]]++;
+  }
+  return hist;
+}
+var cardsLeft = (ctx) => ctx.counts.reduce((a, b) => a + b, 0);
+
 // src/ai.ts
 var PERSONALITIES = {
   conservative: {
     name: "Conservative",
-    bidSafety: 1.25,
-    stretchProb: 0.15,
+    bidMargin: 3,
     trumpPullFrac: 0.5,
     lowKeepBonus: 40,
     endgameCutoff: 3,
@@ -787,8 +1568,7 @@ var PERSONALITIES = {
   },
   balanced: {
     name: "Balanced",
-    bidSafety: 0.75,
-    stretchProb: 0.35,
+    bidMargin: 0,
     trumpPullFrac: 0.35,
     lowKeepBonus: 25,
     endgameCutoff: 2,
@@ -797,8 +1577,7 @@ var PERSONALITIES = {
   },
   aggressive: {
     name: "Aggressive",
-    bidSafety: 0.25,
-    stretchProb: 0.6,
+    bidMargin: -3,
     trumpPullFrac: 0.2,
     lowKeepBonus: 10,
     endgameCutoff: 1,
@@ -807,70 +1586,26 @@ var PERSONALITIES = {
   }
 };
 var clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
-function suitValue(hand, suit, players) {
-  const trumps = hand.filter((c) => isTrump(c, suit));
-  const n = trumps.length;
-  const has = (rank) => trumps.some((c) => !isJoker(c) && c.rank === rank);
-  const hasJoker = trumps.some(isJoker);
-  const highCount = trumps.filter((c) => !isJoker(c) && c.rank >= 12).length;
-  const lowest = lowRankFor(players);
-  const tens = hand.filter((c) => !isJoker(c) && c.rank === 10).length;
-  let score = 0;
-  if (has(14)) score += 1;
-  else if (has(13)) score += 0.4;
-  else if (has(12)) score += 0.15;
-  if (has(11)) {
-    const protectors = [14, 13, 12].filter(has).length + (hasJoker ? 1 : 0);
-    score += Math.min(0.9, 0.25 + 0.2 * protectors);
-  }
-  if (hasJoker) score += Math.min(2.2, 0.3 + 0.25 * (n - 1) + (has(14) ? 1.15 : 0));
-  else score += Math.min(0.8, 0.15 * highCount);
-  score += Math.min(0.7, 0.12 * n + (has(lowest) ? 0.15 : 0) + (has(14) ? 0.65 : has(13) ? 0.25 : 0));
-  score += Math.min(1, 0.1 * n + 0.15 * tens + (has(14) ? 0.5 : 0));
-  score += 0.1 * Math.max(0, n - 3);
-  return score;
+function suitValue(hand2, suit, players) {
+  return suitScore(hand2.map(encodeCard), hand2.length, SUITS.indexOf(suit), lowRankFor(players));
 }
-var CAPTURE_WEIGHTS = {
-  4: [1.143, 1.141, -0.161, -0.396, 0.487, -0.063, 0.504, -0.041, -0.264, 0.567, -0.052, 0.013, 0.584],
-  6: [1.552, 1.146, -0.14, -0.383, 0.513, -0.082, 0.078, 0.083, -0.384, 0.405, 7e-3, 0.04, 0.622],
-  8: [1.832, 1.071, -0.095, -0.365, 0.575, -0.064, -0.144, 0.123, -0.314, 0.318, 0.025, 2e-3, 0.611]
-};
-function expectedCapture(hand, suit, players) {
-  const tr = hand.filter((c) => isTrump(c, suit));
-  const has = (r) => tr.some((c) => !isJoker(c) && c.rank === r);
-  const hasJoker = tr.some(isJoker);
-  const n = tr.length;
-  const jackProt = has(11) ? [14, 13, 12].filter(has).length + (hasJoker ? 1 : 0) : 0;
-  const tens = hand.filter((c) => !isJoker(c) && c.rank === 10).length;
-  const highCt = tr.filter((c) => !isJoker(c) && c.rank >= 12).length;
-  const low = lowRankFor(players);
-  const f = [
-    1,
-    has(14) ? 1 : 0,
-    has(13) ? 1 : 0,
-    has(12) ? 1 : 0,
-    has(11) ? 1 : 0,
-    jackProt,
-    hasJoker ? 1 : 0,
-    hasJoker ? n - 1 : 0,
-    hasJoker && has(14) ? 1 : 0,
-    n,
-    tens,
-    has(low) ? 1 : 0,
-    highCt
-  ];
-  const w = CAPTURE_WEIGHTS[players] ?? CAPTURE_WEIGHTS[6];
-  let s = 0;
-  for (let i = 0; i < w.length; i++) s += f[i] * w[i];
-  return Math.max(0, Math.min(6, s));
-}
-function bestSuit(hand, players) {
+function bestSuit(hand2, players, allowed = () => true) {
   let best = { suit: SUITS[0], score: -Infinity };
   for (const suit of SUITS) {
-    const score = suitValue(hand, suit, players);
+    if (!allowed(suit)) continue;
+    const score = suitValue(hand2, suit, players);
     if (score > best.score) best = { suit, score };
   }
   return best;
+}
+function openingLead(hand2, players) {
+  const naturals = hand2.filter((c) => !isJoker(c));
+  const suit = bestSuit(hand2, players, (s) => naturals.some((c) => c.suit === s)).suit;
+  const inSuit = naturals.filter((c) => c.suit === suit).sort((a, b) => a.rank - b.rank);
+  const top = inSuit[inSuit.length - 1];
+  if (top.rank !== 11) return top;
+  const low = lowRankFor(players);
+  return inSuit.find((c) => c.rank !== 11 && c.rank !== low) ?? inSuit.find((c) => c.rank === low) ?? top;
 }
 function bossTrumpValue(state, trump) {
   const low = lowRankFor(state.players);
@@ -883,6 +1618,19 @@ function bossTrumpValue(state, trump) {
   const unseen = all.map((c) => trumpValue(c, trump)).filter((v) => !seenVals.has(v));
   return unseen.length ? Math.max(...unseen) : -1;
 }
+function hiddenTopTrump(state, trump, myCards) {
+  const low = lowRankFor(state.players);
+  const known = /* @__PURE__ */ new Set();
+  const note = (c) => {
+    const v = trumpValue(c, trump);
+    if (v !== null) known.add(v);
+  };
+  for (const t of state.tricksWon) for (const p of t.plays) note(p.card);
+  for (const p of state.currentTrick) note(p.card);
+  for (const c of myCards) note(c);
+  for (let r = 14; r >= low; r--) if (!known.has(r)) return r;
+  return known.has(0) ? -1 : 0;
+}
 function unseenTrumpCount(state, trump, myCards) {
   const low = lowRankFor(state.players);
   const totalTrumps = 1 + (14 - low + 1);
@@ -893,15 +1641,15 @@ function unseenTrumpCount(state, trump, myCards) {
 function trumpVoidSeats(state, trump) {
   const voids = /* @__PURE__ */ new Set();
   for (const trick of state.tricksWon) {
-    const { trumpLed } = ledInfo(trick.plays[0].card, trump);
-    if (!trumpLed) continue;
+    const { trumpLed: trumpLed2 } = ledInfo(trick.plays[0].card, trump);
+    if (!trumpLed2) continue;
     for (const p of trick.plays) {
       if (!isTrump(p.card, trump)) voids.add(p.seat);
     }
   }
   if (state.currentTrick.length > 0) {
-    const { trumpLed } = ledInfo(state.currentTrick[0].card, trump);
-    if (trumpLed) {
+    const { trumpLed: trumpLed2 } = ledInfo(state.currentTrick[0].card, trump);
+    if (trumpLed2) {
       for (const p of state.currentTrick) {
         if (!isTrump(p.card, trump)) voids.add(p.seat);
       }
@@ -964,12 +1712,18 @@ function keepValue(c, trump, low, p, myTeamAhead) {
   if (c.rank === 12) return 12;
   return c.rank;
 }
-function loadValue(c, trump) {
+function loadValue2(c, trump, low) {
   if (isJoker(c)) return 60;
-  if (!isJoker(c) && c.suit === trump && c.rank === 11) return 30;
+  if (c.suit === trump && c.rank === 11) return 30;
+  if (c.suit === trump && c.rank === low) return 30;
   return gameValue(c);
 }
-var winCost = (c, trump) => isJoker(c) ? 1e3 : isTrump(c, trump) ? trumpValue(c, trump) : c.rank;
+var winCost2 = (c, trump, low, isLast) => {
+  if (isJoker(c)) return 1e3;
+  if (!isTrump(c, trump)) return c.rank;
+  const pointCard = c.rank === 11 || c.rank === low;
+  return c.rank + (pointCard && !isLast ? 200 : 0);
+};
 function pick(items, score, mode) {
   return items.reduce(
     (best, t) => mode === "max" ? score(t) > score(best) ? t : best : score(t) < score(best) ? t : best
@@ -979,140 +1733,38 @@ function bestDiscard(cards, trump, low, p, myTeamAhead) {
   const offSuit = cards.filter((c) => !isTrump(c, trump) && !isJoker(c));
   if (!offSuit.length) return pick(cards, (c) => keepValue(c, trump, low, p, myTeamAhead), "min");
   const cheapOptions = offSuit.filter((c) => gameValue(c) < 10);
-  const pool = cheapOptions.length ? cheapOptions : offSuit;
+  const pool2 = cheapOptions.length ? cheapOptions : offSuit;
   const suitCounts = {};
-  for (const c of pool) {
+  for (const c of pool2) {
     const s = c.suit;
     suitCounts[s] = (suitCounts[s] ?? 0) + 1;
   }
-  const sorted = pool.slice().sort((a, b) => {
+  const sorted2 = pool2.slice().sort((a, b) => {
     const byLen = suitCounts[a.suit] - suitCounts[b.suit];
     if (byLen !== 0) return byLen;
     return keepValue(a, trump, low, p, myTeamAhead) - keepValue(b, trump, low, p, myTeamAhead);
   });
-  return sorted[0];
-}
-function mulberry322(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = a + 1831565813 | 0;
-    let t = Math.imul(a ^ a >>> 15, 1 | a);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
+  return sorted2[0];
 }
 function stateRng(state, seat) {
-  let h = (state.seed ^ Math.imul(seat + 1, 2654435761) ^ Math.imul(state.bidsActed + 1, 2246822519)) >>> 0;
-  for (const c of state.hands[seat]) h = Math.imul(h, 31) + (isJoker(c) ? 53 : c.rank * 4 + SUITS.indexOf(c.suit)) >>> 0;
+  const progress2 = state.bidsActed * 64 + state.trickIndex * 8 + state.currentTrick.length + 1;
+  let h = (state.seed ^ Math.imul(seat + 1, 2654435761) ^ Math.imul(progress2, 2246822519)) >>> 0;
+  for (const c of state.hands[seat]) h = Math.imul(h, 31) + encodeCard(c) >>> 0;
   return mulberry322(h);
 }
-var confFromScore = (score) => score >= 3 ? 2 : score >= 1.5 ? 1 : 0;
 var signalToNum = (sig) => sig === "strong" ? 2 : sig === "weak" ? 0 : 1;
 function signalReliability(prof, level) {
-  const rec = prof.signalRecord[level];
-  return rec.bid >= 3 ? rec.made / rec.bid : null;
+  const rec = prof?.signalRecord?.[level];
+  return rec && rec.bid >= 3 ? rec.made / rec.bid : null;
 }
 function calibratedSignal(sig, prof) {
   const raw = signalToNum(sig);
-  const level = sig ?? "medium";
+  const level = isHandSignal(sig) ? sig : "medium";
   const rel = signalReliability(prof, level);
   if (rel === null) return raw;
   const expected = level === "strong" ? 0.7 : level === "medium" ? 0.5 : 0.2;
   const delta = rel - expected;
   return clamp(raw + delta * 2, 0, 2);
-}
-function aggressionIndex(prof) {
-  return prof.handsPlayed >= 3 ? prof.bidsWon / prof.handsPlayed : 0.5;
-}
-var competeProb = (myConf, theirConf, stretchProb) => {
-  const gap = myConf - theirConf;
-  return gap <= 0 ? stretchProb * 0.6 : gap === 1 ? stretchProb + 0.1 : stretchProb + 0.3;
-};
-function opponentThreatLevel(state, opponentSeat, bidAmount) {
-  const team = teamOf(opponentSeat);
-  if (bidAmount === 6 && state.scores[team] >= 0) return 2;
-  const after = state.scores[team] + bidAmount;
-  if (after >= state.target) return 2;
-  if (after >= state.target - 2) return 1;
-  return 0;
-}
-function estimateSixBidProb(hand, players) {
-  const { suit } = bestSuit(hand, players);
-  const trumps = hand.filter((c) => isTrump(c, suit));
-  const has = (r) => trumps.some((c) => !isJoker(c) && c.rank === r);
-  const hasJoker = trumps.some(isJoker);
-  const n = trumps.length;
-  if (!has(14)) return 0;
-  const remaining = players * 6 + 5 - 6;
-  const pJokerLive = hasJoker ? 1 : (remaining - 5) / remaining;
-  let sweepProb = 0.99;
-  if (!hasJoker) sweepProb -= 0.01;
-  if (!has(11)) sweepProb -= 0.3;
-  if (!has(13) && !has(12)) sweepProb -= 0.12;
-  if (n < 3) sweepProb -= 0.35;
-  else if (n < 4) sweepProb -= 0.15;
-  sweepProb += 5e-3 * Math.max(0, n - 4);
-  sweepProb = clamp(sweepProb, 0, 0.99);
-  return pJokerLive * sweepProb;
-}
-function decideBid(state, seat, rng, p) {
-  const hand = state.hands[seat];
-  const best = bestSuit(hand, state.players);
-  const myTeam = teamOf(seat);
-  const oppTeam = 1 - myTeam;
-  const oppGap = state.target - state.scores[oppTeam];
-  const desperationBonus = oppGap <= 6 ? (6 - oppGap) * 0.18 : 0;
-  const effectiveSafety = Math.max(0, p.bidSafety - desperationBonus);
-  const willing = clamp(Math.round(expectedCapture(hand, best.suit, state.players) - effectiveSafety), 0, 6);
-  const myConf = confFromScore(best.score);
-  const isDealer = seat === state.dealerSeat;
-  const high = state.highBid;
-  const highAmt = high?.amount ?? null;
-  if (isDealer && highAmt === null) return { type: "bid", seat, amount: 2 };
-  const needed = highAmt === null ? 2 : isDealer ? highAmt : highAmt + 1;
-  if (needed > 6) return { type: "pass", seat };
-  if (needed <= 6) {
-    const sixProb = estimateSixBidProb(hand, state.players);
-    const myScore = state.scores[myTeam];
-    const myGap = state.target - myScore;
-    const safeFromHoleBonus = myScore >= 1 ? Math.min(0.1, myScore * 8e-3) : 0;
-    const autoWinBonus = myScore >= 0 ? 0.07 : 0;
-    const despSixBonus = oppGap <= 4 ? 0.12 : oppGap <= 6 ? 0.06 : 0;
-    const rawNearWinPenalty = myGap <= 6 ? (6 - myGap) * 0.1 : 0;
-    const nearWinPenalty = rawNearWinPenalty * Math.max(0, 1 - despSixBonus * 5);
-    const sixThresh = clamp(
-      0.65 + p.bidSafety * 0.2 - safeFromHoleBonus - autoWinBonus - despSixBonus + nearWinPenalty,
-      0.48,
-      0.97
-    );
-    if (sixProb >= sixThresh) return { type: "bid", seat, amount: 6 };
-  }
-  if (willing >= needed) return { type: "bid", seat, amount: Math.min(willing, needed + 1) };
-  if (high !== null) {
-    const sameTeam = teamOf(high.seat) === teamOf(seat);
-    const holderProf = state.profiles[high.seat];
-    const theirConf = calibratedSignal(state.signals[high.seat], holderProf);
-    if (!sameTeam) {
-      const threat = opponentThreatLevel(state, high.seat, high.amount);
-      if (threat === 2 && needed <= 6) {
-        if (needed < 6) return { type: "bid", seat, amount: needed };
-        const sixProb = estimateSixBidProb(hand, state.players);
-        if (sixProb >= 0.05) return { type: "bid", seat, amount: 6 };
-      }
-      if (threat === 1 && needed <= willing + 2) {
-        const blockProb = clamp(0.5 + theirConf * 0.2 - (2 - myConf) * 0.1, 0.2, 0.95);
-        if (rng() < blockProb) return { type: "bid", seat, amount: needed };
-      }
-      if (needed <= willing + 1 && myConf >= theirConf) {
-        const aggBonus = Math.max(0, aggressionIndex(holderProf) - 0.4) * 0.3;
-        if (rng() < competeProb(myConf, theirConf, p.stretchProb + aggBonus))
-          return { type: "bid", seat, amount: needed };
-      }
-    } else if (sameTeam && myConf === 2 && theirConf <= 0.5) {
-      if (rng() < p.stretchProb * 0.5) return { type: "bid", seat, amount: needed };
-    }
-  }
-  return { type: "pass", seat };
 }
 function decidePlay(state, seat, p) {
   const trump = state.trump;
@@ -1124,9 +1776,8 @@ function decidePlay(state, seat, p) {
   const pips = gamePipTotals(state);
   const myTeam = teamOf(seat);
   const myTeamAhead = pips[myTeam] - pips[1 - myTeam] >= p.tenProtectMargin;
-  const kv = (c) => keepValue(c, trump, low, p, myTeamAhead);
   const remaining = tricksRemaining(state, seat);
-  const unseenTrumps = unseenTrumpCount(state, trump, cards);
+  const unseenTrumps = unseenTrumpCount(state, trump, state.hands[seat]);
   const myTrumps = cards.filter((c) => isTrump(c, trump));
   const isLast = state.currentTrick.length === players - 1;
   if (state.currentTrick.length === 0) {
@@ -1159,7 +1810,9 @@ function decidePlay(state, seat, p) {
       const myLow = myTrumps.find((c) => !isJoker(c) && c.rank === low);
       if (!myLow && shouldPullTrumps && myTrumps.length >= 2) {
         const byVal = myTrumps.slice().sort((a, b) => trumpValue(a, trump) - trumpValue(b, trump));
-        return asMove(byVal[1]);
+        const bait = byVal[1];
+        const bareJack = !isJoker(bait) && bait.rank === 11 && !myTrumps.some((c) => !isJoker(c) && c.rank > 11) && !higherTrumpsAllAccountedFor(state, trump, bait, state.hands[seat]);
+        if (!bareJack) return asMove(bait);
       }
     }
     const sideAces = cards.filter((c) => !isTrump(c, trump) && !isJoker(c) && c.rank === 14);
@@ -1173,59 +1826,128 @@ function decidePlay(state, seat, p) {
   const trumpLedThisTrick = isTrump(state.currentTrick[0].card, trump);
   const voids = trumpVoidSeats(state, trump);
   const allOpponentsVoid = [...Array(players).keys()].filter((i) => i !== seat && teamOf(i) !== myTeam).every((i) => voids.has(i));
-  const currentWinnerHoldsBoss = trumpValue(winnerCard, trump) === boss;
-  const jokerSafe = trumpLedThisTrick || allOpponentsVoid || higherTrumpsAllAccountedFor(state, trump, { joker: true }, cards) || currentWinnerHoldsBoss || isLast;
+  const jokerSafe = trumpLedThisTrick || allOpponentsVoid || higherTrumpsAllAccountedFor(state, trump, { joker: true }, cards) || isLast;
   const wouldWin = (c) => trickWinner([...state.currentTrick, { seat, card: c }], trump) === seat;
   const winners = cards.filter((c) => wouldWin(c) && (!isJoker(c) || jokerSafe));
   if (partnerWinning) {
-    const partnerSeat = seat % 2 === 0 ? 1 : 0;
+    const partnerSeat = winnerSeat;
     const partnerCalibrated = calibratedSignal(state.signals[partnerSeat], state.profiles[partnerSeat]);
     const winVal = trumpValue(winnerCard, trump);
-    const partnerStrong = winVal !== null ? winVal === boss || winVal >= 12 || partnerCalibrated >= p.loadSignalThreshold : partnerCalibrated >= p.loadSignalThreshold;
-    const safe = cards.filter((c) => !wouldWin(c));
-    const pool = safe.length ? safe : cards;
+    const partnerStrong = winVal !== null ? winVal > hiddenTopTrump(state, trump, state.hands[seat]) || winVal >= 12 || partnerCalibrated >= p.loadSignalThreshold : partnerCalibrated >= p.loadSignalThreshold;
+    const banks = (c) => isJoker(c) || c.suit === trump && (c.rank === 11 || c.rank === low);
+    const safe = cards.filter((c) => !wouldWin(c) || isLast && banks(c));
+    const pool2 = safe.length ? safe : cards;
     if (partnerStrong || isLast) {
-      return asMove(pick(pool, (c) => loadValue(c, trump), "max"));
+      return asMove(pick(pool2, (c) => loadValue2(c, trump, low), "max"));
     }
-    return asMove(bestDiscard(pool, trump, low, p, myTeamAhead));
+    return asMove(bestDiscard(pool2, trump, low, p, myTeamAhead));
   }
   if (winners.length && trickHasValue) {
     const opponentConf = state.signals.map((s, i) => teamOf(i) !== myTeam ? calibratedSignal(s, state.profiles[i]) : -1).reduce((a, b) => Math.max(a, b), -1);
     if (opponentConf >= 2 && winners.every((c) => !isTrump(c, trump))) {
       return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
     }
-    return asMove(pick(winners, (c) => winCost(c, trump), "min"));
+    return asMove(pick(winners, (c) => winCost2(c, trump, low, isLast), "min"));
   }
   return asMove(bestDiscard(cards, trump, low, p, myTeamAhead));
 }
+var PLAY_BUDGET = 12e3;
+var MIN_WORLDS = 12;
+var MAX_WORLDS = 120;
+var TIE_MARGIN = 0.1;
+function stakesFor(state, seat) {
+  return {
+    myTeam: teamOf(seat),
+    bidderTeam: teamOf(state.winningBid.seat),
+    bid: state.winningBid.amount,
+    scores: state.scores,
+    target: state.target
+  };
+}
+function decidePlayMC(state, seat, rng, p) {
+  const legal = legalMoves(state).filter((m) => m.type === "play").map((m) => m.card);
+  const heuristic = decidePlay(state, seat, p);
+  if (legal.length === 1 || heuristic.type !== "play") return heuristic;
+  const ctx = buildContext(state, seat, state.trump);
+  const cands = legal.map(encodeCard);
+  const worlds = clamp(Math.floor(PLAY_BUDGET / (cands.length * cardsLeft(ctx))), MIN_WORLDS, MAX_WORLDS);
+  const values = evaluatePlays(ctx, cands, stakesFor(state, seat), worlds, rng);
+  const h = cands.indexOf(encodeCard(heuristic.card));
+  let best = 0;
+  for (let i = 1; i < cands.length; i++) if (values[i] > values[best]) best = i;
+  return { type: "play", seat, card: legal[values[best] > values[h] + TIE_MARGIN ? best : h] };
+}
+var BID_BUDGET = 7200;
+var BID_MIN_WORLDS = 200;
+var BID_MAX_WORLDS = 250;
+var DEALER_WORLD_SHARE = 0.6;
+var PARTNER_PREMIUM = 4;
+function expectedUtility(hist, stakes) {
+  let u = 0, total = 0;
+  for (let a = 0; a < 7; a++) {
+    for (let b = 0; a + b <= 6; b++) {
+      const h = hist[a * 7 + b];
+      if (h) {
+        u += h * handUtility(stakes, a, b);
+        total += h;
+      }
+    }
+  }
+  return u / total;
+}
+function decideBid(state, seat, rng, p) {
+  const isDealer = seat === state.dealerSeat;
+  const high = state.highBid;
+  const needed = high === null ? 2 : isDealer ? high.amount : high.amount + 1;
+  if (needed > 6) return { type: "pass", seat };
+  const myTeam = teamOf(seat);
+  const hand2 = state.hands[seat];
+  const lead = openingLead(hand2, state.players);
+  const ctx = buildContext(state, seat, lead.suit);
+  const share = isDealer && high !== null ? DEALER_WORLD_SHARE : 1;
+  const worlds = Math.round(share * clamp(Math.floor(BID_BUDGET / cardsLeft(ctx)), BID_MIN_WORLDS, BID_MAX_WORLDS));
+  const seed = Math.floor(rng() * 4294967296);
+  const outlook = pointHistogram(ctx, encodeCard(lead), worlds, mulberry322(seed));
+  const value = (bid) => expectedUtility(outlook, { myTeam, bidderTeam: myTeam, bid, scores: state.scores, target: state.target });
+  let bestBid = needed;
+  for (let b = needed + 1; b <= 6; b++) if (value(b) > value(bestBid)) bestBid = b;
+  if (isDealer && high === null) return { type: "bid", seat, amount: bestBid };
+  let passValue;
+  if (isDealer && high !== null) {
+    const passOutlook = otherBidderHistogram(ctx, high.seat, worlds, mulberry322(seed));
+    passValue = expectedUtility(passOutlook, {
+      myTeam,
+      bidderTeam: teamOf(high.seat),
+      bid: high.amount,
+      scores: state.scores,
+      target: state.target
+    });
+  } else {
+    const opp = 1 - myTeam;
+    passValue = 100 * winProb(state.target - state.scores[myTeam], state.target - state.scores[opp], state.target);
+    if (high !== null && teamOf(high.seat) === myTeam) passValue += PARTNER_PREMIUM;
+  }
+  return value(bestBid) >= passValue + p.bidMargin ? { type: "bid", seat, amount: bestBid } : { type: "pass", seat };
+}
 function aiMove(state, seat, rng = stateRng(state, seat), personality = PERSONALITIES.balanced) {
   if (state.phase === "gameOver") throw new Error("game is over");
+  if (state.phase === "trickComplete") return legalMoves(state)[0];
   const turnSeat = state.phase === "bidding" ? state.bidTurn : state.turn;
   if (turnSeat !== seat) throw new Error(`not seat ${seat}'s turn (it is seat ${turnSeat}'s)`);
   if (state.phase === "bidding") return decideBid(state, seat, rng, personality);
-  if (state.trump === null) {
-    const trump = bestSuit(state.hands[seat], state.players).suit;
-    const hand = state.hands[seat];
-    const trumpCards = hand.filter(
-      (c) => !isJoker(c) && c.suit === trump
-    );
-    const lead = trumpCards.length ? trumpCards.reduce((a, b) => a.rank >= b.rank ? a : b) : hand.filter((c) => !isJoker(c))[0];
-    return { type: "play", seat, card: lead };
-  }
-  return decidePlay(state, seat, personality);
+  if (state.trump === null) return { type: "play", seat, card: openingLead(state.hands[seat], state.players) };
+  return decidePlayMC(state, seat, rng, personality);
 }
-function handConfidence(hand, players) {
-  const score = bestSuit(hand, players).score;
-  if (score >= 3) return "strong";
-  if (score >= 1.5) return "medium";
-  return "weak";
+function handConfidence(hand2, players) {
+  return ["weak", "medium", "strong"][signalLevel(bestSuit(hand2, players).score)];
 }
 
 // src/protocol.ts
 function redact(state, seat, meta) {
   const phase = meta.phase ?? state.phase;
   const playing = phase === "bidding" || phase === "playing";
-  const toAct = !playing ? null : state.phase === "bidding" ? state.bidTurn : state.turn;
+  const gated = !!state.pendingSignal;
+  const toAct = !playing || gated ? null : state.phase === "bidding" ? state.bidTurn : state.turn;
   const yourTurn = seat !== null && toAct === seat;
   const tricks = state.tricksWon;
   const lastTrick = tricks.length ? { winner: tricks[tricks.length - 1].seat, cards: tricks[tricks.length - 1].plays.map((p) => p.card) } : state.lastHand?.lastTrick ?? null;
@@ -1236,6 +1958,8 @@ function redact(state, seat, meta) {
     target: state.target,
     seats: meta.seats,
     hostSeat: meta.hostSeat,
+    botReplacement: meta.botReplacement ?? false,
+    disconnectedSeats: meta.disconnectedSeats ?? [],
     scores: state.scores,
     winner: state.winner,
     gamesWon: state.gamesWon,
@@ -1253,11 +1977,12 @@ function redact(state, seat, meta) {
     signals: state.signals,
     currentTrick: state.currentTrick,
     trickWinner: state.phase === "trickComplete" ? state.trickWinner ?? null : null,
-    pendingSignal: state.pendingSignal ?? false,
+    pendingSignal: gated,
+    pendingSignalSeat: signalGateSeat(state),
     lastTrick,
     lastHand: state.lastHand,
-    lastKitty: state.lastHand ? state.lastHand.kitty : null,
-    lastDealtHands: state.lastHand ? state.lastHand.dealtHands : null,
+    lastKitty: state.lastHand?.kitty ?? null,
+    lastDealtHands: state.lastHand?.dealtHands ?? null,
     log: state.log ?? []
   };
 }
@@ -1285,9 +2010,8 @@ function hljEntries(prev, next, move) {
   if (prev.trump === null && next.trump !== null && move.type === "play") {
     out.push({ seat: null, msg: "trump is", suit: next.trump });
   }
-  if (next.tricksWon.length > prev.tricksWon.length) {
-    const t = next.tricksWon[next.tricksWon.length - 1];
-    out.push({ seat: t.seat, msg: "takes the trick" });
+  if (move.type === "advance" && prev.phase === "trickComplete" && prev.trickWinner != null) {
+    out.push({ seat: prev.trickWinner, msg: "takes the trick" });
   }
   if (next.lastHand && next.lastHand !== prev.lastHand) {
     const r = next.lastHand;
@@ -1298,21 +2022,23 @@ function hljEntries(prev, next, move) {
     if (d.bonhomme !== null) honors.push(`Joker\u2192${teamLetter(d.bonhomme)}`);
     if (d.game !== null) honors.push(`Game\u2192${teamLetter(d.game)}`);
     out.push({ seat: null, msg: honors.join("    ") });
-    out.push({ seat: null, msg: `Score \u2014 A ${next.scores[0]}, B ${next.scores[1]}` });
+    const scores = r.finalScores ?? next.scores;
+    out.push({ seat: null, msg: `Score \u2014 A ${scores[0]}, B ${scores[1]}` });
+    const [wonA, wonB] = next.gamesWon;
     if (next.phase === "gameOver" && next.winner !== null) {
-      out.push({ seat: null, msg: `${teamName(next.winner)} wins the game!` });
-    } else if (next.dealerSeat !== prev.dealerSeat) {
-      out.push({ seat: next.dealerSeat, msg: "deals the next hand" });
+      const what = next.winsNeeded > 1 ? `series ${Math.max(wonA, wonB)}\u2013${Math.min(wonA, wonB)}` : "game";
+      out.push({ seat: null, msg: `${teamName(next.winner)} wins the ${what}!` });
+    } else {
+      if (r.gameWinner != null) {
+        out.push({ seat: null, msg: `${teamName(r.gameWinner)} wins game ${wonA + wonB} \u2014 series A ${wonA}, B ${wonB}` });
+      }
+      if (next.dealerSeat !== prev.dealerSeat) out.push({ seat: next.dealerSeat, msg: "deals the next hand" });
     }
-    const HLJ_SUIT_ORDER = { S: 0, H: 1, D: 2, C: 3 };
-    const sortHand = (hand) => [...hand].sort(
-      (a, b) => ("joker" in a ? 1 : 0) - ("joker" in b ? 1 : 0) || (HLJ_SUIT_ORDER["suit" in a ? a.suit : ""] ?? 4) - (HLJ_SUIT_ORDER["suit" in b ? b.suit : ""] ?? 4) || ("rank" in a ? a.rank : 0) - ("rank" in b ? b.rank : 0)
-    );
     if (r.kitty.length) {
-      out.push({ seat: null, msg: "kitty", cards: sortHand(r.kitty) });
+      out.push({ seat: null, msg: "kitty", cards: r.kitty });
     }
     for (let seat = 0; seat < r.dealtHands.length; seat++) {
-      out.push({ seat, msg: "was dealt", cards: sortHand(r.dealtHands[seat]) });
+      out.push({ seat, msg: "was dealt", cards: r.dealtHands[seat] });
     }
   }
   return out;
@@ -1325,8 +2051,33 @@ var PERSONALITY_TABLE = [
   PERSONALITIES.conservative
 ];
 function botPersonality(state, seat) {
-  const h = (state.seed >>> 0 ^ Math.imul(seat + 1, 2654435769)) >>> 0;
+  const h = ((state.botSeed ?? state.seed) >>> 0 ^ Math.imul(seat + 1, 2654435769)) >>> 0;
   return PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
+}
+function gameOptions(config) {
+  const target = config.target === void 0 ? 21 : config.target;
+  if (!Number.isInteger(target) || target < 1 || target > 1e4) {
+    throw new Error("Target must be a whole number from 1 to 10000");
+  }
+  const bestOf = config.bestOf ?? 1;
+  if (!Number.isInteger(bestOf) || bestOf < 1 || bestOf > 9 || bestOf % 2 === 0) {
+    throw new Error("Best of must be 1, 3, 5, 7 or 9 games");
+  }
+  return { target, winsNeeded: (bestOf + 1) / 2 };
+}
+function migrateProfile(p) {
+  const base = emptyProfile();
+  if (!p || typeof p !== "object") return base;
+  const rec = p.signalRecord ?? {};
+  return {
+    ...base,
+    ...p,
+    signalRecord: {
+      weak: { ...base.signalRecord.weak, ...rec.weak },
+      medium: { ...base.signalRecord.medium, ...rec.medium },
+      strong: { ...base.signalRecord.strong, ...rec.strong }
+    }
+  };
 }
 var hljModule = {
   meta: { id: "high-low-jack", name: "High Low Jack", supportedPlayerCounts: [4, 6, 8] },
@@ -1335,9 +2086,32 @@ var hljModule = {
   // Base 1600ms for 4p: 6p → ~1067ms, 8p → 800ms.
   botStepMs: (s) => Math.round(1600 * 4 / s.players),
   createGame: (config, seed) => {
-    const winsNeeded = config.bestOf ? Math.ceil(config.bestOf / 2) : 1;
-    const g = createGame(config.players, seed, config.target, winsNeeded);
-    return attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]);
+    const { target, winsNeeded } = gameOptions(config);
+    const g = createGame(config.players, seed, target, winsNeeded);
+    return { ...attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]), botSeed: seed };
+  },
+  // Fresh entropy for the shuffle (the log and botSeed ride through the spread).
+  reseed: (s, entropy) => reseed(s, entropy),
+  // Saved games from older deploys: fill in fields added since (log, profiles,
+  // series counters...) and drop any signal that isn't a real level.
+  migrate: (raw) => {
+    const s = raw;
+    if (!s || typeof s !== "object" || !SUPPORTED_PLAYERS.includes(s.players)) throw new Error("Not a High Low Jack game");
+    const log = Array.isArray(s.log) ? s.log : [];
+    return {
+      ...s,
+      gamesWon: s.gamesWon ?? [0, 0],
+      winsNeeded: s.winsNeeded ?? 1,
+      bidHistory: s.bidHistory ?? [],
+      signals: Array.from({ length: s.players }, (_, i) => isHandSignal(s.signals?.[i]) ? s.signals[i] : null),
+      profiles: Array.from({ length: s.players }, (_, i) => migrateProfile(s.profiles?.[i])),
+      lastHand: s.lastHand ?? null,
+      dealtHands: s.dealtHands ?? null,
+      trickWinner: s.phase === "trickComplete" && s.trickWinner == null ? trickWinner(s.currentTrick, s.trump) : s.trickWinner ?? null,
+      log,
+      logSeq: Number.isInteger(s.logSeq) ? s.logSeq : log.reduce((m, e) => Math.max(m, e.id), 0),
+      botSeed: s.botSeed ?? s.seed
+    };
   },
   // Pitch's turn order: bidder during bidding, otherwise the player to act.
   // No seat acts during the trickComplete gate — the driver auto-advances it.
@@ -1346,7 +2120,11 @@ var hljModule = {
   // Every completed trick lingers so players can read it; the final trick lingers
   // longer so the game never snaps to the win screen. A stack tap (advance) skips ahead.
   pacing: (s) => {
-    if (s.pendingSignal) return { kind: "wait", ms: 3e4, move: { type: "advance", seat: s.bidTurn } };
+    if (s.pendingSignal) {
+      const seat = signalGateSeat(s);
+      const move = { type: "advance", seat: seat ?? s.bidTurn };
+      return seat === null ? { kind: "auto", ms: 3e4, move } : { kind: "auto", ms: 3e4, move, advanceSeat: seat };
+    }
     if (s.phase !== "trickComplete") return null;
     const lastTrick = s.trickIndex >= 5;
     return { kind: "auto", ms: lastTrick ? 2600 : 1500, move: { type: "advance", seat: s.trickWinner ?? 0 } };
@@ -1356,7 +2134,7 @@ var hljModule = {
   legalMoves: (s) => legalMoves(s),
   applyMove: (s, move) => {
     if (move.type === "advance" && s.pendingSignal) {
-      return { ...s, pendingSignal: false };
+      return { ...s, pendingSignal: false, pendingSignalSeat: null };
     }
     const next = applyMove(s, move);
     return attach(next, s.log, s.logSeq, hljEntries(s, next, move));
@@ -1383,22 +2161,32 @@ var hljModule = {
         if (s2 === dealer) break;
       }
     }
-    return teammateLeft ? { ...s, pendingSignal: true } : null;
+    return teammateLeft ? { ...s, pendingSignal: true, pendingSignalSeat: move.seat } : null;
   },
   isOver: (s) => s.phase === "gameOver",
   redact: (s, seat, meta) => redact(s, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats }),
   lobbyView: (config, seat, meta) => {
-    const winsNeeded = config.bestOf ? Math.ceil(config.bestOf / 2) : 1;
-    const g = createGame(config.players, 1, config.target, winsNeeded);
+    let opts = { target: 21, winsNeeded: 1 };
+    try {
+      opts = gameOptions(config);
+    } catch {
+    }
+    const g = createGame(config.players, 1, opts.target, opts.winsNeeded);
     const blanked = { ...g, hands: g.hands.map(() => []), kitty: [], phase: "bidding" };
     return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats, phase: "lobby" });
   },
   aiMove: (s, seat) => aiMove(s, seat, void 0, botPersonality(s, seat)),
   // Hand signals: a non-turn side action that must preserve the log untouched.
+  // The payload is raw client input (and keys the bots' signal records), so only
+  // a real level is accepted; while the confidence gate is open only the bidder
+  // it waits on may signal, and that pick clears it.
   aux: {
     apply: (s, seat, payload) => {
+      if (!isHandSignal(payload)) throw new Error("Invalid signal");
+      const gate = signalGateSeat(s);
+      if (gate !== null && seat !== gate) throw new Error("Waiting for the bidder to signal");
       const next = setSignal(s, seat, payload);
-      return { ...next, log: s.log, logSeq: s.logSeq, pendingSignal: false };
+      return { ...next, log: s.log, logSeq: s.logSeq, pendingSignal: false, pendingSignalSeat: null };
     },
     botAux: (s, seat) => {
       if (s.phase !== "bidding" || s.signals[seat] != null) return null;
@@ -1424,7 +2212,11 @@ var hljModule = {
       bidHistory: prev.bidHistory,
       // prev still holds the finished hand's auction; next's is reset
       log: next.log,
-      scores: next.scores,
+      scores: next.lastHand.finalScores ?? next.scores,
+      // before a won game resets them
+      gameWinner: next.lastHand.gameWinner ?? null,
+      // team that won a game with this hand
+      gamesWon: next.gamesWon,
       gameOver: next.phase === "gameOver"
     };
   }
@@ -1451,8 +2243,26 @@ function mulberry323(seed) {
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
-function shuffle2(items, seed) {
-  const rng = mulberry323(seed);
+function sfc322(a, b, c, d) {
+  const next = () => {
+    a >>>= 0;
+    b >>>= 0;
+    c >>>= 0;
+    d >>>= 0;
+    let t = a + b | 0;
+    a = b ^ b >>> 9;
+    b = c + (c << 3) | 0;
+    c = c << 21 | c >>> 11;
+    d = d + 1 | 0;
+    t = t + d | 0;
+    c = c + t | 0;
+    return (t >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < 15; i++) next();
+  return next;
+}
+function shuffle2(items, seed, entropy) {
+  const rng = entropy ? sfc322(seed ^ entropy[0], entropy[1], entropy[2], entropy[3]) : mulberry323(seed);
   const a = items.slice();
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -1461,6 +2271,8 @@ function shuffle2(items, seed) {
   const nextSeed = Math.floor(rng() * 4294967295) >>> 0;
   return { shuffled: a, nextSeed };
 }
+var minSlot = (aceRank) => aceRank === 1 ? 1 : 2;
+var maxSlot = (aceRank) => aceRank === 1 ? 13 : 14;
 function isRun(cards) {
   if (cards.length < 3) return false;
   const naturals = cards.filter((c) => !c.joker);
@@ -1476,8 +2288,7 @@ function isRun(cards) {
     const gaps = high - low + 1 - ranks.length;
     if (gaps < 0 || gaps > jokers) continue;
     const extra = jokers - gaps;
-    if (high - low + 1 + extra > 14) continue;
-    if (low - 1 + (14 - high) < extra) continue;
+    if (low - minSlot(aceRank) + (maxSlot(aceRank) - high) < extra) continue;
     return true;
   }
   return false;
@@ -1515,44 +2326,67 @@ function orderRunCards(cards) {
   return cards;
 }
 var validMeld = (cards) => isSet(cards) || isRun(cards);
-function canRunWith(pool, target) {
-  if (target.joker) return false;
-  const inSuit = pool.filter((c) => c.suit === target.suit && !c.joker);
-  const jokers = pool.filter((c) => c.joker).length;
+function trioWith(others, f) {
+  if (f.joker) {
+    const nats = others.filter((c) => !c.joker);
+    const jk = others.find((c) => c.joker);
+    if (jk && nats.length) return [f, jk, nats[0]];
+    for (let i = 0; i < nats.length; i++)
+      for (let j = i + 1; j < nats.length; j++) if (validMeld([f, nats[i], nats[j]])) return [f, nats[i], nats[j]];
+    return null;
+  }
+  const pool2 = [f, ...others];
+  const set = findSetContaining(pool2, f)?.slice(0, 3) ?? null;
+  if (set && isSet(set)) return set;
+  const run = findRunContaining(pool2, f);
+  return run && run.length === 3 && isRun(run) ? run : null;
+}
+function runBridge(run, f, pool2) {
+  if (isRun([...run, f])) return [];
+  const nat = run.filter((c) => !c.joker);
+  if (f.joker || !nat.length || nat[0].suit !== f.suit) return null;
+  const runJokers = run.length - nat.length;
+  let best = null;
   for (const aceRank of [1, 14]) {
-    const ranks = new Set(inSuit.map((c) => c.rank === 14 ? aceRank : c.rank));
-    const tr = target.rank === 14 ? aceRank : target.rank;
-    ranks.add(tr);
-    for (let start = tr - 2; start <= tr; start++) {
-      let ok = true, need = 0;
-      for (let k = 0; k < 3; k++) {
-        const r = start + k;
-        if (r < 1 || r > 14) {
-          ok = false;
-          break;
-        }
-        if (!ranks.has(r)) need++;
-      }
-      if (ok && need <= jokers) return true;
+    const eff = (c) => c.rank === 14 ? aceRank : c.rank;
+    const ranks = new Set(nat.map(eff));
+    if (ranks.has(eff(f))) continue;
+    ranks.add(eff(f));
+    const lo = Math.min(...ranks), hi = Math.max(...ranks);
+    const holes = [];
+    for (let r = lo + 1; r < hi; r++) if (!ranks.has(r)) holes.push(r);
+    const need = holes.length - runJokers;
+    const bridge = [];
+    for (const r of holes) {
+      if (bridge.length >= need) break;
+      const c = pool2.find((x) => !x.joker && x.suit === f.suit && eff(x) === r);
+      if (c) bridge.push(c);
+    }
+    for (const j of pool2) if (j.joker && bridge.length < need) bridge.push(j);
+    if (bridge.length < need || !isRun([...run, f, ...bridge])) continue;
+    if (!best || bridge.length < best.length) best = bridge;
+  }
+  return best;
+}
+function forcedPlays(hand2, f, melds) {
+  const others = hand2.filter((c) => c.id !== f.id);
+  const out = [];
+  const trio = trioWith(others, f);
+  if (trio) out.push({ meldId: null, cards: trio });
+  for (const m of melds) {
+    if (m.kind === "set") {
+      if (isSet([...m.cards, f])) out.push({ meldId: m.id, cards: [f] });
+    } else {
+      const bridge = runBridge(m.cards, f, others);
+      if (bridge) out.push({ meldId: m.id, cards: [f, ...bridge] });
     }
   }
-  return false;
+  return out;
 }
-function canFormMeldWith(pool, target) {
-  if (target.joker) return false;
-  const otherSuits = new Set(pool.filter((c) => !c.joker && c.rank === target.rank && c.suit !== target.suit).map((c) => c.suit));
-  const jokers = pool.filter((c) => c.joker).length;
-  if (1 + otherSuits.size + jokers >= 3) return true;
-  return canRunWith(pool, target);
-}
-function canLayoff(state, target) {
-  return state.melds.some(
-    (m) => m.kind === "set" ? isSet([...m.cards, target]) : isRun([...m.cards, target])
-  );
-}
+var forcedPlayable = (hand2, f, melds, requireDiscard) => forcedPlays(hand2, f, melds).some((p) => !requireDiscard || p.cards.length < hand2.length);
 var handSize = (players) => players === 2 ? 13 : 7;
 function dealRound(prev) {
-  const { shuffled, nextSeed } = shuffle2(buildDeck2(decksFor(prev.players)), prev.seed);
+  const { shuffled, nextSeed } = shuffle2(buildDeck2(decksFor(prev.players)), prev.seed, prev.entropy);
   const hands = Array.from({ length: prev.players }, () => []);
   const hs = handSize(prev.players);
   let i = 0;
@@ -1575,14 +2409,21 @@ function dealRound(prev) {
     nextMeldId: 0
   };
 }
+var botLevels = (players, raw) => Array.from({ length: players }, (_, i) => {
+  const d = Array.isArray(raw) ? raw[i] : void 0;
+  return Number.isInteger(d) && d >= 0 && d <= 3 ? d : 2;
+});
 function createGame2(config, seed) {
-  if (config.players < 2 || config.players > 8) throw new Error(`Unsupported player count: ${config.players}`);
-  if (config.target <= 0) throw new Error("Target must be positive");
-  const botDifficulty = Array.from({ length: config.players }, (_, i) => config.botDifficulty?.[i] ?? 2);
+  const players = config.players;
+  if (!Number.isInteger(players) || players < 2 || players > 8) throw new Error(`Unsupported player count: ${players}`);
+  const target = config.target === void 0 ? 500 : config.target;
+  if (!Number.isInteger(target) || target < 1 || target > 1e4) throw new Error("Target must be a whole number from 1 to 10000");
+  const requireDiscard = config.requireDiscard ?? false;
+  if (typeof requireDiscard !== "boolean") throw new Error("Must discard to go out must be on or off");
   const base = {
-    players: config.players,
-    target: config.target,
-    requireDiscard: config.requireDiscard ?? false,
+    players,
+    target,
+    requireDiscard,
     seed,
     phase: "playing",
     dealerSeat: 0,
@@ -1594,16 +2435,37 @@ function createGame2(config, seed) {
     melds: [],
     cardOwner: {},
     mustMeldCardId: null,
-    scores: Array(config.players).fill(0),
+    scores: Array(players).fill(0),
     winner: null,
     lastRound: null,
-    botDifficulty,
+    botDifficulty: botLevels(players, config.botDifficulty),
     nextMeldId: 0,
     log: [],
     logSeq: 0
   };
   const dealt = dealRound(base);
-  return attachRummy(dealt, [], 0, [{ seat: dealt.dealerSeat, msg: "deals the first hand" }]);
+  return { ...attachRummy(dealt, [], 0, [{ seat: dealt.dealerSeat, msg: "deals the first hand" }]), seedOnlyDeal: true };
+}
+function reseed2(state, entropy) {
+  if (!Array.isArray(entropy) || entropy.length < 4) return state;
+  const next = { ...state, entropy: entropy.slice(0, 4).map((w) => w >>> 0) };
+  const untouched = state.phase === "playing" && state.logSeq === 1 && state.lastRound === null;
+  if (!state.seedOnlyDeal || !untouched) return next;
+  return { ...dealRound(next), seedOnlyDeal: false };
+}
+function migrate(raw) {
+  const s = raw;
+  if (!s || typeof s !== "object" || !Number.isInteger(s.players) || s.players < 2 || s.players > 8) throw new Error("Not a Rummy 500 game");
+  const log = Array.isArray(s.log) ? s.log : [];
+  return {
+    ...s,
+    // Older melds took their owner from cards[0]; that's the best guess left.
+    melds: (s.melds ?? []).map((m) => ({ ...m, owner: m.owner ?? s.cardOwner?.[m.cards[0]?.id] ?? -1 })),
+    requireDiscard: s.requireDiscard === true,
+    botDifficulty: botLevels(s.players, s.botDifficulty),
+    log,
+    logSeq: Number.isInteger(s.logSeq) ? s.logSeq : log.reduce((m, e) => Math.max(m, e.id), 0)
+  };
 }
 var LOG_CAP2 = 120;
 function attachRummy(next, prevLog, prevSeq, parts) {
@@ -1615,7 +2477,7 @@ var findCard = (list, id) => list.find((c) => c.id === id);
 function rummyEntries(prev, next, move) {
   const out = [];
   const seat = move.seat;
-  const hand = prev.hands[seat] ?? [];
+  const hand2 = prev.hands[seat] ?? [];
   if (move.type === "drawStock") {
     out.push({ seat, msg: "drew from the stock" });
   } else if (move.type === "drawDiscard") {
@@ -1631,11 +2493,11 @@ function rummyEntries(prev, next, move) {
       extraCards: extra ? taken.slice(1) : void 0
     });
   } else if (move.type === "meld") {
-    out.push({ seat, msg: "melded", cards: move.cards.map((id) => findCard(hand, id)).filter(Boolean) });
+    out.push({ seat, msg: "melded", cards: move.cards.map((id) => findCard(hand2, id)).filter(Boolean) });
   } else if (move.type === "layoff") {
-    out.push({ seat, msg: "laid off", cards: move.cards.map((id) => findCard(hand, id)).filter(Boolean) });
+    out.push({ seat, msg: "laid off", cards: move.cards.map((id) => findCard(hand2, id)).filter(Boolean) });
   } else if (move.type === "discard") {
-    const c = findCard(hand, move.cardId);
+    const c = findCard(hand2, move.cardId);
     out.push({ seat, msg: "discarded", cards: c ? [c] : [] });
   }
   if (next.lastRound && next.lastRound !== prev.lastRound) {
@@ -1643,7 +2505,11 @@ function rummyEntries(prev, next, move) {
     if (lr.outSeat != null) out.push({ seat: lr.outSeat, msg: `goes out (+${lr.delta[lr.outSeat]} this round)` });
     else out.push({ seat: null, msg: "Stock exhausted \u2014 round scored" });
     if (next.phase === "gameOver" && next.winner !== null) out.push({ seat: next.winner, msg: "wins the game!" });
-    else if (next.dealerSeat !== prev.dealerSeat) out.push({ seat: next.dealerSeat, msg: "deals a new round" });
+    else if (next.dealerSeat !== prev.dealerSeat) {
+      const max = Math.max(...next.scores);
+      if (max >= next.target) out.push({ seat: null, msg: `Tied for the lead at ${max} \u2014 another round decides` });
+      out.push({ seat: next.dealerSeat, msg: "deals a new round" });
+    }
   }
   return out;
 }
@@ -1653,16 +2519,17 @@ function meldedValue(state, seat) {
   return v;
 }
 var heldValue = (state, seat) => state.hands[seat].reduce((a, c) => a + cardValue(c), 0);
+var cardOrder = (a, b) => Number(!!a.joker) - Number(!!b.joker) || SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit) || a.rank - b.rank || a.id - b.id;
 function endRound(state, outSeat) {
   const meldedPts = state.scores.map((_, s) => meldedValue(state, s));
   const heldPts = state.scores.map((_, s) => heldValue(state, s));
   const delta = state.scores.map((_, s) => meldedPts[s] - heldPts[s]);
-  const heldCards = state.hands.map((h) => [...h]);
+  const heldCards = state.hands.map((h) => [...h].sort(cardOrder));
   const scores = state.scores.map((v, s) => v + delta[s]);
-  const lastMelds = state.melds.map((m) => ({ ...m, owner: state.cardOwner[m.cards[0]?.id] ?? -1 }));
+  const lastMelds = state.melds.map((m) => ({ ...m }));
   const lastRound = { delta, outSeat, meldedPts, heldPts, heldCards, lastMelds };
   const max = Math.max(...scores);
-  if (max >= state.target) {
+  if (max >= state.target && scores.filter((v) => v === max).length === 1) {
     return { ...state, scores, phase: "gameOver", winner: scores.indexOf(max), lastRound };
   }
   const nextDealer = (state.dealerSeat + 1) % state.players;
@@ -1670,10 +2537,10 @@ function endRound(state, outSeat) {
 }
 var seatToAct = (s) => s.phase === "gameOver" || s.phase === "handComplete" ? null : s.turn;
 var isOver = (s) => s.phase === "gameOver";
-function isLegal(state, move) {
+function isLegal2(state, move) {
   if (move.type === "advance") return state.phase === "handComplete";
   if (state.phase !== "playing" || move.seat !== state.turn) return false;
-  const hand = state.hands[move.seat];
+  const hand2 = state.hands[move.seat];
   switch (move.type) {
     case "drawStock":
       return state.turnPhase === "draw" && state.stock.length > 0;
@@ -1682,29 +2549,26 @@ function isLegal(state, move) {
       const idx = state.discard.findIndex((c) => c.id === move.cardId);
       if (idx < 0) return false;
       if (idx === state.discard.length - 1) return true;
-      const taken = state.discard.slice(idx);
-      const target = state.discard[idx];
-      return canFormMeldWith([...hand, ...taken], target) || canLayoff(state, target);
+      return forcedPlayable([...hand2, ...state.discard.slice(idx)], state.discard[idx], state.melds, state.requireDiscard);
     }
     case "meld": {
       if (state.turnPhase !== "play" || !move.cards || move.cards.length < 3) return false;
       if (new Set(move.cards).size !== move.cards.length) return false;
-      const objs = move.cards.map((id) => hand.find((c) => c.id === id));
+      const objs = move.cards.map((id) => hand2.find((c) => c.id === id));
       if (objs.some((o) => !o)) return false;
       if (!validMeld(objs)) return false;
       if (state.mustMeldCardId != null && !move.cards.includes(state.mustMeldCardId)) {
-        const mustCard = hand.find((c) => c.id === state.mustMeldCardId);
+        const mustCard = hand2.find((c) => c.id === state.mustMeldCardId);
         if (mustCard) {
-          const remainHand = hand.filter((c) => !move.cards.includes(c.id));
+          const remainHand = hand2.filter((c) => !move.cards.includes(c.id));
           const newMeldCards = objs;
           const newMeldKind = isSet(newMeldCards) ? "set" : "run";
-          const allMelds = [...state.melds, { id: -1, kind: newMeldKind, cards: newMeldCards }];
-          const canStillPlay = canFormMeldWith(remainHand, mustCard) || allMelds.some((m) => m.kind === "set" ? isSet([...m.cards, mustCard]) : isRun([...m.cards, mustCard]));
-          if (!canStillPlay) return false;
+          const allMelds = [...state.melds, { id: -1, kind: newMeldKind, owner: move.seat, cards: newMeldCards }];
+          if (!forcedPlayable(remainHand, mustCard, allMelds, state.requireDiscard)) return false;
         }
       }
       if (state.requireDiscard) {
-        const remainAfter = hand.filter((c) => !move.cards.includes(c.id));
+        const remainAfter = hand2.filter((c) => !move.cards.includes(c.id));
         if (remainAfter.length === 0) return false;
       }
       return true;
@@ -1714,34 +2578,33 @@ function isLegal(state, move) {
       if (new Set(move.cards).size !== move.cards.length) return false;
       const m = state.melds.find((x) => x.id === move.meldId);
       if (!m) return false;
-      const objs = move.cards.map((id) => hand.find((c) => c.id === id));
+      const objs = move.cards.map((id) => hand2.find((c) => c.id === id));
       if (objs.some((o) => !o)) return false;
       const combined = [...m.cards, ...objs];
       if (!(m.kind === "set" ? isSet(combined) : isRun(combined))) return false;
       if (state.mustMeldCardId != null && !move.cards.includes(state.mustMeldCardId)) {
-        const mustCard = hand.find((c) => c.id === state.mustMeldCardId);
+        const mustCard = hand2.find((c) => c.id === state.mustMeldCardId);
         if (mustCard) {
-          const remainHand = hand.filter((c) => !move.cards.includes(c.id));
+          const remainHand = hand2.filter((c) => !move.cards.includes(c.id));
           const updatedMeldCards = m.kind === "run" ? orderRunCards(combined) : combined;
           const updatedMelds = state.melds.map((x) => x.id === move.meldId ? { ...x, cards: updatedMeldCards } : x);
-          const canStillPlay = canFormMeldWith(remainHand, mustCard) || updatedMelds.some((mx) => mx.kind === "set" ? isSet([...mx.cards, mustCard]) : isRun([...mx.cards, mustCard]));
-          if (!canStillPlay) return false;
+          if (!forcedPlayable(remainHand, mustCard, updatedMelds, state.requireDiscard)) return false;
         }
       }
       if (state.requireDiscard) {
-        const remainAfter = hand.filter((c) => !move.cards.includes(c.id));
+        const remainAfter = hand2.filter((c) => !move.cards.includes(c.id));
         if (remainAfter.length === 0) return false;
       }
       return true;
     }
     case "discard":
-      return state.turnPhase === "play" && state.mustMeldCardId == null && hand.some((c) => c.id === move.cardId);
+      return state.turnPhase === "play" && state.mustMeldCardId == null && hand2.some((c) => c.id === move.cardId);
   }
   return false;
 }
 function applyMoveCore(state, move) {
   if (state.phase === "gameOver") throw new Error("Game is over");
-  if (!isLegal(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
+  if (!isLegal2(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
   if (move.type === "advance") {
     if (state.phase !== "handComplete") throw new Error("Not in handComplete");
     return dealRound({ ...state });
@@ -1773,7 +2636,7 @@ function applyMoveCore(state, move) {
       const objs = move.cards.map((id) => state.hands[seat].find((c) => c.id === id));
       const newHand = state.hands[seat].filter((c) => !move.cards.includes(c.id));
       const kind = isSet(objs) ? "set" : "run";
-      const meld = { id: state.nextMeldId, kind, cards: kind === "run" ? orderRunCards(objs) : objs };
+      const meld = { id: state.nextMeldId, kind, owner: seat, cards: kind === "run" ? orderRunCards(objs) : objs };
       const cardOwner = { ...state.cardOwner };
       for (const id of move.cards) cardOwner[id] = seat;
       const ns = {
@@ -1821,32 +2684,37 @@ function applyMoveWithLog(state, move) {
 function legalMoves2(state) {
   if (state.phase === "gameOver") return [];
   const seat = state.turn;
-  const hand = state.hands[seat];
+  const hand2 = state.hands[seat];
   const moves = [];
   if (state.turnPhase === "draw") {
     if (state.stock.length > 0) moves.push({ type: "drawStock", seat });
     const top = state.discard[state.discard.length - 1];
     if (top) moves.push({ type: "drawDiscard", seat, cardId: top.id });
     for (let i = 0; i < state.discard.length - 1; i++) {
-      const target = state.discard[i];
-      const taken = state.discard.slice(i);
-      if (canFormMeldWith([...hand, ...taken], target) || canLayoff(state, target))
-        moves.push({ type: "drawDiscard", seat, cardId: target.id });
+      const move = { type: "drawDiscard", seat, cardId: state.discard[i].id };
+      if (isLegal2(state, move)) moves.push(move);
     }
     return moves;
   }
-  const set = findSet(hand);
+  moves.push(...forcedMoves(state, seat));
+  const set = findSet(hand2);
   if (set) moves.push({ type: "meld", seat, cards: set.map((c) => c.id) });
-  const run = findRun(hand);
+  const run = findRun(hand2);
   if (run) moves.push({ type: "meld", seat, cards: run.map((c) => c.id) });
   for (const m of state.melds)
-    for (const c of hand) {
-      const combined = [...m.cards, c];
-      if (m.kind === "set" ? isSet(combined) : isRun(combined))
-        moves.push({ type: "layoff", seat, meldId: m.id, cards: [c.id] });
-    }
-  if (state.mustMeldCardId == null) for (const c of hand) moves.push({ type: "discard", seat, cardId: c.id });
-  return moves;
+    for (const c of hand2) moves.push({ type: "layoff", seat, meldId: m.id, cards: [c.id] });
+  for (const c of hand2) moves.push({ type: "discard", seat, cardId: c.id });
+  return moves.filter((m) => isLegal2(state, m));
+}
+function forcedMoves(state, seat) {
+  const hand2 = state.hands[seat];
+  const mc = hand2.find((c) => c.id === state.mustMeldCardId);
+  if (!mc) return [];
+  const moves = forcedPlays(hand2, mc, state.melds).map((p) => {
+    const cards = p.cards.map((c) => c.id);
+    return p.meldId == null ? { type: "meld", seat, cards } : { type: "layoff", seat, meldId: p.meldId, cards };
+  });
+  return moves.filter((m) => isLegal2(state, m));
 }
 function redact2(state, seat, meta) {
   const toAct = state.phase === "gameOver" || state.phase === "handComplete" ? null : state.turn;
@@ -1871,7 +2739,7 @@ function redact2(state, seat, meta) {
     handCounts: state.hands.map((h) => h.length),
     stockCount: state.stock.length,
     discard: state.discard,
-    melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: state.cardOwner[m.cards[0].id] ?? -1, cards: m.cards })),
+    melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: m.owner, cards: m.cards })),
     mustMeldCardId: yours ? state.mustMeldCardId : null,
     lastRound: state.lastRound,
     requireDiscard: state.requireDiscard,
@@ -1904,118 +2772,41 @@ function lobbyView(config, seat, meta) {
     melds: [],
     mustMeldCardId: null,
     lastRound: null,
-    requireDiscard: config.requireDiscard ?? false,
-    botDifficulty: Array.from({ length: players }, (_, i) => config.botDifficulty?.[i] ?? 2),
+    requireDiscard: config.requireDiscard === true,
+    botDifficulty: botLevels(players, config.botDifficulty),
     log: []
   };
 }
-var PERSONALITIES2 = [
-  // 0 · Balanced — reliable execution, moderate risk tolerance
-  { pickupThreshold: 6, earlyDiscount: 0.68, endgameHandSize: 3, dangerWeight: 1.8, misplayRate: 0.03 },
-  // 1 · Aggressive — highest pile appetite, sharpest execution, rarely misplays
-  { pickupThreshold: 3, earlyDiscount: 0.76, endgameHandSize: 2, dangerWeight: 3, misplayRate: 0.01 },
-  // 2 · Conservative — very selective pickups, strongest danger avoidance, patient
-  { pickupThreshold: 9, earlyDiscount: 0.65, endgameHandSize: 5, dangerWeight: 3.5, misplayRate: 0.02 },
-  // 3 · Opportunist — erratic: swings between brilliance and blunder
-  { pickupThreshold: 5, earlyDiscount: 0.6, endgameHandSize: 4, dangerWeight: 1.2, misplayRate: 0.05 }
+var AI_LEVELS = [
+  // 0 · Easy: short pile pickups only, ignores what its discards feed, slips often
+  { horizonScale: 1, feedWeight: 0, sweepWeight: 0, pickupDepth: 2, misplayRate: 0.2 },
+  // 1 · Medium: modest pickups, light discard caution, slips often
+  { horizonScale: 1, feedWeight: 1, sweepWeight: 0, pickupDepth: 3, misplayRate: 0.2 },
+  // 2 · Hard: the full evaluation, but sweeps at most 8 cards and slips now and then
+  { horizonScale: 2.4, feedWeight: 1.5, sweepWeight: 0.3, pickupDepth: 8, misplayRate: 0.2 },
+  // 3 · Expert: the full engine
+  { horizonScale: 2.4, feedWeight: 1.5, sweepWeight: 0.3, pickupDepth: 99, misplayRate: 0 }
 ];
-var DIFFICULTY_TO_PERSONALITY = [2, 0, 1, 3];
-function getPersonality(seat, state) {
-  const difficulty = state.botDifficulty?.[seat] ?? 2;
-  return PERSONALITIES2[DIFFICULTY_TO_PERSONALITY[difficulty]];
-}
-function roundProgress(state) {
-  const deckSize = 54 * decksFor(state.players);
-  const hs = handSize(state.players);
-  const initialStock = Math.max(1, deckSize - state.players * hs - 1);
-  return Math.min(1, Math.max(0, 1 - state.stock.length / initialStock));
+var FEED_TEMPO = 4;
+var PILE_OUT = 0.5;
+function aiLevel(state, seat) {
+  return AI_LEVELS[botLevels(state.players, state.botDifficulty)[seat] ?? 2];
 }
 function aiRng(state, seat) {
   const seed = (state.seed >>> 0 ^ seat * 2654435769 ^ state.logSeq * 1367130551) >>> 0;
   return mulberry323(seed);
 }
-function buildOpponentModel(state, seat) {
-  const model = /* @__PURE__ */ new Map();
-  for (let i = 0; i < state.players; i++) if (i !== seat) model.set(i, []);
-  const fullDeck = buildDeck2(decksFor(state.players));
-  const visibleIds = new Set(visibleCards(state, seat).map((c) => c.id));
-  const unknownPool = fullDeck.filter((c) => !visibleIds.has(c.id));
-  if (state.stock.length === 0 && unknownPool.length > 0) {
-    const opponentSeats = Array.from({ length: state.players }, (_, i) => i).filter((i) => i !== seat);
-    const totalOppCards = opponentSeats.reduce((s, i) => s + state.hands[i].length, 0);
-    for (const opp of opponentSeats) {
-      const fraction = totalOppCards > 0 ? state.hands[opp].length / totalOppCards : 0;
-      model.set(opp, unknownPool.map((card) => ({ card, confidence: fraction })));
-    }
-    return model;
-  }
-  const totalEntries = state.log.length;
-  for (const entry of state.log) {
-    const opp = entry.seat;
-    if (opp === null || opp === seat) continue;
-    if (!model.has(opp)) continue;
-    if (entry.msg !== "took" || !entry.cards || entry.cards.length === 0) continue;
-    const lc3 = entry.cards[0];
-    if ("joker" in lc3) continue;
-    const { rank, suit } = lc3;
-    const turnsAgo = totalEntries - entry.id;
-    const recency = Math.max(0.1, 1 - turnsAgo / 30);
-    const suspected = model.get(opp);
-    for (const uc of unknownPool) {
-      if (uc.joker) continue;
-      let conf = 0;
-      if (uc.rank === rank && uc.suit !== suit) conf = Math.max(conf, 0.45 * recency);
-      const ucR = uc.rank === 14 ? 1 : uc.rank;
-      const tR = rank === 14 ? 1 : rank;
-      if (uc.suit === suit && Math.abs(ucR - tR) <= 2 && uc.rank !== rank) conf = Math.max(conf, 0.3 * recency);
-      if (conf > 0) suspected.push({ card: uc, confidence: conf });
-    }
-  }
-  for (const [opp, list] of model) {
-    const best = /* @__PURE__ */ new Map();
-    for (const s of list) {
-      const prev = best.get(s.card.id);
-      if (!prev || s.confidence > prev.confidence) best.set(s.card.id, s);
-    }
-    model.set(opp, [...best.values()]);
-  }
-  return model;
-}
-function opponentDangerWithModel(state, card, seat, model) {
-  if (card.joker) return 0;
-  let danger2 = 0;
-  for (const m of state.melds) {
-    const combined = [...m.cards, card];
-    if (m.kind === "set" ? isSet(combined) : isRun(combined)) {
-      danger2 += 4;
-      break;
-    }
-  }
-  const sameRankOnTable = state.melds.flatMap((m) => m.cards).filter((c) => !c.joker && c.rank === card.rank).length;
-  if (sameRankOnTable >= 1) danger2 += 2;
-  danger2 += Math.floor(cardValue(card) / 5);
-  for (const suspected of model.values()) {
-    let modelDanger = 0;
-    for (const { card: sc, confidence } of suspected) {
-      if (sc.joker) continue;
-      if (sc.rank === card.rank) modelDanger = Math.max(modelDanger, confidence * 4);
-      if (sc.suit === card.suit && Math.abs(sc.rank - card.rank) <= 2) modelDanger = Math.max(modelDanger, confidence * 3);
-    }
-    danger2 += modelDanger;
-  }
-  return Math.min(danger2, 10);
-}
-var naturalsOf = (hand) => hand.filter((c) => !c.joker);
-var jokersOf = (hand) => hand.filter((c) => c.joker);
+var naturalsOf = (hand2) => hand2.filter((c) => !c.joker);
+var jokersOf = (hand2) => hand2.filter((c) => c.joker);
 function uniqueBySuit(cards) {
   const seen = /* @__PURE__ */ new Map();
   for (const c of cards) if (!seen.has(c.suit)) seen.set(c.suit, c);
   return [...seen.values()];
 }
-function findSet(hand) {
-  const jokers = jokersOf(hand);
+function findSet(hand2) {
+  const jokers = jokersOf(hand2);
   const byRank = /* @__PURE__ */ new Map();
-  for (const c of naturalsOf(hand)) byRank.set(c.rank, [...byRank.get(c.rank) ?? [], c]);
+  for (const c of naturalsOf(hand2)) byRank.set(c.rank, [...byRank.get(c.rank) ?? [], c]);
   let bestG = null;
   for (const g of byRank.values()) {
     const unique = uniqueBySuit(g);
@@ -2026,13 +2817,13 @@ function findSet(hand) {
     return [...bestG, ...jokers.slice(0, 3 - bestG.length)];
   return null;
 }
-function findSetContaining(hand, c) {
+function findSetContaining(hand2, c) {
   if (c.joker) return null;
   const seen = /* @__PURE__ */ new Map([[c.suit, c]]);
-  for (const x of hand) if (!x.joker && x.rank === c.rank && !seen.has(x.suit)) seen.set(x.suit, x);
+  for (const x of hand2) if (!x.joker && x.rank === c.rank && !seen.has(x.suit)) seen.set(x.suit, x);
   const g = [...seen.values()];
   if (g.length >= 3) return g.slice(0, 4);
-  const jokers = jokersOf(hand);
+  const jokers = jokersOf(hand2);
   if (g.length >= 1 && g.length + jokers.length >= 3) return [...g, ...jokers.slice(0, 3 - g.length)];
   return null;
 }
@@ -2048,6 +2839,7 @@ function bestRunInSuit(naturals, jokers) {
     if (!byRank.size) continue;
     for (let lo = 1; lo <= 12; lo++) {
       for (let hi = lo + 2; hi <= 14; hi++) {
+        if (lo === 1 && hi === 14) break;
         const span = hi - lo + 1;
         let nat = 0;
         for (let r = lo; r <= hi; r++) if (byRank.has(r)) nat++;
@@ -2065,18 +2857,18 @@ function bestRunInSuit(naturals, jokers) {
   }
   return best;
 }
-function findRun(hand) {
-  const jokers = jokersOf(hand);
+function findRun(hand2) {
+  const jokers = jokersOf(hand2);
   for (const s of SUITS) {
-    const r = bestRunInSuit(hand.filter((c) => c.suit === s && !c.joker), jokers);
+    const r = bestRunInSuit(hand2.filter((c) => c.suit === s && !c.joker), jokers);
     if (r) return r;
   }
   return null;
 }
-function findRunContaining(hand, c) {
+function findRunContaining(hand2, c) {
   if (c.joker) return null;
-  const inSuit = hand.filter((x) => x.suit === c.suit && !x.joker);
-  const jokers = jokersOf(hand);
+  const inSuit = hand2.filter((x) => x.suit === c.suit && !x.joker);
+  const jokers = jokersOf(hand2);
   for (const aceRank of [1, 14]) {
     const byRank = /* @__PURE__ */ new Map();
     for (const x of inSuit) {
@@ -2101,313 +2893,739 @@ function findRunContaining(hand, c) {
   }
   return null;
 }
-function layoffOnto(state, m, c, seat) {
-  const combined = [...m.cards, c];
-  const ok = m.kind === "set" ? isSet(combined) : isRun(combined);
-  return ok ? { type: "layoff", seat, meldId: m.id, cards: [c.id] } : null;
+var SUIT_IDX = { C: 0, D: 1, H: 2, S: 3 };
+var keyOf2 = (c) => SUIT_IDX[c.suit] * 16 + c.rank;
+var keyValue = (key) => cardValue({ id: -1, rank: key & 15, suit: "C" });
+function popcount(x) {
+  x -= x >>> 1 & 1431655765;
+  x = (x & 858993459) + (x >>> 2 & 858993459);
+  return (x + (x >>> 4) & 252645135) * 16843009 >>> 24;
 }
-function handPoints(hand) {
-  return hand.reduce((s, c) => s + cardValue(c), 0);
-}
-function simulatePlayPoints(hand, melds) {
-  let h = [...hand];
-  for (let pass = 0; pass < 12; pass++) {
-    const before = h.length;
-    const set = findSet(h);
-    if (set) {
-      h = h.filter((c) => !set.includes(c));
+function meldInfo(cards, run, id) {
+  let mask = 0, jokers = 0, suit = -1, rank = 0;
+  for (const c of cards) {
+    if (c.joker) {
+      jokers++;
       continue;
     }
-    const run = findRun(h);
     if (run) {
-      h = h.filter((c) => !run.includes(c));
+      suit = SUIT_IDX[c.suit];
+      mask |= 1 << c.rank;
+    } else {
+      rank = c.rank;
+      mask |= 1 << SUIT_IDX[c.suit];
+    }
+  }
+  return { run, suit, rank, mask, size: cards.length, jokers, id };
+}
+function runSpan(nat, jokers) {
+  if (nat === 0) return 0;
+  for (let mode = 0; mode < 2; mode++) {
+    let m = nat;
+    if (mode === 1) {
+      if (!(m & 1 << 14)) break;
+      m = m & ~(1 << 14) | 2;
+    }
+    const lo = 31 - Math.clz32(m & -m);
+    const hi = 31 - Math.clz32(m);
+    const gaps = hi - lo + 1 - popcount(m);
+    if (gaps > jokers) continue;
+    const extra = jokers - gaps;
+    if (hi - lo + 1 + extra > 13) continue;
+    return (1 << hi + 1) - 1 & ~((1 << lo) - 1);
+  }
+  return 0;
+}
+function fits(m, c) {
+  if (c.joker) return m.run ? runSpan(m.mask, m.jokers + 1) !== 0 : m.size < 4;
+  if (!m.run) return c.rank === m.rank && m.size < 4 && !(m.mask & 1 << SUIT_IDX[c.suit]);
+  return SUIT_IDX[c.suit] === m.suit && !(m.mask & 1 << c.rank) && runSpan(m.mask | 1 << c.rank, m.jokers) !== 0;
+}
+function extend(m, c) {
+  if (c.joker) return { ...m, size: m.size + 1, jokers: m.jokers + 1, view: void 0 };
+  return { ...m, size: m.size + 1, mask: m.mask | 1 << (m.run ? c.rank : SUIT_IDX[c.suit]), view: void 0 };
+}
+var TABLE_VIEWS = /* @__PURE__ */ new WeakMap();
+function meldView(m) {
+  if (m.view) return m.view;
+  const v = { lay: [0, 0, 0, 0], anchors: [0, 0, 0, 0] };
+  if (m.run) {
+    v.anchors[m.suit] = runSpan(m.mask, m.jokers);
+    for (let r = 2; r <= 14; r++) if (!(m.mask & 1 << r) && runSpan(m.mask | 1 << r, m.jokers)) v.lay[m.suit] |= 1 << r;
+  } else if (m.size < 4) {
+    for (let t = 0; t < 4; t++) if (!(m.mask & 1 << t)) v.lay[t] |= 1 << m.rank;
+  }
+  m.view = v;
+  return v;
+}
+function tableView(tbl) {
+  let v = TABLE_VIEWS.get(tbl);
+  if (v) return v;
+  v = { lay: [0, 0, 0, 0], anchors: [0, 0, 0, 0] };
+  for (const m of tbl) {
+    const mv = meldView(m);
+    for (let t = 0; t < 4; t++) {
+      v.lay[t] |= mv.lay[t];
+      v.anchors[t] |= mv.anchors[t];
+    }
+  }
+  TABLE_VIEWS.set(tbl, v);
+  return v;
+}
+function revealedCards(state, seat) {
+  const held = Array.from({ length: state.players }, () => /* @__PURE__ */ new Map());
+  const log = state.log;
+  let start = 0;
+  for (let i = log.length - 1; i >= 0; i--) {
+    const m = log[i].msg;
+    if (m === "deals a new round" || m === "deals the first hand" || m.startsWith("goes out") || m.startsWith("Stock exhausted")) {
+      start = i + 1;
+      break;
+    }
+  }
+  for (let i = start; i < log.length; i++) {
+    const e = log[i];
+    if (e.seat === null || e.seat === seat || !held[e.seat]) continue;
+    const cards = [...e.cards ?? [], ...e.extraCards ?? []];
+    for (const c of cards) {
+      if (typeof c?.id !== "number") continue;
+      if (e.msg === "took") held[e.seat].set(c.id, c);
+      else if (e.msg === "melded" || e.msg === "laid off" || e.msg === "discarded") held[e.seat].delete(c.id);
+    }
+  }
+  return held.map((m) => [...m.values()]);
+}
+var HORIZON_BY_HAND = [0, 1.2, 2.1, 2.7, 3.3, 3.9, 4.8, 5.7, 5.7, 5.9, 6.7, 7, 7, 7.2];
+var OUT_HAZARD = [1, 0.46, 0.25, 0.21, 0.09, 0.06, 0.04, 0.03, 0.02, 0.02, 0.01];
+function buildCtx(state, seat, lv) {
+  const decks = decksFor(state.players);
+  const live = new Int8Array(64);
+  for (let s = 0; s < 4; s++) for (let r = 2; r <= 14; r++) live[s * 16 + r] = decks;
+  let liveJokers = 2 * decks;
+  const see = (c) => {
+    if (c.joker) liveJokers--;
+    else live[keyOf2(c)]--;
+  };
+  const visible = /* @__PURE__ */ new Set();
+  for (const c of state.hands[seat]) {
+    see(c);
+    visible.add(c.id);
+  }
+  for (const c of state.discard) {
+    see(c);
+    visible.add(c.id);
+  }
+  for (const m of state.melds) for (const c of m.cards) {
+    see(c);
+    visible.add(c.id);
+  }
+  const revealed = revealedCards(state, seat);
+  const opps = [];
+  const knownCount = [], knownJokers = [];
+  for (let i = 1; i < state.players; i++) {
+    const o = (seat + i) % state.players;
+    const known = new Int8Array(64);
+    let n = 0, jokers = 0;
+    for (const c of revealed[o]) {
+      if (visible.has(c.id)) continue;
+      visible.add(c.id);
+      see(c);
+      n++;
+      if (c.joker) jokers++;
+      else known[keyOf2(c)]++;
+    }
+    knownCount.push(n);
+    knownJokers.push(jokers);
+    opps.push({ seat: o, rho: 0, jokerP: jokers > 0 ? 1 : 0, known });
+  }
+  let unknown = liveJokers, liveVal = liveJokers * 15;
+  for (let k = 0; k < 64; k++) if (live[k] > 0) {
+    unknown += live[k];
+    liveVal += live[k] * keyValue(k);
+  }
+  unknown = Math.max(1, unknown);
+  const avgVal = liveVal / unknown;
+  let minOpp = 99, pCont = 1, goOut = 0;
+  opps.forEach((o, i) => {
+    const h = state.hands[o.seat].length;
+    minOpp = Math.min(minOpp, h);
+    pCont *= 1 - OUT_HAZARD[Math.min(h, OUT_HAZARD.length - 1)];
+    const hidden = Math.max(0, h - knownCount[i]);
+    o.rho = hidden / unknown;
+    if (o.jokerP < 1) o.jokerP = 1 - Math.pow(1 - o.rho, liveJokers);
+    let knownVal = 0;
+    for (let k = 0; k < 64; k++) knownVal += o.known[k] * keyValue(k);
+    goOut += knownVal + 15 * knownJokers[i] + hidden * avgVal;
+  });
+  const horizon = Math.max(0, Math.min(
+    state.stock.length / state.players,
+    lv.horizonScale * HORIZON_BY_HAND[Math.min(minOpp, HORIZON_BY_HAND.length - 1)] / (1 + 0.2 * (opps.length - 1))
+  ));
+  const p1 = new Float64Array(12), p2 = new Float64Array(12);
+  for (let k = 0; k < 12; k++) {
+    const p = Math.min(1, k / unknown);
+    const miss = Math.pow(1 - p, horizon);
+    p1[k] = 1 - miss;
+    p2[k] = Math.max(0, 1 - miss - (p < 1 ? horizon * p * Math.pow(1 - p, horizon - 1) : 0));
+  }
+  const pileCredit = new Float64Array(64);
+  const pile = state.discard;
+  for (let i = 0; i < pile.length; i++) {
+    const c = pile[i];
+    if (c.joker) continue;
+    const depth = pile.length - i;
+    const credit = PILE_OUT / (1 + 0.25 * (depth - 1));
+    if (credit > pileCredit[keyOf2(c)]) pileCredit[keyOf2(c)] = credit;
+  }
+  return {
+    state,
+    seat,
+    lv,
+    live,
+    liveJokers,
+    unknown,
+    pileCredit,
+    p1,
+    p2,
+    pairDraw: horizon > 1 ? (horizon - 1) / horizon : 0,
+    keep: pCont,
+    opps,
+    goOutBonus: goOut,
+    table: state.melds.map((m) => meldInfo(m.cards, m.kind === "run", m.id)),
+    feedCache: /* @__PURE__ */ new Map(),
+    leavesLeft: DECISION_LEAVES
+  };
+}
+var HAS = new Int8Array(64);
+var RANK_SUITS = new Int8Array(16);
+var PROB = new Float64Array(64);
+var PROB2 = new Float64Array(64);
+function loadHand(rest) {
+  HAS.fill(0);
+  RANK_SUITS.fill(0);
+  let jokers = 0;
+  for (const c of rest) {
+    if (c.joker) {
+      jokers++;
       continue;
     }
-    let laid = false;
-    for (const m of melds) {
-      for (const c of h) {
-        const combined = [...m.cards, c];
-        if (m.kind === "set" ? isSet(combined) : isRun(combined)) {
-          h = h.filter((x) => x !== c);
-          laid = true;
-          break;
-        }
-      }
-      if (laid) break;
-    }
-    if (!laid && h.length === before) break;
+    const s = SUIT_IDX[c.suit];
+    HAS[s * 16 + c.rank]++;
+    if (c.rank === 14) HAS[s * 16 + 1]++;
+    RANK_SUITS[c.rank] |= 1 << s;
   }
-  return handPoints(h);
+  if (PROB.length < rest.length) {
+    PROB = new Float64Array(rest.length * 2);
+    PROB2 = new Float64Array(rest.length * 2);
+  }
+  return jokers;
 }
-function visibleCards(state, seat) {
-  return [
-    ...state.hands[seat],
-    ...state.discard,
-    ...state.melds.flatMap((m) => m.cards)
-  ];
+function shiftCard(c, delta) {
+  const s = SUIT_IDX[c.suit];
+  HAS[s * 16 + c.rank] += delta;
+  if (c.rank === 14) HAS[s * 16 + 1] += delta;
+  if (HAS[s * 16 + c.rank] > 0) RANK_SUITS[c.rank] |= 1 << s;
+  else RANK_SUITS[c.rank] &= ~(1 << s);
 }
-function unknownCount(state, seat) {
-  return state.stock.length + state.hands.reduce((s, h, i) => i !== seat ? s + h.length : s, 0);
+function related(a, b) {
+  if (a.rank === b.rank) return true;
+  if (a.suit !== b.suit) return false;
+  const d = Math.abs(a.rank - b.rank);
+  return d <= 2 || a.rank === 14 && b.rank <= 3 || b.rank === 14 && a.rank <= 3;
 }
-function probDraw(state, seat, rank, suit) {
-  const totalDecks = decksFor(state.players);
-  const seen = visibleCards(state, seat);
-  const visibleCopies = seen.filter((c) => !c.joker && c.rank === rank && c.suit === suit).length;
-  const remaining = Math.max(0, totalDecks - visibleCopies);
-  if (remaining === 0) return 0;
-  const unk = unknownCount(state, seat);
-  return unk > 0 ? Math.min(1, remaining / unk) : 0;
-}
-function probEventually(pPerDraw, draws) {
-  if (pPerDraw <= 0 || draws <= 0) return 0;
-  return Math.min(1, 1 - Math.pow(1 - pPerDraw, draws));
-}
-function expectedFutureDraws(state, seat) {
-  return Math.max(0, state.stock.length / state.players);
-}
-function cardMeldEV(state, seat, card) {
-  if (card.joker) return cardValue(card);
-  const hand = state.hands[seat];
-  const draws = expectedFutureDraws(state, seat);
-  const val = cardValue(card);
-  const sameRankInHand = hand.filter((c) => !c.joker && c.rank === card.rank && c.id !== card.id);
-  const jokersInHand = jokersOf(hand).length;
-  let pSet = 0;
-  if (sameRankInHand.length + jokersInHand >= 2) {
-    pSet = 1;
-  } else if (sameRankInHand.length === 1) {
-    const usedSuits = /* @__PURE__ */ new Set([card.suit, sameRankInHand[0].suit]);
-    let pOneMore = 0;
-    for (const s of SUITS) if (!usedSuits.has(s)) pOneMore += probDraw(state, seat, card.rank, s);
-    pSet = probEventually(pOneMore, draws);
-  } else if (jokersInHand >= 1) {
-    let pOneMore = 0;
-    const usedSuits = /* @__PURE__ */ new Set([card.suit]);
-    for (const s of SUITS) if (!usedSuits.has(s)) pOneMore += probDraw(state, seat, card.rank, s);
-    pSet = probEventually(pOneMore, draws) * 0.7;
+function meldChance(ctx, c, view) {
+  const s = SUIT_IDX[c.suit], r = c.rank;
+  if (view.lay[s] >> r & 1) return ctx.keep;
+  const { live, pileCredit, p1, p2 } = ctx;
+  const mask = RANK_SUITS[r];
+  const k = popcount(mask);
+  let pSet;
+  if (k >= 3) pSet = ctx.keep;
+  else {
+    let outs = 0, pile = 0;
+    for (let t = 0; t < 4; t++) {
+      if (mask & 1 << t) continue;
+      outs += live[t * 16 + r];
+      if (pileCredit[t * 16 + r] > pile) pile = pileCredit[t * 16 + r];
+    }
+    pSet = k === 2 ? Math.max(p1[outs], pile) : p2[outs];
   }
   let pRun = 0;
-  for (const aceRank of [1, 14]) {
-    const cr = card.rank === 14 ? aceRank : card.rank;
-    if (cr < 1 || cr > 14) continue;
-    const byRank = /* @__PURE__ */ new Map();
-    for (const c of hand) {
-      if (c.joker || c.suit !== card.suit) continue;
-      const r = c.rank === 14 ? aceRank : c.rank;
-      byRank.set(r, true);
+  const own = view.anchors[s];
+  for (let mode = 0; mode < (r === 14 ? 2 : 1); mode++) {
+    const cr = mode === 1 ? 1 : r;
+    const anc = own & 1 << cr ? 0 : own;
+    for (let lo = Math.max(1, cr - 2); lo <= Math.min(cr, 12); lo++) {
+      let miss = 0, a = 0, b = 0, fromPile = false, ok = true;
+      for (let rr = lo; rr < lo + 3; rr++) {
+        if (rr === cr || HAS[s * 16 + rr] || anc & 1 << rr) continue;
+        const key = s * 16 + (rr === 1 ? 14 : rr);
+        const pd = p1[live[key]], pc = pileCredit[key];
+        if (pd === 0 && pc === 0) {
+          ok = false;
+          break;
+        }
+        if (pc > pd) fromPile = true;
+        if (miss === 0) a = Math.max(pd, pc);
+        else b = Math.max(pd, pc);
+        miss++;
+      }
+      if (!ok) continue;
+      const pw = miss === 0 ? ctx.keep : miss === 1 ? a : a * b * (fromPile ? 1 : ctx.pairDraw);
+      if (pw > pRun) pRun = pw;
     }
-    byRank.set(cr, true);
-    for (let lo = Math.max(1, cr - 4); lo <= cr; lo++) {
-      for (let hi = cr; hi <= Math.min(14, lo + 6); hi++) {
-        if (hi - lo + 1 < 3) continue;
-        const needed = [];
-        for (let r = lo; r <= hi; r++) if (!byRank.has(r)) needed.push(r);
-        const canFillWithJokers = needed.length <= jokersInHand;
-        if (canFillWithJokers) {
-          pRun = Math.max(pRun, 0.95);
-          continue;
+  }
+  return 1 - (1 - pSet) * (1 - pRun);
+}
+function applyJokers(ctx, rest, P2, jokers, skip, tableMelds) {
+  let usedJoker = false;
+  const n = rest.length;
+  for (let j = 0; j < jokers; j++) {
+    let best = 0, bi = -1, bj = -1;
+    for (let x = 0; x < n; x++) {
+      const a = rest[x];
+      if (x === skip || a.joker || P2[x] >= ctx.keep) continue;
+      for (let y = x + 1; y < n; y++) {
+        const b = rest[y];
+        if (y === skip || b.joker || P2[y] >= ctx.keep || a.rank === b.rank && a.suit === b.suit || !related(a, b)) continue;
+        const gain2 = cardValue(a) * (ctx.keep - P2[x]) + cardValue(b) * (ctx.keep - P2[y]);
+        if (gain2 > best) {
+          best = gain2;
+          bi = x;
+          bj = y;
         }
-        const stillNeed = needed.length - jokersInHand;
-        if (stillNeed > 2) continue;
-        let pAll = 1;
-        for (const r of needed.slice(jokersInHand)) {
-          pAll *= probEventually(probDraw(state, seat, r, card.suit), draws / Math.max(1, stillNeed));
+      }
+    }
+    if (bi < 0) break;
+    P2[bi] = P2[bj] = ctx.keep;
+    usedJoker = true;
+  }
+  return usedJoker || tableMelds > 0 ? ctx.keep : 0.85 * ctx.keep;
+}
+function sumValue(rest, P2, jokerP, skip) {
+  let total = 0;
+  for (let i = 0; i < rest.length; i++) {
+    if (i === skip) continue;
+    const c = rest[i];
+    total += cardValue(c) * (2 * (c.joker ? jokerP : P2[i]) - 1);
+  }
+  return total;
+}
+function handValue(ctx, rest, tbl) {
+  if (rest.length === 0) return 0;
+  const jokers = loadHand(rest);
+  const view = tableView(tbl);
+  for (let i = 0; i < rest.length; i++) PROB[i] = rest[i].joker ? 0 : meldChance(ctx, rest[i], view);
+  const jokerP = jokers ? applyJokers(ctx, rest, PROB, jokers, -1, tbl.length) : 0;
+  return sumValue(rest, PROB, jokerP, -1);
+}
+function thirdRanks(a, b) {
+  const out = [];
+  for (let mode = 0; mode < 2; mode++) {
+    if (mode === 1 && a !== 14 && b !== 14) break;
+    const ea = mode === 1 && a === 14 ? 1 : a, eb = mode === 1 && b === 14 ? 1 : b;
+    const lo = Math.min(ea, eb), hi = Math.max(ea, eb);
+    if (hi - lo === 2) out.push(lo + 1);
+    if (hi - lo === 1) {
+      if (lo > 1) out.push(lo - 1);
+      if (hi < 14) out.push(hi + 1);
+    }
+  }
+  return out.map((r) => r === 1 ? 14 : r);
+}
+function sweepRisk(ctx, c, hold, jokerP) {
+  const pile = ctx.state.discard;
+  const s = SUIT_IDX[c.suit];
+  let above = 0, best = 0;
+  for (let i = pile.length - 1; i >= 0; i--) {
+    const t = pile[i];
+    if (!t.joker && related(t, c) && !(t.rank === c.rank && t.suit === c.suit)) {
+      let none = 1;
+      if (t.rank === c.rank) {
+        for (let u = 0; u < 4; u++) if (u !== s && u !== SUIT_IDX[t.suit]) none *= 1 - hold(u * 16 + c.rank);
+      } else {
+        for (const x of thirdRanks(t.rank, c.rank)) none *= 1 - hold(s * 16 + x);
+      }
+      const pX = 1 - none * (1 - jokerP);
+      const gain2 = pX * (cardValue(t) + cardValue(c) + 0.3 * above);
+      if (gain2 > best) best = gain2;
+    }
+    above += cardValue(t);
+  }
+  return best;
+}
+function feedRisk(ctx, c) {
+  if (c.joker) return 60;
+  const cacheKey = keyOf2(c);
+  const hit = ctx.feedCache.get(cacheKey);
+  if (hit !== void 0) return hit;
+  const { live } = ctx;
+  let layable = false;
+  for (const m of ctx.table) if (fits(m, c)) {
+    layable = true;
+    break;
+  }
+  const s = SUIT_IDX[c.suit], r = c.rank;
+  let risk = 0, pileRisk = 0;
+  for (const o of ctx.opps) {
+    let pUse = 1;
+    const hold = (key) => o.known[key] > 0 ? 1 : live[key] > 0 ? 1 - Math.pow(1 - o.rho, live[key]) : 0;
+    if (ctx.lv.sweepWeight > 0) pileRisk += sweepRisk(ctx, c, hold, o.jokerP);
+    if (!layable) {
+      let p0 = 1, pOne = 0, pTwo = 0;
+      for (let t = 0; t < 4; t++) {
+        if (t === s) continue;
+        const q = hold(t * 16 + r);
+        pTwo += pOne * q;
+        pOne = pOne * (1 - q) + p0 * q;
+        p0 *= 1 - q;
+      }
+      const pSet = pTwo + pOne * o.jokerP;
+      let pRun = 0;
+      for (let mode = 0; mode < (r === 14 ? 2 : 1); mode++) {
+        const cr = mode === 1 ? 1 : r;
+        for (let lo = Math.max(1, cr - 2); lo <= Math.min(cr, 12); lo++) {
+          const need = [];
+          for (let rr = lo; rr < lo + 3; rr++) if (rr !== cr) need.push(hold(s * 16 + (rr === 1 ? 14 : rr)));
+          const pw = need[0] * need[1] + (need[0] + need[1] - 2 * need[0] * need[1]) * o.jokerP;
+          if (pw > pRun) pRun = pw;
         }
-        pRun = Math.max(pRun, pAll * (hi - lo + 1 >= 4 ? 1 : 0.8));
+      }
+      pUse = 1 - (1 - pSet) * (1 - pRun);
+    }
+    risk += pUse;
+  }
+  risk = risk * (cardValue(c) + FEED_TEMPO) + ctx.lv.sweepWeight * pileRisk;
+  ctx.feedCache.set(cacheKey, risk);
+  return risk;
+}
+function meldCandidates(hand2, only = -1) {
+  const jokers = hand2.filter((c) => c.joker).length;
+  const oc = only >= 0 ? hand2[only] : null;
+  const allowSingles = hand2.length <= 4;
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = (idx, jk, run) => {
+    if (oc && !idx.includes(only)) return;
+    if (jk > 0) {
+      const sig = [...idx].sort((a, b) => a - b).join(",") + "/" + jk + (run ? "r" : "s");
+      if (seen.has(sig)) return;
+      seen.add(sig);
+    }
+    out.push({ idx, jokers: jk, run, pts: idx.reduce((a, i) => a + cardValue(hand2[i]), 0) + 15 * jk });
+  };
+  const byRank = /* @__PURE__ */ new Map();
+  hand2.forEach((c, i) => {
+    if (c.joker || oc && c.rank !== oc.rank) return;
+    const g = byRank.get(c.rank) ?? [];
+    if (!g.some((j) => hand2[j].suit === c.suit)) g.push(i);
+    byRank.set(c.rank, g);
+  });
+  for (const g of byRank.values()) {
+    const k = g.length;
+    if (k >= 3) add(g, 0, false);
+    if (k === 4) for (let skip = 0; skip < 4; skip++) add(g.filter((_, x) => x !== skip), 0, false);
+    if (k === 3 && jokers >= 1) add(g, 1, false);
+    if (jokers >= 1 && k >= 2) for (let x = 0; x < k; x++) for (let y = x + 1; y < k; y++) add([g[x], g[y]], 1, false);
+    if (jokers >= 2 && allowSingles) for (const x of g) add([x], 2, false);
+  }
+  for (let s = 0; s < 4; s++) {
+    if (oc && SUIT_IDX[oc.suit] !== s) continue;
+    const at = new Array(15).fill(-1);
+    hand2.forEach((c, i) => {
+      if (c.joker || SUIT_IDX[c.suit] !== s) return;
+      if (at[c.rank] < 0) at[c.rank] = i;
+    });
+    at[1] = at[14];
+    for (let lo = 1; lo <= 12; lo++) {
+      for (let hi = lo + 2; hi <= 14; hi++) {
+        if (lo === 1 && hi === 14) break;
+        let nat = 0;
+        for (let r = lo; r <= hi; r++) if (at[r] >= 0) nat++;
+        const missing = hi - lo + 1 - nat;
+        if (missing > jokers) break;
+        if (nat === 0 || nat === 1 && !allowSingles) continue;
+        const endsNatural = at[lo] >= 0 && at[hi] >= 0;
+        if (!endsNatural && (hi - lo > 2 || at[lo] < 0 && at[hi] < 0)) continue;
+        const idx = [];
+        for (let r = lo; r <= hi; r++) if (at[r] >= 0) idx.push(at[r]);
+        add(idx, missing, true);
       }
     }
   }
-  const pMeld = Math.min(1, Math.max(pSet, pRun));
-  return val * pMeld - val * (1 - pMeld);
+  return out.sort((a, b) => b.pts - a.pts);
 }
-function meldPotential(hand) {
-  let score = 0;
-  for (const c of hand) {
+var PLAY_LEAVES = 1500;
+var DEEP_LEAVES = 400;
+var DECISION_LEAVES = 4e3;
+var MIN_LEAVES = 30;
+function planLeaf(ctx, hand2, forcedId, chosen) {
+  const n = hand2.length;
+  let banked = 0;
+  const jokerIdx = [];
+  hand2.forEach((c, i) => {
+    if (c.joker) jokerIdx.push(i);
+  });
+  let jx = 0;
+  const melds = [];
+  let infos = ctx.table.slice();
+  const inMeld = new Uint8Array(n);
+  for (const cd of chosen) {
+    const cards = cd.idx.map((i) => hand2[i]);
+    for (const i of cd.idx) inMeld[i] = 1;
+    for (let k = 0; k < cd.jokers; k++) {
+      const ji = jokerIdx[jx++];
+      cards.push(hand2[ji]);
+      inMeld[ji] = 1;
+    }
+    melds.push(cards);
+    infos.push(meldInfo(cards, cd.run && cd.idx.length > 1, -1));
+    banked += cd.pts;
+  }
+  let rest = [];
+  for (let i = 0; i < n; i++) if (!inMeld[i]) rest.push(hand2[i]);
+  const layoffs = [];
+  const layOff = (t, c) => {
+    infos[t] = extend(infos[t], c);
+    layoffs.push({ card: c, meldId: infos[t].id, at: t });
+    banked += cardValue(c);
+  };
+  const fi = rest.findIndex((c) => c.id === forcedId);
+  if (fi >= 0) {
+    const t = infos.findIndex((m) => fits(m, rest[fi]));
+    if (t < 0) return null;
+    layOff(t, rest[fi]);
+    rest.splice(fi, 1);
+  }
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (let i = 0; i < rest.length; i++) {
+      const c = rest[i];
+      if (c.joker) continue;
+      const t = infos.findIndex((m) => fits(m, c));
+      if (t < 0) continue;
+      layOff(t, c);
+      rest.splice(i--, 1);
+      changed = true;
+    }
+  }
+  let restValue = handValue(ctx, rest, infos);
+  for (let i = 0; i < rest.length; i++) {
+    const c = rest[i];
+    if (!c.joker) continue;
+    const t = infos.findIndex((m) => fits(m, c));
+    if (t < 0) continue;
+    const without = rest.filter((x) => x !== c);
+    const v = handValue(ctx, without, infos);
+    if (v + cardValue(c) > restValue) {
+      infos = infos.slice();
+      layOff(t, c);
+      rest = without;
+      restValue = v;
+      i--;
+    }
+  }
+  if (rest.length === 0 && ctx.state.requireDiscard) {
+    if (!layoffs.length || layoffs[layoffs.length - 1].card.id === forcedId) return null;
+    const back = layoffs.pop();
+    banked -= cardValue(back.card);
+    rest = [back.card];
+  }
+  const value = banked + (rest.length <= 1 ? ctx.goOutBonus : restValue);
+  return { chosen: chosen.slice(), melds, layoffs, rest, tbl: infos, banked, value };
+}
+function planTurn(ctx, hand2, forcedId, maxLeaves) {
+  const cands = meldCandidates(hand2);
+  const used = new Uint8Array(hand2.length);
+  const chosen = [];
+  let jokersLeft = hand2.filter((c) => c.joker).length;
+  let best = null;
+  let leaves = 0;
+  maxLeaves = Math.max(MIN_LEAVES, Math.min(maxLeaves, ctx.leavesLeft));
+  const dfs = (start) => {
+    leaves++;
+    const p = planLeaf(ctx, hand2, forcedId, chosen);
+    if (p && (!best || p.value > best.value)) best = p;
+    for (let j = start; j < cands.length && leaves < maxLeaves; j++) {
+      const cd = cands[j];
+      if (cd.jokers > jokersLeft || cd.idx.some((i) => used[i])) continue;
+      for (const i of cd.idx) used[i] = 1;
+      jokersLeft -= cd.jokers;
+      chosen.push(cd);
+      dfs(j + 1);
+      chosen.pop();
+      jokersLeft += cd.jokers;
+      for (const i of cd.idx) used[i] = 0;
+    }
+  };
+  dfs(0);
+  ctx.leavesLeft -= leaves;
+  return best;
+}
+function planWithExtra(ctx, hand2, base) {
+  const n = hand2.length - 1;
+  const jokers = hand2.filter((c) => c.joker).length;
+  let best = planLeaf(ctx, hand2, null, base.chosen);
+  for (const cd of meldCandidates(hand2, n)) {
+    const kept = base.chosen.filter((b) => !b.idx.some((i) => cd.idx.includes(i)));
+    let jk = cd.jokers;
+    const fit = kept.filter((b) => jk + b.jokers <= jokers ? (jk += b.jokers, true) : false);
+    const p = planLeaf(ctx, hand2, null, [...fit, cd]);
+    if (p && (!best || p.value > best.value)) best = p;
+  }
+  return best;
+}
+function rankDiscards(ctx, rest, tbl, avoidId) {
+  const n = rest.length;
+  const jokers = loadHand(rest);
+  const view = tableView(tbl);
+  for (let i = 0; i < n; i++) PROB[i] = rest[i].joker ? 0 : meldChance(ctx, rest[i], view);
+  const anyNatural = rest.some((c) => !c.joker && c.id !== avoidId);
+  const out = [];
+  for (let d = 0; d < n; d++) {
+    const card = rest[d];
+    if (anyNatural ? card.joker || card.id === avoidId : false) continue;
+    PROB2.set(PROB.subarray(0, n));
+    let jokersLeft = jokers;
+    if (card.joker) jokersLeft--;
+    else {
+      shiftCard(card, -1);
+      for (let i = 0; i < n; i++) if (i !== d && !rest[i].joker && related(rest[i], card)) PROB2[i] = meldChance(ctx, rest[i], view);
+      shiftCard(card, 1);
+    }
+    const jokerP = jokersLeft ? applyJokers(ctx, rest, PROB2, jokersLeft, d, tbl.length) : 0;
+    out.push({ card, score: sumValue(rest, PROB2, jokerP, d) - ctx.lv.feedWeight * feedRisk(ctx, card) });
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
+function planValue(ctx, plan) {
+  if (plan.rest.length <= 1) return plan.value;
+  return plan.banked + rankDiscards(ctx, plan.rest, plan.tbl, null)[0].score;
+}
+var handPoints = (cards) => cards.reduce((a, c) => a + cardValue(c), 0);
+var planUses = (plan, id) => plan.melds.some((m) => m.some((c) => c.id === id)) || plan.layoffs.some((l) => l.card.id === id);
+function relatedCard(hand2, key, view) {
+  const s = key >> 4, r = key & 15;
+  if (view.lay[s] >> r & 1) return true;
+  const near = (x, y) => Math.abs(x - y) <= 2 || x === 14 && y <= 3 || y === 14 && x <= 3;
+  for (let t = Math.max(1, r - 2); t <= Math.min(14, r + 2); t++) if (view.anchors[s] & 1 << t) return true;
+  if (r === 14 && view.anchors[s] & 14) return true;
+  let jokers = 0;
+  for (const c of hand2) {
     if (c.joker) {
-      score += 20;
+      jokers++;
       continue;
     }
-    const sameRank = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
-    const inSuitAdj = hand.filter(
-      (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2
-    ).length;
-    score += sameRank * 3 + inSuitAdj * 2;
+    if (c.rank === r || SUIT_IDX[c.suit] === s && near(c.rank, r)) return true;
   }
-  return score;
+  return jokers >= 2;
 }
-function minOpponentHandSize(state, seat) {
-  let min = Infinity;
-  for (let i = 0; i < state.players; i++) {
-    if (i !== seat) min = Math.min(min, state.hands[i].length);
+function stockValue(ctx, hand2) {
+  const base = planTurn(ctx, hand2, null, PLAY_LEAVES);
+  if (!base) return -Infinity;
+  const view = tableView(ctx.table);
+  const keepRest = base.rest.length ? handValue(ctx, base.rest, base.tbl) : 0;
+  const baseDiscard = base.rest.length ? rankDiscards(ctx, base.rest, base.tbl, null)[0].score : 0;
+  let sum = 0;
+  for (let k = 0; k < 64; k++) {
+    if (ctx.live[k] <= 0) continue;
+    const card = { id: -1e3 - k, rank: k & 15, suit: SUITS[k >> 4] };
+    let v;
+    if (relatedCard(hand2, k, view)) {
+      const p = planWithExtra(ctx, [...hand2, card], base);
+      if (!p) continue;
+      v = planValue(ctx, p);
+    } else if (!base.rest.length) {
+      v = base.banked + ctx.goOutBonus;
+    } else {
+      const solo = handValue(ctx, [card], base.tbl);
+      v = base.banked + Math.max(keepRest - ctx.lv.feedWeight * feedRisk(ctx, card), baseDiscard + solo);
+    }
+    sum += ctx.live[k] * v;
   }
-  return min === Infinity ? 99 : min;
-}
-function evaluateDeepPickup(state, seat, targetCardId, personality) {
-  const discardPile = state.discard;
-  const targetIdx = discardPile.findIndex((c) => c.id === targetCardId);
-  if (targetIdx < 0) return { gain: -Infinity, cards: [] };
-  const taken = discardPile.slice(targetIdx);
-  const combined = [...state.hands[seat], ...taken];
-  const leftoverPts = simulatePlayPoints(combined, state.melds);
-  const handPts = handPoints(state.hands[seat]);
-  const takenPts = taken.reduce((s, c) => s + cardValue(c), 0);
-  const extraHeldPts = Math.max(0, leftoverPts - handPts);
-  const progress2 = roundProgress(state);
-  const discount = personality.earlyDiscount * (1 - progress2);
-  const effectiveHeldPenalty = extraHeldPts * (1 - discount);
-  const grossGain = takenPts - extraHeldPts;
-  return { gain: grossGain - effectiveHeldPenalty, cards: taken };
-}
-function maybeMisplay(ranked, rng, misplayRate) {
-  if (ranked.length <= 1 || rng() >= misplayRate) return ranked[0];
-  const worstZone = ranked.slice(Math.max(1, Math.floor(ranked.length / 3)));
-  return worstZone[Math.floor(rng() * worstZone.length)];
-}
-function speculativeTopValue(hand, top, state, personality) {
-  if (top.joker) return 40;
-  const progress2 = roundProgress(state);
-  const futureDiscount = personality.earlyDiscount * (1 - progress2);
-  const hypotheticalState = { ...state, hands: state.hands.map((h, i) => i === state.turn ? [...h, top] : h) };
-  const mev = cardMeldEV(hypotheticalState, state.turn, top);
-  return mev * (0.5 + futureDiscount * 0.5);
-}
-function allMeldsInHand(hand) {
-  const melds = [];
-  let remaining = [...hand];
-  for (let pass = 0; pass < 20; pass++) {
-    const run = findRun(remaining);
-    const set = findSet(remaining);
-    const runPts = run ? run.reduce((s, c) => s + cardValue(c), 0) : -1;
-    const setPts = set ? set.reduce((s, c) => s + cardValue(c), 0) : -1;
-    const pick2 = runPts >= setPts ? run : set;
-    if (!pick2) break;
-    melds.push(pick2);
-    remaining = remaining.filter((c) => !pick2.includes(c));
+  if (ctx.liveJokers > 0) {
+    const p = planTurn(ctx, [...hand2, { id: -2e3, rank: 0, suit: "S", joker: true }], null, DEEP_LEAVES);
+    if (p) sum += ctx.liveJokers * planValue(ctx, p);
   }
-  return melds;
+  return sum / ctx.unknown;
 }
-function evaluateGoOutSurprise(state, seat, personality, rng) {
-  if (state.mustMeldCardId != null) return null;
-  const hand = state.hands[seat];
-  const meldGroups = allMeldsInHand(hand);
-  if (meldGroups.length === 0) return null;
-  const meldedIds = new Set(meldGroups.flatMap((g) => g.map((c) => c.id)));
-  let remaining = hand.filter((c) => !meldedIds.has(c.id));
-  for (const tm of state.melds) {
-    for (const c of [...remaining]) {
-      const combined = [...tm.cards, c];
-      if (tm.kind === "set" ? isSet(combined) : isRun(combined)) {
-        remaining = remaining.filter((x) => x !== c);
-      }
+function chooseDraw(ctx) {
+  const { state, seat } = ctx;
+  const hand2 = state.hands[seat];
+  const pile = state.discard;
+  let bestMove = null;
+  let bestValue = -Infinity;
+  const consider = (move, value) => {
+    if (value > bestValue) {
+      bestValue = value;
+      bestMove = move;
+    }
+  };
+  if (state.stock.length > 0) consider({ type: "drawStock", seat }, stockValue(ctx, hand2));
+  if (pile.length > 0) {
+    const top = pile[pile.length - 1];
+    const tp = planTurn(ctx, [...hand2, top], null, PLAY_LEAVES);
+    if (tp && (planUses(tp, top.id) || state.stock.length === 0)) consider({ type: "drawDiscard", seat, cardId: top.id }, planValue(ctx, tp));
+    for (let i = Math.max(0, pile.length - ctx.lv.pickupDepth); i < pile.length - 1; i++) {
+      const target = pile[i];
+      const move = { type: "drawDiscard", seat, cardId: target.id };
+      if (!isLegal2(state, move)) continue;
+      const dp = planTurn(ctx, [...hand2, ...pile.slice(i)], target.id, DEEP_LEAVES);
+      if (dp) consider(move, planValue(ctx, dp));
     }
   }
-  if (remaining.length === 0) return null;
-  if (remaining.length > 3) return null;
-  const remainingEV = remaining.reduce((s, c) => s + cardMeldEV(state, seat, c), 0);
-  if (remainingEV <= 0) return null;
-  const opponentHeld = state.hands.reduce(
-    (s, h, i) => i !== seat ? s + h.reduce((hs, c) => hs + cardValue(c), 0) : s,
-    0
-  );
-  const immediateScore = meldGroups.flat().reduce((s, c) => s + cardValue(c), 0);
-  if (opponentHeld < immediateScore * 0.6) return null;
-  if (minOpponentHandSize(state, seat) <= 3) return null;
-  const gamblerFactor = (personality.earlyDiscount - 0.6) / 0.16;
-  const gamblerProb = Math.max(0, Math.min(1, gamblerFactor));
-  if (rng() > gamblerProb) return null;
-  return meldedIds;
+  return bestMove ?? { type: "drawStock", seat };
+}
+function takenTopThisTurn(state, seat) {
+  for (let i = state.log.length - 1; i >= 0 && state.log[i].seat === seat; i--) {
+    const e = state.log[i];
+    if (e.msg === "took" && !e.extraCards?.length) return e.cards?.[0]?.id ?? null;
+  }
+  return null;
+}
+function choosePlay(ctx, rng) {
+  const { state, seat } = ctx;
+  const forced = state.mustMeldCardId;
+  const plan = planTurn(ctx, state.hands[seat], forced, PLAY_LEAVES);
+  if (!plan) return null;
+  const forcedMeld = plan.melds.find((m) => m.some((c) => c.id === forced));
+  const forcedLay = plan.layoffs.find((l) => l.card.id === forced);
+  if (forcedMeld) return { type: "meld", seat, cards: forcedMeld.map((c) => c.id) };
+  if (forcedLay && forcedLay.meldId >= 0) return { type: "layoff", seat, meldId: forcedLay.meldId, cards: [forced] };
+  if (forcedLay) return { type: "meld", seat, cards: plan.melds[forcedLay.at - ctx.table.length].map((c) => c.id) };
+  if (plan.melds.length) {
+    const biggest = plan.melds.reduce((a, b) => handPoints(b) > handPoints(a) ? b : a);
+    return { type: "meld", seat, cards: biggest.map((c) => c.id) };
+  }
+  const lay = plan.layoffs.find((l) => l.meldId >= 0);
+  if (lay) return { type: "layoff", seat, meldId: lay.meldId, cards: [lay.card.id] };
+  if (forced != null || !plan.rest.length) return null;
+  const ranked = rankDiscards(ctx, plan.rest, ctx.table, takenTopThisTurn(state, seat));
+  let pick2 = ranked[0];
+  if (ranked.length > 1 && rng() < ctx.lv.misplayRate) pick2 = ranked[1 + Math.floor(rng() * Math.min(3, ranked.length - 1))];
+  return { type: "discard", seat, cardId: pick2.card.id };
+}
+function fallbackMove(state, seat) {
+  const hand2 = state.hands[seat];
+  const legal = (m) => isLegal2(state, m);
+  if (state.turnPhase === "draw") {
+    const stock = { type: "drawStock", seat };
+    if (legal(stock)) return stock;
+  } else {
+    const forced = forcedMoves(state, seat);
+    if (forced.length) return forced[0];
+    const costly = hand2.filter((c) => !c.joker).sort((a, b) => cardValue(b) - cardValue(a))[0] ?? hand2[0];
+    if (costly) {
+      const m = { type: "discard", seat, cardId: costly.id };
+      if (legal(m)) return m;
+    }
+  }
+  return legalMoves2(state).find(legal) ?? { type: "drawStock", seat };
 }
 function aiMove2(state, seat) {
-  const hand = state.hands[seat];
-  const personality = getPersonality(seat, state);
-  const opponentLow = minOpponentHandSize(state, seat) <= personality.endgameHandSize;
-  const rng = aiRng(state, seat);
-  const model = buildOpponentModel(state, seat);
-  if (state.turnPhase === "draw") {
-    const discard = state.discard;
-    const top = discard[discard.length - 1];
-    if (top && (canFormMeldWith([...hand, top], top) || canLayoff(state, top))) {
-      if (rng() < personality.misplayRate && state.stock.length > 0)
-        return { type: "drawStock", seat };
-      return { type: "drawDiscard", seat, cardId: top.id };
-    }
-    if (!opponentLow && top) {
-      const specScore = speculativeTopValue(hand, top, state, personality);
-      if (specScore > 0) {
-        if (rng() >= personality.misplayRate) return { type: "drawDiscard", seat, cardId: top.id };
-      }
-    }
-    const deepAllowed = !opponentLow || personality.pickupThreshold <= 5;
-    if (deepAllowed && discard.length >= 2) {
-      let bestGain = personality.pickupThreshold;
-      let bestTarget = null;
-      for (let i = 0; i < discard.length - 1; i++) {
-        const candidate = discard[i];
-        const combined = [...hand, ...discard.slice(i)];
-        if (!canFormMeldWith(combined, candidate) && !canLayoff(state, candidate)) continue;
-        const { gain: gain2 } = evaluateDeepPickup(state, seat, candidate.id, personality);
-        if (gain2 > bestGain) {
-          bestGain = gain2;
-          bestTarget = candidate;
-        }
-      }
-      if (bestTarget) {
-        if (rng() >= personality.misplayRate) return { type: "drawDiscard", seat, cardId: bestTarget.id };
-      }
-    }
-    if (state.stock.length > 0) return { type: "drawStock", seat };
-    if (top) return { type: "drawDiscard", seat, cardId: top.id };
-    return { type: "drawStock", seat };
-  }
-  if (state.mustMeldCardId != null) {
-    const mc = hand.find((c) => c.id === state.mustMeldCardId);
-    if (mc) {
-      const s2 = findSetContaining(hand, mc);
-      if (s2) return { type: "meld", seat, cards: s2.map((c) => c.id) };
-      const r2 = findRunContaining(hand, mc);
-      if (r2) return { type: "meld", seat, cards: r2.map((c) => c.id) };
-      for (const m of state.melds) {
-        const lo = layoffOnto(state, m, mc, seat);
-        if (lo) return lo;
-      }
-    }
-  }
-  const withheldIds = !opponentLow ? evaluateGoOutSurprise(state, seat, personality, rng) : null;
-  if (withheldIds === null) {
-    const allMelds = allMeldsInHand(hand);
-    if (allMelds.length > 0) return { type: "meld", seat, cards: allMelds[0].map((c) => c.id) };
-    const layoffCandidates = [];
-    for (const m of state.melds) {
-      for (const c of hand) {
-        const lo = layoffOnto(state, m, c, seat);
-        if (lo) layoffCandidates.push({ move: lo, value: cardValue(c) });
-      }
-    }
-    if (layoffCandidates.length > 0) {
-      layoffCandidates.sort((a, b) => {
-        if (opponentLow) return b.value - a.value;
-        const aCard = hand.find((c) => c.id === a.move.cards[0]);
-        const bCard = hand.find((c) => c.id === b.move.cards[0]);
-        const aPot = meldPotential([aCard, ...hand.filter((c) => c !== aCard)]);
-        const bPot = meldPotential([bCard, ...hand.filter((c) => c !== bCard)]);
-        return aPot - bPot;
-      });
-      return layoffCandidates[0].move;
-    }
-  }
-  const discardPool = withheldIds ? hand.filter((c) => !withheldIds.has(c.id)) : hand;
-  const discardSource = discardPool.length > 0 ? discardPool : hand;
-  const discardRanked = discardSource.map((c) => {
-    if (c.joker) return { card: c, score: -200 };
-    const mev = cardMeldEV(state, seat, c);
-    const danger2 = opponentDangerWithModel(state, c, seat, model);
-    let score = -mev;
-    score -= danger2 * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
-    if (opponentLow) score += Math.max(0, -mev) * 0.5;
-    return { card: c, score };
-  }).sort((a, b) => b.score - a.score);
-  const chosen = maybeMisplay(discardRanked, rng, personality.misplayRate);
-  return { type: "discard", seat, cardId: chosen.card.id };
+  const ctx = buildCtx(state, seat, aiLevel(state, seat));
+  const move = state.turnPhase === "draw" ? chooseDraw(ctx) : choosePlay(ctx, aiRng(state, seat));
+  return move && isLegal2(state, move) ? move : fallbackMove(state, seat);
 }
 function pacing(s) {
   if (s.phase !== "handComplete") return null;
@@ -2418,8 +3636,10 @@ var rummy500Module = {
   botStepMs: 900,
   seatCount: (config) => config.players,
   createGame: createGame2,
+  reseed: reseed2,
+  migrate,
   seatToAct,
-  isLegal,
+  isLegal: isLegal2,
   legalMoves: legalMoves2,
   applyMove: applyMoveWithLog,
   isOver,
@@ -2467,11 +3687,16 @@ function buildDeck3(players) {
 var handSize2 = (players) => buildDeck3(players).length / players;
 var LOG_CAP3 = 120;
 var lc = (c) => ({ rank: c.rank, suit: c.suit });
+var REVEAL_SUIT_ORDER2 = { S: 0, H: 1, D: 2, C: 3 };
+var sortCards2 = (cards) => [...cards].sort((a, b) => REVEAL_SUIT_ORDER2[a.suit] - REVEAL_SUIT_ORDER2[b.suit] || a.rank - b.rank);
+var PASS_COUNT = ["", "one", "two", "three"];
 function passDirLabel(offset, players) {
   if (offset === 0) return "hold \u2014 no pass";
   if (offset === 1) return "passing left";
   if (offset === players - 1) return "passing right";
-  return "passing across";
+  if (offset * 2 === players) return "passing across";
+  const n = Math.min(offset, players - offset);
+  return `passing ${PASS_COUNT[n] ?? n} to the ${offset * 2 < players ? "left" : "right"}`;
 }
 function attach2(next, prev, parts) {
   if (parts.length === 0) return { ...next, log: prev.log, logSeq: prev.logSeq };
@@ -2489,8 +3714,26 @@ function mulberry324(seed) {
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
-function shuffle3(items, seed) {
-  const rng = mulberry324(seed);
+function sfc323(a, b, c, d) {
+  const next = () => {
+    a >>>= 0;
+    b >>>= 0;
+    c >>>= 0;
+    d >>>= 0;
+    let t = a + b | 0;
+    a = b ^ b >>> 9;
+    b = c + (c << 3) | 0;
+    c = c << 21 | c >>> 11;
+    d = d + 1 | 0;
+    t = t + d | 0;
+    c = c + t | 0;
+    return (t >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < 15; i++) next();
+  return next;
+}
+function shuffle3(items, seed, entropy) {
+  const rng = entropy ? sfc323(seed ^ entropy[0], entropy[1], entropy[2], entropy[3]) : mulberry324(seed);
   const a = items.slice();
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -2514,7 +3757,7 @@ function lowestClubSeat(hands) {
   return bestSeat;
 }
 function dealHand(prev) {
-  const { shuffled, nextSeed } = shuffle3(buildDeck3(prev.players), prev.seed);
+  const { shuffled, nextSeed } = shuffle3(buildDeck3(prev.players), prev.seed, prev.entropy);
   const hands = Array.from({ length: prev.players }, () => []);
   const hs = handSize2(prev.players);
   let i = 0;
@@ -2542,10 +3785,11 @@ function dealHand(prev) {
 }
 function createGame3(config, seed) {
   if (![3, 4, 5].includes(config.players)) throw new Error(`Unsupported player count: ${config.players}`);
-  if (config.target <= 0) throw new Error("Target must be positive");
+  const target = config.target === void 0 ? 100 : config.target;
+  if (!Number.isInteger(target) || target < 1 || target > 1e4) throw new Error("Target must be a whole number from 1 to 10000");
   const base = {
     players: config.players,
-    target: config.target,
+    target,
     seed,
     phase: "passing",
     handNo: 0,
@@ -2567,27 +3811,34 @@ function createGame3(config, seed) {
     logSeq: 0
   };
   const dealt = dealHand(base);
-  return attach2(dealt, dealt, [{ seat: null, msg: `first hand \u2014 ${passDirLabel(dealt.passOffset, dealt.players)}` }]);
+  return { ...attach2(dealt, dealt, [{ seat: null, msg: `first hand \u2014 ${passDirLabel(dealt.passOffset, dealt.players)}` }]), seedOnlyDeal: true };
+}
+function reseed3(state, entropy) {
+  if (!Array.isArray(entropy) || entropy.length < 4) return state;
+  const next = { ...state, entropy: entropy.slice(0, 4).map((w) => w >>> 0) };
+  const untouched = state.phase === "passing" && state.handNo === 0 && state.logSeq === 1 && state.lastHand === null;
+  if (!state.seedOnlyDeal || !untouched) return next;
+  return { ...dealHand(next), seedOnlyDeal: false };
 }
 function legalPlays(state, seat) {
-  const hand = state.hands[seat];
+  const hand2 = state.hands[seat];
   const firstTrick = state.trickNo === 0;
   const leading = state.currentTrick.length === 0;
   if (leading) {
     if (firstTrick) {
-      const clubs = hand.filter((c) => c.suit === "C");
+      const clubs = hand2.filter((c) => c.suit === "C");
       const lead = clubs.reduce((lo, c) => c.rank < lo.rank ? c : lo, clubs[0]);
-      return lead ? [lead] : hand.slice();
+      return lead ? [lead] : hand2.slice();
     }
     if (!state.heartsBroken) {
-      const nonHearts = hand.filter((c) => !isHeart(c));
+      const nonHearts = hand2.filter((c) => !isHeart(c));
       if (nonHearts.length) return nonHearts;
     }
-    return hand.slice();
+    return hand2.slice();
   }
-  const ledSuit = state.currentTrick[0].card.suit;
-  const inSuit = hand.filter((c) => c.suit === ledSuit);
-  let candidates = inSuit.length ? inSuit : hand.slice();
+  const ledSuit2 = state.currentTrick[0].card.suit;
+  const inSuit = hand2.filter((c) => c.suit === ledSuit2);
+  let candidates = inSuit.length ? inSuit : hand2.slice();
   if (firstTrick) {
     const nonPoints = candidates.filter((c) => !isPoint(c));
     if (nonPoints.length) candidates = nonPoints;
@@ -2603,7 +3854,7 @@ var seatToAct2 = (s) => {
   return (s.leader + s.currentTrick.length) % s.players;
 };
 var isOver2 = (s) => s.phase === "gameOver";
-function isLegal2(state, move) {
+function isLegal3(state, move) {
   if (state.phase === "gameOver") return false;
   if (move.type === "advance") return state.phase === "trickComplete";
   if (seatToAct2(state) !== move.seat) return false;
@@ -2612,8 +3863,8 @@ function isLegal2(state, move) {
     if (state.selected[move.seat] !== null) return false;
     const ids = move.cards;
     if (!ids || ids.length !== 3 || new Set(ids).size !== 3) return false;
-    const hand = state.hands[move.seat];
-    return ids.every((id) => hand.some((c) => c.id === id));
+    const hand2 = state.hands[move.seat];
+    return ids.every((id) => hand2.some((c) => c.id === id));
   }
   if (state.phase !== "playing") return false;
   const card = state.hands[move.seat].find((c) => c.id === move.card);
@@ -2621,20 +3872,25 @@ function isLegal2(state, move) {
   return legalPlays(state, move.seat).some((c) => c.id === move.card);
 }
 function trickWinner2(cards) {
-  const ledSuit = cards[0].card.suit;
+  const ledSuit2 = cards[0].card.suit;
   let best = cards[0];
-  for (const p of cards) if (p.card.suit === ledSuit && p.card.rank > best.card.rank) best = p;
+  for (const p of cards) if (p.card.suit === ledSuit2 && p.card.rank > best.card.rank) best = p;
   return best.seat;
 }
+var lowSeats = (scores) => {
+  const min = Math.min(...scores);
+  return scores.flatMap((v, s) => v === min ? [s] : []);
+};
+var pastTarget = (s) => Math.max(...s.scores) >= s.target;
 function endHand(state) {
   const points = state.points;
   const moon = points.findIndex((p) => p === 26);
   const delta = moon >= 0 ? points.map((_, s) => s === moon ? 0 : 26) : points.slice();
   const scores = state.scores.map((v, s) => v + delta[s]);
   const lastHand = { delta, shooter: moon >= 0 ? moon : null };
-  if (Math.max(...scores) >= state.target) {
-    const min = Math.min(...scores);
-    return { ...state, scores, phase: "gameOver", winner: scores.indexOf(min), lastHand };
+  const low = lowSeats(scores);
+  if (Math.max(...scores) >= state.target && low.length === 1) {
+    return { ...state, scores, phase: "gameOver", winner: low[0], lastHand };
   }
   return dealHand({ ...state, scores, lastHand, handNo: state.handNo + 1 });
 }
@@ -2670,12 +3926,17 @@ function applyMove2(state, move) {
     if (scored.phase === "gameOver" && scored.winner !== null) {
       scoreEnt.push({ seat: scored.winner, msg: "wins the game \u2014 lowest score!" });
     } else {
+      if (pastTarget(scored)) {
+        const low = lowSeats(scored.scores);
+        for (const s of low) scoreEnt.push({ seat: s, msg: `ties for the lowest score (${scored.scores[s]})` });
+        scoreEnt.push({ seat: null, msg: "no outright winner \u2014 playing another hand" });
+      }
       scoreEnt.push({ seat: null, msg: `next hand \u2014 ${passDirLabel(scored.passOffset, scored.players)}` });
     }
     return attach2(scored, state, scoreEnt);
   }
   if (seatToAct2(state) !== move.seat) throw new Error("Not this seat's turn");
-  if (!isLegal2(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
+  if (!isLegal3(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
   const ent = [];
   if (move.type === "pass") {
     const selected = state.selected.map((sel, s) => s === move.seat ? move.cards.slice() : sel);
@@ -2742,6 +4003,7 @@ function redact3(state, seat, meta) {
     disconnectedSeats: meta.disconnectedSeats,
     scores: state.scores,
     winner: state.winner,
+    tiebreak: state.phase !== "gameOver" && pastTarget(state),
     handNo: state.handNo,
     passOffset: state.passOffset,
     toAct,
@@ -2773,6 +4035,7 @@ function lobbyView2(config, seat, meta) {
     disconnectedSeats: meta.disconnectedSeats,
     scores: Array(config.players).fill(0),
     winner: null,
+    tiebreak: false,
     handNo: 0,
     passOffset: 0,
     toAct: null,
@@ -2799,9 +4062,9 @@ function danger(c) {
   return c.rank;
 }
 function aiPass(state, seat) {
-  const hand = state.hands[seat];
+  const hand2 = state.hands[seat];
   const chosen = [];
-  const qs = hand.find(isQueenOfSpades);
+  const qs = hand2.find(isQueenOfSpades);
   if (qs) chosen.push(qs);
   let progress2 = true;
   while (chosen.length < 3 && progress2) {
@@ -2809,19 +4072,19 @@ function aiPass(state, seat) {
     const slots = 3 - chosen.length;
     let bestSuit2 = null, bestLen = Infinity;
     for (const su of ["S", "D", "C"]) {
-      const rem = hand.filter((c) => c.suit === su && !chosen.includes(c));
+      const rem = hand2.filter((c) => c.suit === su && !chosen.includes(c));
       if (rem.length >= 1 && rem.length <= slots && rem.length < bestLen) {
         bestLen = rem.length;
         bestSuit2 = su;
       }
     }
     if (bestSuit2) {
-      for (const c of hand.filter((c2) => c2.suit === bestSuit2 && !chosen.includes(c2))) chosen.push(c);
+      for (const c of hand2.filter((c2) => c2.suit === bestSuit2 && !chosen.includes(c2))) chosen.push(c);
       progress2 = true;
     }
   }
   if (chosen.length < 3) {
-    const rest = hand.filter((c) => !chosen.includes(c)).sort((a, b) => danger(b) - danger(a));
+    const rest = hand2.filter((c) => !chosen.includes(c)).sort((a, b) => danger(b) - danger(a));
     for (const c of rest) {
       if (chosen.length >= 3) break;
       chosen.push(c);
@@ -2836,8 +4099,8 @@ function aiPlay(state, seat) {
   const highestBy = (cards, key) => cards.reduce((hi, c) => key(c) > key(hi) ? c : hi, cards[0]);
   if (state.currentTrick.length === 0) {
     const nonHearts = legal.filter((c) => !isHeart(c));
-    const pool = nonHearts.length ? nonHearts : legal;
-    return play(lowestBy(pool, (c) => c.rank));
+    const pool2 = nonHearts.length ? nonHearts : legal;
+    return play(lowestBy(pool2, (c) => c.rank));
   }
   {
     const pts = state.points;
@@ -2845,20 +4108,20 @@ function aiPlay(state, seat) {
     const shooter = others.reduce((a, b) => b.p > a.p ? b : a, others[0]);
     const threat = shooter.p >= 13 && pts[seat] === 0 && !others.some((o) => o.i !== shooter.i && o.p > 0) && pts.reduce((a, b) => a + b, 0) < 26;
     if (threat) {
-      const ledSuit2 = state.currentTrick[0].card.suit;
-      const inLed = state.currentTrick.filter((tp) => tp.card.suit === ledSuit2);
+      const ledSuit3 = state.currentTrick[0].card.suit;
+      const inLed = state.currentTrick.filter((tp) => tp.card.suit === ledSuit3);
       const curWin = inLed.reduce((hi, tp) => tp.card.rank > hi.card.rank ? tp : hi, inLed[0]);
       const trickPts = state.currentTrick.reduce((a, tp) => a + cardPoints(tp.card), 0);
-      const winners = legal.filter((c) => c.suit === ledSuit2 && c.rank > curWin.card.rank);
+      const winners = legal.filter((c) => c.suit === ledSuit3 && c.rank > curWin.card.rank);
       if (trickPts > 0 && curWin.seat === shooter.i && winners.length) {
         return play(winners.reduce((lo, c) => c.rank < lo.rank ? c : lo, winners[0]));
       }
     }
   }
-  const ledSuit = state.currentTrick[0].card.suit;
-  const inSuit = legal.filter((c) => c.suit === ledSuit);
+  const ledSuit2 = state.currentTrick[0].card.suit;
+  const inSuit = legal.filter((c) => c.suit === ledSuit2);
   if (inSuit.length) {
-    const curWin = state.currentTrick.filter((p) => p.card.suit === ledSuit).reduce((hi, p) => p.card.rank > hi.card.rank ? p : hi, state.currentTrick[0]);
+    const curWin = state.currentTrick.filter((p) => p.card.suit === ledSuit2).reduce((hi, p) => p.card.rank > hi.card.rank ? p : hi, state.currentTrick[0]);
     const losing = inSuit.filter((c) => c.rank < curWin.card.rank);
     if (losing.length) return play(highestBy(losing, (c) => c.rank));
     return play(lowestBy(inSuit, (c) => c.rank));
@@ -2880,8 +4143,9 @@ var heartsModule = {
   botStepMs: (s) => s.phase === "passing" ? 350 : Math.round(1600 * 4 / s.players),
   seatCount: (config) => config.players,
   createGame: createGame3,
+  reseed: reseed3,
   seatToAct: seatToAct2,
-  isLegal: isLegal2,
+  isLegal: isLegal3,
   legalMoves: legalMoves3,
   applyMove: applyMove2,
   isOver: isOver2,
@@ -2894,8 +4158,9 @@ var heartsModule = {
     return {
       game: "hearts",
       target: next.target,
-      dealtHands: prev.dealtHands,
-      // prev still holds this hand's deal; next has the new deal
+      // prev still holds this hand's deal (next has the new one); each hand is
+      // sorted so the record never shows the order the cards were dealt in.
+      dealtHands: prev.dealtHands ? prev.dealtHands.map(sortCards2) : null,
       lastHand: next.lastHand,
       // delta per seat + shooter (if moon)
       log: next.log,
@@ -2908,7 +4173,7 @@ var heartsModule = {
 
 // src/pj-module.ts
 var HPS = 12;
-var HAND = 5;
+var HAND2 = 5;
 var SUPPORTED = [4, 6];
 var ringSize = (players) => players * HPS;
 var teamOf2 = (p) => p % 2;
@@ -3008,10 +4273,10 @@ function boardLayout(players, marbles) {
   for (let p = 0; p < players; p++) {
     const cm = ring[castleEntry(p)];
     const dx = cx - cm.x, dy = cy - cm.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const ux = dx / len, uy = dy / len;
+    const len2 = Math.hypot(dx, dy) || 1;
+    const ux = dx / len2, uy = dy / len2;
     const ax = -uy, ay = ux;
-    const reach = len * 0.6;
+    const reach = len2 * 0.6;
     const cstep = reach / (marbles + 0.5);
     const cas = [];
     if (players === 4) {
@@ -3157,7 +4422,7 @@ function legalMoves4(state) {
 var moveEq3 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var seatToAct3 = (s) => s.phase === "gameOver" ? null : s.turn;
 var isOver3 = (s) => s.phase === "gameOver";
-function isLegal3(state, move) {
+function isLegal4(state, move) {
   return state.phase === "playing" && move.seat === state.turn && legalMoves4(state).some((m) => moveEq3(m, move));
 }
 var LOG_CAP4 = 120;
@@ -3194,7 +4459,7 @@ function drawUp(state) {
   let { stock, discard, seed } = state;
   const hands = state.hands.map((h) => h.slice());
   const seat = state.turn;
-  while (hands[seat].length < HAND) {
+  while (hands[seat].length < HAND2) {
     if (stock.length === 0) {
       if (discard.length === 0) break;
       const sh = shuffle4(discard, seed);
@@ -3224,7 +4489,7 @@ function finishTurn(state, cardId, bump) {
 function applyMove3(state, move) {
   if (state.phase !== "playing") throw new Error("Game is over");
   if (seatToAct3(state) !== move.seat) throw new Error("Not this seat's turn");
-  if (!isLegal3(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
+  if (!isLegal4(state, move)) throw new Error(`Illegal move: ${JSON.stringify(move)}`);
   const seat = move.seat;
   const card = state.hands[seat].find((c) => c.id === move.cardId);
   const homeBefore = state.pos[seat].filter((l) => l.z === "castle").length;
@@ -3277,7 +4542,7 @@ function createGame4(config, seed) {
   const { shuffled, nextSeed } = shuffle4(buildDeck4(), seed);
   const hands = Array.from({ length: players }, () => []);
   let i = 0;
-  for (let k = 0; k < HAND; k++) for (let s = 0; s < players; s++) hands[s].push(shuffled[i++]);
+  for (let k = 0; k < HAND2; k++) for (let s = 0; s < players; s++) hands[s].push(shuffled[i++]);
   const stock = shuffled.slice(i);
   const pos = Array.from({ length: players }, () => Array.from({ length: marbles }, (_, idx) => ({ z: "start", i: idx })));
   const base = { players, marbles, seed: nextSeed, phase: "playing", turn: 0, pos, hands, stock, discard: [], winner: null, lastBump: null, log: [], logSeq: 0 };
@@ -3359,25 +4624,25 @@ function gain(owner, from, to, players) {
   return progAfter(owner, to, players) - progAfter(owner, from, players);
 }
 function moveScore(state, m) {
-  const P = state.players;
+  const P2 = state.players;
   if (m.type === "forfeit") return -1e3;
   if (m.type === "comeOut") {
     const e2 = comeOutEffect(state, m.marble);
-    return COMEOUT_BONUS + gain(m.marble.owner, e2.from, e2.to, P) + (e2.bump ? BUMP_WEIGHT * progAfter(e2.bump.owner, e2.from, P) : 0);
+    return COMEOUT_BONUS + gain(m.marble.owner, e2.from, e2.to, P2) + (e2.bump ? BUMP_WEIGHT * progAfter(e2.bump.owner, e2.from, P2) : 0);
   }
   if (m.type === "joker") {
     const e2 = jokerEffect(state, m.marble, m.target);
-    return gain(m.marble.owner, e2.from, e2.to, P) + BUMP_WEIGHT * (1 + progAfter(e2.bump.owner, { z: "ring", r: m.target }, P));
+    return gain(m.marble.owner, e2.from, e2.to, P2) + BUMP_WEIGHT * (1 + progAfter(e2.bump.owner, { z: "ring", r: m.target }, P2));
   }
   if (m.type === "split7") {
     const e1 = ordinaryEffect(state, m.a.marble, m.a.steps);
-    const s1 = gain(m.a.marble.owner, e1.from, e1.to, P) + (e1.bump ? BUMP_WEIGHT * progAfter(e1.bump.owner, e1.from, P) : 0);
+    const s1 = gain(m.a.marble.owner, e1.from, e1.to, P2) + (e1.bump ? BUMP_WEIGHT * progAfter(e1.bump.owner, e1.from, P2) : 0);
     const mid = applyEffect(state, m.a.marble, e1);
     const e2 = ordinaryEffect(mid, m.b.marble, m.b.steps);
-    return s1 + gain(m.b.marble.owner, e2.from, e2.to, P) + (e2.bump ? BUMP_WEIGHT * progAfter(e2.bump.owner, e2.from, P) : 0);
+    return s1 + gain(m.b.marble.owner, e2.from, e2.to, P2) + (e2.bump ? BUMP_WEIGHT * progAfter(e2.bump.owner, e2.from, P2) : 0);
   }
   const e = ordinaryEffect(state, m.marble, m.steps);
-  return gain(m.marble.owner, e.from, e.to, P) + (e.bump ? BUMP_WEIGHT * progAfter(e.bump.owner, e.from, P) : 0);
+  return gain(m.marble.owner, e.from, e.to, P2) + (e.bump ? BUMP_WEIGHT * progAfter(e.bump.owner, e.from, P2) : 0);
 }
 function aiMove4(state, seat) {
   if (state.phase === "gameOver") throw new Error("game is over");
@@ -3399,7 +4664,7 @@ var pegsAndJokersModule = {
   seatCount: (config) => config.players,
   createGame: createGame4,
   seatToAct: seatToAct3,
-  isLegal: isLegal3,
+  isLegal: isLegal4,
   legalMoves: legalMoves4,
   applyMove: applyMove3,
   isOver: isOver3,
@@ -3419,7 +4684,7 @@ var pegsAndJokersModule = {
 // src/client-local.ts
 var REGISTRY = {
   rummy500: { game: rummy500Module, config: { players: 4, target: 500 } },
-  "high-low-jack": { game: hljModule, config: { players: 6, target: 21, dealerSeat: -2, ensureAce: true } },
+  "high-low-jack": { game: hljModule, config: { players: 6, target: 21 } },
   hearts: { game: heartsModule, config: { players: 4, target: 100 } },
   "pegs-and-jokers": { game: pegsAndJokersModule, config: { players: 4, marbles: 5 } }
 };
