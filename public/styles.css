@@ -2628,6 +2628,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .appbar-left{ order:10; flex:0 0 auto !important; margin-left:auto; display:flex; align-items:center; min-width:0; }
   .ls-actions{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
   .ls-actions .hint{ display:none !important; }
+  /* ...except a rule's reason (forced card, Must discard), kept short beside the buttons */
+  .ls-actions .hint.key{ display:block !important; width:auto; max-width:300px; font-size:12px; line-height:1.25; text-align:right; }
   /* Lobby: the editable name block rides in the appbar beside Tutorial / Deal
      (mobile parity — the selfbar that holds it in portrait is hidden here). */
   .appbar:has(.lby-action-row) .ls-self{ display:flex !important; align-items:center; gap:8px; min-width:0; }
@@ -2783,6 +2785,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   color: #e6cf78; text-align: center; padding: 14px 16px 10px;
   border-bottom: 1px solid rgba(201,144,30,.2);
 }
+.rhc-tie {
+  font-family: "Fraunces", serif; font-size: 14px; color: #ddd;
+  text-align: center; padding: 8px 16px;
+  border-bottom: 1px solid rgba(201,144,30,.2);
+}
 .rhc-body {
   overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 12px;
   flex: 1; min-height: 0;
@@ -2920,6 +2927,8 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .ls-actions{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
   /* No room for the guidance hint text in landscape — hide it */
   .ls-actions .hint{ display:none !important; }
+  /* ...except a rule's reason (forced card, Must discard): a compact line beside the buttons */
+  .ls-actions .hint.key{ display:block !important; width:auto; max-width:min(30vw,230px); font-size:10.5px; line-height:1.2; text-align:right; }
 
   /* HLJ (no game buttons, just the A/B team score pills) — keep the pills on the
      right (room tag / Log / Leave stay on the left) but pull them in from the
@@ -3296,6 +3305,12 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   flex:1; font-size:11px; font-style:italic;
   color:var(--ink-dim); padding-left:4px;
 }
+/* The piles' box (.center) is far wider than the two piles and sits over the
+   ledger (the lower rows of both landscape columns; the last rows in portrait):
+   only the piles themselves take taps, so the melds beneath stay tappable. */
+.felt-stage.has-ledger .center{ pointer-events:none; }
+.felt-stage.has-ledger .center .stockwrap,
+.felt-stage.has-ledger .center .discardstack{ pointer-events:auto; }
 
 @media (orientation:portrait){
 
@@ -3421,6 +3436,27 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
 
   /* Portrait Rummy: selfbar sits below hand, above actions */
   .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .selfbar{ margin:6px 0 4px; }
+
+  /* The fixed hand rail overlaps the felt's bottom edge, where the piles sit
+     (the 2-player fan's scroll box spans the whole rail): let taps through its
+     empty areas. Cards and the bar/buttons still capture, and a swipe on a
+     card still scrolls the fan. */
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap,
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .hand,
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .fan-scroll,
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .fan-inner{ pointer-events:none; }
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .card,
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .rummy-drawn-preview,
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .selfbar,
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .self-extra,
+  .table:has(.felt-stage.has-ledger:not(.ledger-landscape)) .selfwrap .actions{ pointer-events:auto; }
+}
+/* Tablet portrait: the bigger hand fans further up over the felt and would
+   cover the piles' lower half (most of it under the 13-card 2-player fan), so
+   the piles sit higher, and the ledger's bottom padding grows to match. */
+@media (orientation:portrait) and (min-width:768px){
+  .felt-stage.has-ledger .center.at-bottom{ bottom:80px; }
+  .felt-ledger{ padding-bottom:146px; }
 }
 /* ============================================================
    PATCH 06 — L1 landscape layout (Rummy)

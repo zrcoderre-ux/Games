@@ -61,7 +61,8 @@ src/
   hearts.smoke.ts       Hearts full-game smoke (3/4/5p; scoring + conservation invariants)
   pj.smoke.ts           Pegs & Jokers full-game smoke (4p/6p; invariants every move)
   ai.battle.ts          HLJ paired-seed bot battle harness (A vs B, or --roundrobin)
-  rummy.battle.ts       Rummy paired-seed bot battle harness
+  rummy.battle.ts       Rummy paired-seed bot battle harness (baseline moves illegal under the new rules are substituted and counted; --strict)
+  hearts.battle.ts      Hearts paired-seed bot battle harness (--mode solo|duo, --workers, --timing)
 test/
   signals.test.ts, lead-and-signals.test.ts   HLJ node:test suites
   regressions.test.ts   fixed-bug regressions (LocalRoom config merge, HLJ signal gate, Rummy/Hearts rules, reseed)
@@ -131,7 +132,7 @@ The container has Node 22, `tsc`, `wrangler`, `tsx`, and `jsdom`; npm and GitHub
 1. **Type-check:** copy `src/` + `wrangler.jsonc` into a project with deps (`partyserver`, `typescript`, `@cloudflare/workers-types`, `wrangler`) and run `npx tsc --noEmit`. Must be clean.
 2. **Dry-run deploy:** `npx wrangler deploy --dry-run` — must register both Durable Objects (`HighLowJack` / `Rummy500`).
 3. **Tests:** `npm test` (Node 22 runs `.ts` directly) runs the node:test suites in `test/`, the HLJ pacing test against a fresh bundle of `src/client-local.ts`, and the Rummy/Hearts/Pegs & Jokers smoke tests (many complete bot games, asserting card conservation and that every AI move is legal). `npm run typecheck` covers the Worker code; Node-only scripts are excluded in `tsconfig.json`. CI runs the bundle staleness check, the type-check and `npm test`.
-4. **Bot strength:** `node src/ai.battle.ts --a ./src/hlj-module.ts --b <baseline>/hlj-module.ts --players 4,6,8 --seeds 500` and `node src/rummy.battle.ts --a ./src/rummy-module.ts --b <baseline>/rummy-module.ts --players 4 --seeds 300` play paired seeds (each deal from both sides) and print win rates with 95% CIs.
+4. **Bot strength:** `node src/ai.battle.ts --a ./src/hlj-module.ts --b <baseline>/hlj-module.ts --players 4,6,8 --seeds 500`, `node src/rummy.battle.ts --a ./src/rummy-module.ts --b <baseline>/rummy-module.ts --players 4 --seeds 300` and `node src/hearts.battle.ts --a ./src/hearts-module.ts --b <baseline>/hearts-module.ts --players 4 --seeds 200` play paired seeds (each deal from both sides) and print win rates (Hearts also points per hand) with 95% CIs; `node src/hearts.battle.ts --timing --players 4 --seeds 50` measures Hearts bot latency.
 5. **Headless render of the client:** install `jsdom`, stub globals, strip the trailing `init();` from `app.js`, and drive `render()` against mock views. Gotchas: in Node 22 `navigator` is a read-only global (set `window`/`document`/`location`/`history`/`WebSocket`/`crypto`/`localStorage` individually, skip `navigator`); `WebSocket` and `localStorage` need trivial stubs. This catches runtime errors in render code without a browser. (Don't try Puppeteer — the Chromium download host is outside the network allowlist.)
 
 ---

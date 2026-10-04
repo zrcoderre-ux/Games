@@ -17,6 +17,7 @@
 //   --target T           points to win (default 500)
 //   --requireDiscard     play with the "must discard to go out" option
 //   --maxMoves M         per-game move cap; a capped game counts as a stall (default 20000)
+//   --strict             abort on an illegal baseline move instead of substituting a fallback
 //   --json               also print the summary as one JSON line
 //
 // Method. One candidate seat plays against N-1 baseline seats. For each seed the
@@ -26,7 +27,12 @@
 // module's rules drive every transition (createGame / applyMove / isLegal), a
 // pacing gate (handComplete) is cleared by applying pacing(state).move, aux
 // botAux signals are applied when a module has them, and each seat asks its OWN
-// side's aiMove. Every bot move is checked with isLegal.
+// side's aiMove. Every bot move is checked with isLegal: an illegal candidate
+// move aborts the run, while an illegal baseline move (a baseline from before a
+// rules change, e.g. main before the 13-card run cap and the playable-deep-
+// pickup rule) is replaced by a fixed legal fallback — the forced card's play
+// if one is pending, else the highest-value discard, else drawStock — and
+// counted in the summary. --strict aborts on those too.
 //
 // Win share is reported with a 95% CI computed over seeds (each seed's N rotated
 // games form one paired sample), against the fair share 1/N. Secondary metrics:
@@ -45,10 +51,12 @@ type State = {
   scores: number[];
   winner: number | null;
   stock: Card[];
+  hands: Card[][];
+  mustMeldCardId: number | null;
   lastRound: { delta: number[]; outSeat: number | null } | null;
   log: LogEntry[];
 };
-type Move = { type: string; seat: number };
+type Move = { type: string; seat: number; cardId?: number; cards?: number[] };
 type Config = { players: number; target: number; requireDiscard?: boolean; botDifficulty?: number[] };
 type RummyGame = Game<State, Move, Config, unknown>;
 
@@ -72,6 +80,7 @@ const DIFF_B = num("--diffB", 2);
 const TARGET = num("--target", 500);
 const MAX_MOVES = num("--maxMoves", 20000);
 const REQUIRE_DISCARD = flag("--requireDiscard");
+const STRICT = flag("--strict");
 
 async function loadModule(path: string): Promise<RummyGame> {
   const url = path.startsWith("/") ? `file://${path}` : new URL(path, `file://${process.cwd()}/`).href;
@@ -110,17 +119,36 @@ type GameResult = {
   finalMargin: number; // candidate final score - mean baseline final score
   candidateOuts: number; // rounds the candidate went out
   baselineOuts: number; // rounds some baseline seat went out
+  substituted: number; // illegal baseline moves replaced by a fallback
 };
+
+// A fixed legal stand-in for an illegal baseline move: put down the pending
+// forced card if there is one, else discard the highest-value card (lowest id
+// on ties), else draw from the stock, else the first legal move.
+const pointValue = (c: Card | undefined): number =>
+  !c ? 0 : c.joker || c.rank === 14 ? 15 : c.rank >= 10 ? 10 : c.rank;
+function fallbackMove(rules: RummyGame, s: State, seat: number): Move | undefined {
+  const legal = rules.legalMoves(s);
+  const forced = s.mustMeldCardId;
+  if (forced != null) {
+    const play = legal.find((m) => (m.type === "meld" || m.type === "layoff") && m.cards?.includes(forced));
+    if (play) return play;
+  }
+  const value = (m: Move) => pointValue(s.hands[seat].find((c) => c.id === m.cardId));
+  const discards = legal.filter((m) => m.type === "discard")
+    .sort((a, b) => value(b) - value(a) || (a.cardId ?? 0) - (b.cardId ?? 0));
+  return discards[0] ?? legal.find((m) => m.type === "drawStock") ?? legal[0];
+}
 
 function playGame(rules: RummyGame, sides: RummyGame[], seed: number, candSeat: number, timeA: Timing, timeB: Timing): GameResult {
   const botDifficulty = Array.from({ length: PLAYERS }, (_, s) => (s === candSeat ? DIFF_A : DIFF_B));
   let state = rules.createGame({ players: PLAYERS, target: TARGET, requireDiscard: REQUIRE_DISCARD, botDifficulty }, seed);
   const roundMargins: number[] = [];
-  let candidateOuts = 0, baselineOuts = 0, moves = 0;
+  let candidateOuts = 0, baselineOuts = 0, moves = 0, substituted = 0;
 
   while (!rules.isOver(state)) {
     if (++moves > MAX_MOVES) {
-      return { candidateWon: false, stalled: true, rounds: roundMargins.length, roundMargins, finalMargin: 0, candidateOuts, baselineOuts };
+      return { candidateWon: false, stalled: true, rounds: roundMargins.length, roundMargins, finalMargin: 0, candidateOuts, baselineOuts, substituted };
     }
     const seat = rules.seatToAct(state);
     let next: State;
@@ -135,11 +163,17 @@ function playGame(rules: RummyGame, sides: RummyGame[], seed: number, candSeat: 
       const aux = side.aux?.botAux?.(s, seat);
       if (aux != null && rules.aux) s = rules.aux.apply(s, seat, aux);
       const t0 = performance.now();
-      const move = side.aiMove(s, seat);
+      let move = side.aiMove(s, seat);
       const dt = performance.now() - t0;
       (seat === candSeat ? timeA : timeB).push(dt);
       if (!rules.isLegal(s, move)) {
-        throw new Error(`illegal move from ${seat === candSeat ? "A" : "B"} (seed ${seed}, seat ${seat}): ${JSON.stringify(move)}`);
+        const what = `illegal move from ${seat === candSeat ? "A" : "B"} (seed ${seed}, seat ${seat}): ${JSON.stringify(move)}`;
+        if (seat === candSeat || STRICT) throw new Error(what);
+        // The baseline follows older rules: play a legal stand-in under A's.
+        const alt = fallbackMove(rules, s, seat);
+        if (!alt) throw new Error(`${what}; no legal fallback`);
+        move = alt;
+        substituted++;
       }
       next = rules.applyMove(s, move);
     }
@@ -163,6 +197,7 @@ function playGame(rules: RummyGame, sides: RummyGame[], seed: number, candSeat: 
     finalMargin: state.scores[candSeat] - mean(others),
     candidateOuts,
     baselineOuts,
+    substituted,
   };
 }
 
@@ -176,7 +211,7 @@ async function main() {
   const seedShares: number[] = []; // per seed: candidate wins / games
   const seedRoundMargins: number[] = []; // per seed: mean round margin
   const seedFinalMargins: number[] = [];
-  let games = 0, wins = 0, stalls = 0, rounds = 0, candOuts = 0, baseOuts = 0;
+  let games = 0, wins = 0, stalls = 0, rounds = 0, candOuts = 0, baseOuts = 0, substituted = 0;
 
   for (let i = 0; i < SEEDS; i++) {
     const seed = START + i;
@@ -186,6 +221,7 @@ async function main() {
       const sides = Array.from({ length: PLAYERS }, (_, s) => (s === candSeat ? A : B));
       const r = playGame(A, sides, seed, candSeat, timeA, timeB);
       games++;
+      substituted += r.substituted;
       if (r.stalled) { stalls++; continue; }
       seedGames++;
       if (r.candidateWon) { wins++; seedWins++; }
@@ -210,6 +246,7 @@ async function main() {
   console.log(`  A (candidate): ${label(PATH_A, DIFF_A)}  x1 seat, rotated through all ${PLAYERS}`);
   console.log(`  B (baseline):  ${label(PATH_B, DIFF_B)}  x${PLAYERS - 1} seats`);
   console.log(`games ${games} (${stalls} stalled), rounds ${rounds}`);
+  console.log(`baseline moves substituted (illegal under A's rules): ${substituted}${substituted ? " — the comparison is slightly perturbed" : ""}`);
   console.log(`candidate win share ${pct(share)} ± ${pct(shareCi)} (fair ${pct(fair)}; edge ${(100 * (share - fair)).toFixed(1)} pts)`);
   console.log(`round margin (A - mean B) ${mean(seedRoundMargins).toFixed(2)} ± ${ci95(seedRoundMargins).toFixed(2)} pts/round`);
   console.log(`final margin (A - mean B) ${mean(seedFinalMargins).toFixed(1)} ± ${ci95(seedFinalMargins).toFixed(1)} pts/game`);
@@ -219,7 +256,7 @@ async function main() {
   if (flag("--json")) {
     const sa = [...timeA].sort((a, b) => a - b), sb = [...timeB].sort((a, b) => a - b);
     console.log(JSON.stringify({
-      players: PLAYERS, start: START, seeds: SEEDS, diffA: DIFF_A, diffB: DIFF_B, games, stalls, wins,
+      players: PLAYERS, start: START, seeds: SEEDS, diffA: DIFF_A, diffB: DIFF_B, games, stalls, wins, substituted,
       share, shareCi, roundMargin: mean(seedRoundMargins), roundMarginCi: ci95(seedRoundMargins),
       finalMargin: mean(seedFinalMargins), timingA: { mean: mean(sa), p99: percentile(sa, 0.99), max: sa[sa.length - 1] ?? 0 },
       timingB: { mean: mean(sb), p99: percentile(sb, 0.99), max: sb[sb.length - 1] ?? 0 },

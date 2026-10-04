@@ -515,7 +515,7 @@
         id: "welcome",
         when: (v) => v.phase === "playing",
         title: "Welcome to Rummy 500",
-        body: (v) => `Everyone plays for themselves — no teams. Each round you draw, meld cards onto the table, and discard. Cards you meld score <b>for you</b>; cards left in your hand score <b>against you</b>. First to <b>${v.target || 500} points</b> wins.`,
+        body: (v) => `Everyone plays for themselves — no teams. Each round you draw, meld cards onto the table, and discard. Cards you meld score <b>for you</b>; cards left in your hand score <b>against you</b>. First to <b>${v.target || 500} points</b> wins; a tie for the lead plays another round.`,
         gate: "tap", cta: "Show me",
       },
       {
@@ -614,7 +614,7 @@
         id: "welcome",
         when: (v) => v.phase === "passing" || v.phase === "playing",
         title: "Welcome to Hearts",
-        body: "Hearts is a trick-avoidance game — <b>lowest score wins</b>. Each heart is worth 1 point, and the <b>Queen of Spades is worth 13</b>. You want to capture as few of these as possible. First player to reach the target score ends the game; whoever has the fewest points wins.",
+        body: "Hearts is a trick-avoidance game — <b>lowest score wins</b>. Each heart is worth 1 point, and the <b>Queen of Spades is worth 13</b>. You want to capture as few of these as possible. First player to reach the target score ends the game; whoever has the fewest points wins. If the lowest total is shared, another hand is played until one player is alone at the bottom.",
         gate: "tap", cta: "Show me",
       },
       {
@@ -698,7 +698,7 @@
         id: "scoring",
         when: (v) => !!(v.lastHand),
         title: "End of hand",
-        body: (v) => `After all ${heartsTricks(v)} tricks the hand is scored. Check the <b>scorecard</b>: each player's hearts and Q♠ are totalled. If someone shot the moon, everyone else takes 26. The running totals update and a new hand deals. Game ends when anyone reaches the target — lowest total wins.`,
+        body: (v) => `After all ${heartsTricks(v)} tricks the hand is scored. Check the <b>scorecard</b>: each player's hearts and Q♠ are totalled. If someone shot the moon, everyone else takes 26. The running totals update and a new hand deals. Game ends when anyone reaches the target — lowest total wins; a tie for lowest plays another hand.`,
         gate: "tap",
       },
       {

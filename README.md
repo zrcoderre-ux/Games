@@ -34,7 +34,7 @@ src/
   ai.ts, ai-sim.ts  HLJ bot: Monte Carlo bidding and card play
   protocol.ts       HLJ redact() + PlayerView
   *.smoke.ts        Rummy / Hearts / Pegs & Jokers full-game smoke tests (run with `node`)
-  *.battle.ts       Paired-seed bot-vs-bot battle harnesses (HLJ, Rummy)
+  *.battle.ts       Paired-seed bot-vs-bot battle harnesses (HLJ, Rummy, Hearts)
 test/
   *.test.ts         node:test suites (HLJ signals and bidding, fixed-bug regressions)
   hlj_pacing.test.mjs  HLJ trick-gate pacing contract, driven through the offline bundle
@@ -65,6 +65,12 @@ Bot battle harnesses (paired seeds, so card luck cancels; see each file's header
 node src/ai.battle.ts --a ./src/hlj-module.ts --b <baseline>/hlj-module.ts --players 4,6,8 --seeds 500
 node src/ai.battle.ts --roundrobin --players 4 --seeds 300      # HLJ personalities vs each other
 node src/rummy.battle.ts --a ./src/rummy-module.ts --b <baseline>/rummy-module.ts --players 4 --seeds 300
+node src/hearts.battle.ts --a ./src/hearts-module.ts --b <baseline>/hearts-module.ts --players 4 --seeds 200 [--mode solo|duo] [--workers N]
+node src/hearts.battle.ts --timing --players 4 --seeds 50        # Hearts aiMove latency only
 ```
+
+A Rummy baseline from before the current rules (13-card run cap, playable deep
+pickups) sometimes proposes moves those rules reject; the harness swaps each one
+for a fixed legal move and prints how many it swapped (`--strict` aborts instead).
 
 [PartyServer]: https://github.com/cloudflare/partyserver

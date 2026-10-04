@@ -337,6 +337,7 @@ export type RummyView = {
   lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][]; lastMelds: { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] }[] } | null;
   requireDiscard: boolean;
   botDifficulty: number[]; // per-seat difficulty (public, for lobby display)
+  tiebreak: boolean; // target reached but the lead is shared: playing on until one seat leads alone
   log: LogEntry[]; // authoritative move log (public)
 };
 
@@ -780,6 +781,7 @@ function redact(state: RummyState, seat: number | null, meta: RoomMeta): RummyVi
     lastRound: state.lastRound,
     requireDiscard: state.requireDiscard,
     botDifficulty: state.botDifficulty,
+    tiebreak: state.phase !== "gameOver" && Math.max(...state.scores) >= state.target,
     log: state.log,
   };
 }
@@ -811,6 +813,7 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
     lastRound: null,
     requireDiscard: config.requireDiscard === true,
     botDifficulty: botLevels(players, config.botDifficulty),
+    tiebreak: false,
     log: [],
   };
 }

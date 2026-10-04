@@ -691,7 +691,7 @@ async function connectLocal(handoff = null) {
   const hotseats = S.hotseats;
   S.hotseats = {};
   try {
-    if (!localMod) localMod = await import("/local.js?v=20261004a");
+    if (!localMod) localMod = await import("/local.js?v=20261004b");
   } catch (err) {
     // No offline bundle (e.g. never cached): back to the start screen, still
     // prefilled with this game and room, rather than a dead "Connecting…".
@@ -2208,6 +2208,116 @@ const rCanLayoff = (meld, cards) =>
 // requireDiscard check): a card has to be left to go out on.
 const rKeepsDiscard = (v, cards) => !v.requireDiscard || cards.length < v.yourHand.length;
 
+// The forced card (deep discard pickup). While it is pending, a meld or lay-off
+// that leaves it out is refused unless the card can still go down in one move
+// afterwards. A port of rummy-module's findSetContaining / findRunContaining /
+// trioWith / runBridge / forcedPlays / forcedPlayable, quirks included, so the
+// UI offers exactly the plays the engine accepts.
+function rSetWith(hand, c) {
+  if (c.joker) return null;
+  const seen = new Map([[c.suit, c]]);
+  for (const x of hand) if (!x.joker && x.rank === c.rank && !seen.has(x.suit)) seen.set(x.suit, x);
+  const g = [...seen.values()];
+  if (g.length >= 3) return g.slice(0, 4);
+  const jokers = hand.filter((x) => x.joker);
+  if (g.length >= 1 && g.length + jokers.length >= 3) return [...g, ...jokers.slice(0, 3 - g.length)];
+  return null;
+}
+function rRunWith(hand, c) {
+  if (c.joker) return null;
+  const inSuit = hand.filter((x) => x.suit === c.suit && !x.joker);
+  const jokers = hand.filter((x) => x.joker);
+  for (const ace of [1, 14]) {
+    const byRank = new Map();
+    for (const x of inSuit) { const r = x.rank === 14 ? ace : x.rank; if (!byRank.has(r)) byRank.set(r, x); }
+    const cr = c.rank === 14 ? ace : c.rank;
+    byRank.set(cr, c);
+    for (let lo = Math.max(1, cr - 2); lo <= cr; lo++) {
+      for (let hi = cr; hi <= Math.min(14, cr + 2); hi++) {
+        if (hi - lo + 1 < 3) continue;
+        let nat = 0;
+        for (let r = lo; r <= hi; r++) if (byRank.has(r)) nat++;
+        if (nat < 1 || hi - lo + 1 - nat > jokers.length) continue;
+        const jk = [...jokers];
+        const cards = [];
+        for (let r = lo; r <= hi; r++) cards.push(byRank.has(r) ? byRank.get(r) : jk.shift());
+        if (cards.includes(c)) return cards;
+      }
+    }
+  }
+  return null;
+}
+// Is there a three-card meld of `f` plus two of `others`?
+function rTrioWith(others, f) {
+  if (f.joker) {
+    const nats = others.filter((c) => !c.joker);
+    if (nats.length && others.some((c) => c.joker)) return true;
+    for (let i = 0; i < nats.length; i++)
+      for (let j = i + 1; j < nats.length; j++) if (rValidMeld([f, nats[i], nats[j]])) return true;
+    return false;
+  }
+  const pool = [f, ...others];
+  const set = rSetWith(pool, f)?.slice(0, 3);
+  if (set && rIsSet(set)) return true;
+  const run = rRunWith(pool, f);
+  return !!run && run.length === 3 && rIsRun(run);
+}
+// How many `pool` cards `f` needs to join the run `run` (0 = fits alone), or -1.
+function rRunBridge(run, f, pool) {
+  if (rIsRun([...run, f])) return 0;
+  const nat = run.filter((c) => !c.joker);
+  if (f.joker || !nat.length || nat[0].suit !== f.suit) return -1;
+  const runJokers = run.length - nat.length;
+  let best = -1;
+  for (const ace of [1, 14]) {
+    const eff = (c) => (c.rank === 14 ? ace : c.rank);
+    const ranks = new Set(nat.map(eff));
+    if (ranks.has(eff(f))) continue;
+    ranks.add(eff(f));
+    const lo = Math.min(...ranks), hi = Math.max(...ranks);
+    const holes = [];
+    for (let r = lo + 1; r < hi; r++) if (!ranks.has(r)) holes.push(r);
+    const need = holes.length - runJokers;
+    const bridge = [];
+    for (const r of holes) {
+      if (bridge.length >= need) break;
+      const c = pool.find((x) => !x.joker && x.suit === f.suit && eff(x) === r);
+      if (c) bridge.push(c);
+    }
+    for (const j of pool) if (j.joker && bridge.length < need) bridge.push(j);
+    if (bridge.length < need || !rIsRun([...run, f, ...bridge])) continue;
+    if (best < 0 || bridge.length < best) best = bridge.length;
+  }
+  return best;
+}
+// Can `f` (in `hand`) still go down in one move onto `melds` — keeping a card
+// back to discard when requireDiscard is on?
+function rForcedPlayable(hand, f, melds, requireDiscard) {
+  const others = hand.filter((c) => c.id !== f.id);
+  const fits = (n) => !requireDiscard || n < hand.length;
+  if (rTrioWith(others, f) && fits(3)) return true;
+  return melds.some((m) => {
+    if (m.kind === "set") return rIsSet([...m.cards, f]) && fits(1);
+    const n = rRunBridge(m.cards, f, others);
+    return n >= 0 && fits(n + 1);
+  });
+}
+// Would playing `cards` (a new meld, or a lay-off onto `meld`) strand the
+// pending forced card? Mirrors the engine's check in isLegal.
+function rStrandsForced(v, cards, meld = null) {
+  const fid = v.mustMeldCardId;
+  if (fid == null || cards.some((c) => c.id === fid)) return false;
+  const f = v.yourHand.find((c) => c.id === fid);
+  if (!f) return false;
+  const ids = new Set(cards.map((c) => c.id));
+  const rest = v.yourHand.filter((c) => !ids.has(c.id));
+  const melds = meld
+    ? v.melds.map((m) => (m.id === meld.id ? { ...m, cards: [...m.cards, ...cards] } : m))
+    : [...v.melds, { id: -1, kind: rIsSet(cards) ? "set" : "run", cards }];
+  return !rForcedPlayable(rest, f, melds, v.requireDiscard);
+}
+const R_STRANDS = "That would strand the green card \u2014 keep what it needs to go down this turn.";
+
 // Reconcile S.rummyOrder with the live hand: keep order, append new cards, drop gone ones.
 function rummyOrdered(hand) {
   const ids = hand.map((c) => c.id);
@@ -2493,7 +2603,8 @@ function renderRummy(v) {
   // laid off on — the same highlight on the felt and in the phone ledger.
   const meldCls = (m) => S.rummyLayoff === m.id ? "target"
     : inPlay && selCardsForMelds.length >= 1 && S.rummyLayoff === null
-      && rCanLayoff(m, selCardsForMelds) && rKeepsDiscard(v, selCardsForMelds) ? "layoff-hint" : "";
+      && rCanLayoff(m, selCardsForMelds) && rKeepsDiscard(v, selCardsForMelds)
+      && !rStrandsForced(v, selCardsForMelds, m) ? "layoff-hint" : "";
 
   const meldsInner = v.melds.length
     ? `<div class="melds">${v.melds.map((m) => {
@@ -2595,8 +2706,12 @@ function renderRummy(v) {
     : "";
   const hand = drawnPreview + selRow + fanWrap;
   const keepsDiscard = rKeepsDiscard(v, selCards);
-  const canMeld = selCards.length >= 3 && rValidMeld(selCards) && keepsDiscard;
-  const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards) && keepsDiscard;
+  const meldFits = selCards.length >= 3 && rValidMeld(selCards) && keepsDiscard;
+  const layFits = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards) && keepsDiscard;
+  // A pending forced card refuses any play that would leave it no way down.
+  const canMeld = meldFits && !rStrandsForced(v, selCards);
+  const canLay = layFits && !rStrandsForced(v, selCards, layMeld);
+  const strands = !canMeld && !canLay && (meldFits || layFits);
   const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;
 
   // sort controls (available whenever you hold cards) \u2014 single alternating button
@@ -2626,8 +2741,10 @@ function renderRummy(v) {
       acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
     }
     acts.push(sortBar);
-    if (v.mustMeldCardId != null) acts.push(`<span class="hint">The green card must be melded or laid off before you discard.</span>`);
-    else if (!keepsDiscard) acts.push(`<span class="hint">Must discard is on \u2014 keep a card back to go out on.</span>`);
+    // Rule reasons stay visible in landscape (.key), where other hints are hidden.
+    if (strands) acts.push(`<span class="hint key">${R_STRANDS}</span>`);
+    else if (v.mustMeldCardId != null) acts.push(`<span class="hint key">The green card must be melded or laid off before you discard.</span>`);
+    else if (!keepsDiscard) acts.push(`<span class="hint key">Must discard is on \u2014 keep a card back to go out on.</span>`);
     else if (canMeld) acts.push(`<span class="hint">Tap \u201cPlay meld\u201d to put these ${n} cards down.</span>`);
     else if (canLay) acts.push(`<span class="hint">Tap \u201cLay off\u201d to add these cards to the highlighted meld.</span>`);
     else if (n >= 3) acts.push(`<span class="hint">These cards don\u2019t form a valid meld.</span>`);
@@ -2637,9 +2754,9 @@ function renderRummy(v) {
   }
 
   const myScore = v.you != null ? v.scores[v.you] : null;
-  const selfMeta = myScore != null
+  const selfMeta = (myScore != null
     ? `${myScore} of ${v.target}`
-    : `play to ${v.target}`;
+    : `play to ${v.target}`) + (v.tiebreak ? " \u00b7 tiebreak round" : "");
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
@@ -2781,10 +2898,14 @@ function rummyRoundSummary(v, prefix, footHTML) {
   const heading = lr.outSeat != null
     ? `${esc(seatName(v, lr.outSeat))} went out`
     : "Stock exhausted";
+  // Past the target with the lead shared: the game plays on (engine tie rule).
+  const tie = v.tiebreak
+    ? `<div class="rhc-tie">Tied for the lead at ${Math.max(...v.scores)} \u2014 another round decides</div>`
+    : "";
   return `<div class="rhc-wrap" style="flex-direction:column;justify-content:flex-start;gap:6px">
     <div style="align-self:stretch;padding-top:env(safe-area-inset-top)">${appbar(v, { log: true })}</div>
     <div class="rhc-modal" style="margin:auto 0;max-height:calc(100% - 60px)">
-      <div class="rhc-head">${prefix}${heading}</div>
+      <div class="rhc-head">${prefix}${heading}</div>${tie}
       <div class="rhc-body">${rummyRoundPlayers(v, lr)}</div>
       <div class="rhc-foot">${footHTML}</div>
     </div>
@@ -3052,7 +3173,8 @@ function renderHearts(v) {
   }
 
   const you = v.you;
-  const selfMeta = you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`;
+  const selfMeta = (you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`)
+    + (v.tiebreak ? " \u00b7 tiebreak hand" : "");
   // Nobody is to act during the trick gate (toAct is null): name the trick's winner.
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
@@ -3087,9 +3209,11 @@ function renderHearts(v) {
     }
     const { delta, shooter } = lh;
     const moonSeat = shooter;
-    const headline = moonSeat != null
+    const headline = (moonSeat != null
       ? `<div class="hlj-result-verdict made">${esc(seatName(v, moonSeat))} shot the moon!</div>`
-      : "";
+      : "")
+      // Target reached but the low score is shared: the engine plays on.
+      + (v.tiebreak ? `<div class="hlj-result-bidline">Tied for low at ${Math.min(...v.scores)} \u2014 playing another hand</div>` : "");
     const scoreRows = v.seats.map((_, i) => {
       const d = delta[i];
       const total = v.scores[i];
@@ -3603,8 +3727,11 @@ app.addEventListener("click", (e) => {
       // off at once; otherwise (planning off-turn, or before drawing) it just opens.
       if (v.yourTurn && v.turnPhase === "play" && selNow.length >= 1 && S.rummyLayoff === null && meldTarget
           && rCanLayoff(meldTarget, selNow) && rKeepsDiscard(v, selNow)) {
-        S.rummyLayoff = meldId;
-        return doLayoff();
+        if (rStrandsForced(v, selNow, meldTarget)) toast(R_STRANDS);
+        else {
+          S.rummyLayoff = meldId;
+          return doLayoff();
+        }
       }
       S.rummyMeldOpen = meldId;
       return render();
@@ -3855,7 +3982,8 @@ function dptExecute(target) {
       const meld   = v.melds.find((m) => m.id === meldId);
       const card   = v.yourHand.find((c) => c.id === DPT.cid);
       if (meld && card && rCanLayoff(meld, [card]) && rKeepsDiscard(v, [card])) {
-        sendOnce({ t: "move", move: { type: "layoff", seat: v.you, meldId, cards: [DPT.cid] } });
+        if (rStrandsForced(v, [card], meld)) toast(R_STRANDS);
+        else sendOnce({ t: "move", move: { type: "layoff", seat: v.you, meldId, cards: [DPT.cid] } });
       } else {
         toast("That card can’t be laid off there.");
       }
