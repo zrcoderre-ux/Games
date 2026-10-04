@@ -49,12 +49,16 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
   private viewSeat: number | null = null; // the seat whose view we currently emit
   private name = "You";
   private botTimer: ReturnType<typeof setTimeout> | null = null;
+  // Plain fields rather than constructor parameter properties, so Node's
+  // type stripping can load this file directly (the tests do).
+  private game: Game<State, Move, Config, View>;
+  private config: Config;
+  private emit: (msg: ServerMessage<View>) => void;
 
-  constructor(
-    private game: Game<State, Move, Config, View>,
-    private config: Config,
-    private emit: (msg: ServerMessage<View>) => void,
-  ) {
+  constructor(game: Game<State, Move, Config, View>, config: Config, emit: (msg: ServerMessage<View>) => void) {
+    this.game = game;
+    this.config = config;
+    this.emit = emit;
     this.seats = emptySeats(game.seatCount(config));
   }
 

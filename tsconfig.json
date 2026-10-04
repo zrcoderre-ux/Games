@@ -11,7 +11,17 @@
     "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/**/*.ts"],
-  // rummy.smoke.ts is a Node script (uses `process`); it's run via `node`, not
-  // bundled into the Worker, so keep it out of the Worker type-check.
-  "exclude": ["node_modules", "src/rummy.smoke.ts", "src/hearts.smoke.ts", "src/pj.smoke.ts"]
+  // Node-only scripts (smoke tests, battle harnesses, bidding analyses) use
+  // `process` and are run with `node`, never bundled into the Worker, so keep
+  // them out of the Worker type-check. Tests live in test/, outside `include`.
+  "exclude": [
+    "node_modules",
+    "src/*.smoke.ts",
+    "src/*.battle.ts",
+    "src/*.test.ts",
+    "src/bid-threshold.ts",
+    "src/bid23.ts",
+    "src/hand-eval.ts",
+    "src/six-threshold.ts"
+  ]
 }
