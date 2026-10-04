@@ -208,7 +208,17 @@ export abstract class RoomServer<
       delete this.room.pendingBotSeats[seat];
       delete this.room.disconnectedSeats[seat];
     } else if (!this.room.state || this.game.isOver(this.room.state)) {
-      const empty = this.room.seats.findIndex((s) => s.kind === "empty");
+      let empty = this.room.seats.findIndex((s) => s.kind === "empty");
+      if (empty === -1 && this.room.state) {
+        // A finished game keeps its seats for returning players, but a seat
+        // whose player is gone must not lock newcomers out of the rematch.
+        // Take the absent host's seat only as a last resort.
+        const live = this.liveSeats(conn);
+        const hostSeat = this.room.hostPid !== null && Object.hasOwn(this.room.pidSeats, this.room.hostPid)
+          ? this.room.pidSeats[this.room.hostPid] : null;
+        const absent = [...this.room.seats.keys()].filter((i) => this.room.seats[i].kind === "human" && !live.has(i));
+        empty = absent.find((i) => i !== hostSeat) ?? absent[0] ?? -1;
+      }
       if (empty !== -1) {
         seat = empty;
         this.room.seats[seat] = { kind: "human", name };
@@ -246,15 +256,26 @@ export abstract class RoomServer<
     if (!st || st.seat === null) return;
     const seat = st.seat;
     if (this.inProgress()) {
-      const live = this.liveSeats();
-      if (!this.room.seats.some((s, i) => i !== seat && s.kind === "human" && live.has(i))) {
-        // The last connected human is leaving: start over as an open lobby
-        // rather than leave a running game nobody could ever join, finish or
-        // reset (any other human seat has nobody behind it).
+      const live = this.liveSeats(conn);
+      const others = [...this.room.seats.keys()].filter((i) => i !== seat && this.room.seats[i].kind === "human");
+      if (!others.length) {
+        // The last human is leaving: start over as an open lobby rather than
+        // leave a running game nobody could ever join, finish or reset.
         this.resetToLobby();
         await this.persist();
         this.broadcastViews();
         return;
+      }
+      if (!others.some((i) => live.has(i))) {
+        // Everyone else still seated is away (a locked phone, a reload). Keep
+        // the game for them, but don't let it wait forever: anyone not back
+        // within ABANDON_DELAY_MS gets a bot, and once no human is left the
+        // alarm resets the room to a lobby.
+        const deadline = Date.now() + ABANDON_DELAY_MS;
+        for (const i of others) {
+          this.room.disconnectedSeats[i] = true;
+          this.room.pendingBotSeats[i] = Math.min(this.room.pendingBotSeats[i] ?? deadline, deadline);
+        }
       }
       this.room.seats[seat] = { kind: "bot", name: this.room.seats[seat].name };
     } else {
@@ -847,6 +868,7 @@ function emptySeats(n: number): SeatInfo[] {
 // A relaxed pace lets each draw, meld, and discard register before the next.
 const BOT_STEP_MS = 2400;
 const BOT_REPLACE_DELAY_MS = 60_000; // 1 minute grace period before auto bot-replacement
+const ABANDON_DELAY_MS = 5 * 60_000; // how long a table left with only away players waits for them
 const ALARM_SLACK_MS = 50; // an alarm this close to a step's due time runs it
 
 // Client input limits. No legitimate message comes near MAX_FRAME; names match

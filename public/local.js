@@ -2744,6 +2744,7 @@ function redact2(state, seat, meta) {
     lastRound: state.lastRound,
     requireDiscard: state.requireDiscard,
     botDifficulty: state.botDifficulty,
+    tiebreak: state.phase !== "gameOver" && Math.max(...state.scores) >= state.target,
     log: state.log
   };
 }
@@ -2774,6 +2775,7 @@ function lobbyView(config, seat, meta) {
     lastRound: null,
     requireDiscard: config.requireDiscard === true,
     botDifficulty: botLevels(players, config.botDifficulty),
+    tiebreak: false,
     log: []
   };
 }

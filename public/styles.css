@@ -2929,6 +2929,9 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .ls-actions .hint{ display:none !important; }
   /* ...except a rule's reason (forced card, Must discard): a compact line beside the buttons */
   .ls-actions .hint.key{ display:block !important; width:auto; max-width:min(30vw,230px); font-size:10.5px; line-height:1.2; text-align:right; }
+  /* With a Play meld / Lay off button showing, the forced-card reminder is
+     redundant, and on narrow phones it would push past the screen edge. */
+  .ls-actions:has([data-action=meld-selected], [data-action=layoff-selected]) .hint.key{ display:none !important; }
 
   /* HLJ (no game buttons, just the A/B team score pills) — keep the pills on the
      right (room tag / Log / Leave stay on the left) but pull them in from the

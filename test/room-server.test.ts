@@ -190,18 +190,57 @@ test("after a restart in the lobby, a player who doesn't come back is not dealt 
   assert.equal(bob.state.seat, null, "Bob watches the game he missed");
 });
 
-test("the last connected player leaving resets the room even if a disconnected seat remains", async () => {
+// Hearts with Alice and Bob; Bob's phone locks, then Alice taps Leave.
+async function leftWithAwayPlayer() {
   const room = await open("hearts");
   const alice = await join(room, "A", "Alice");
   const bob = await join(room, "B", "Bob");
   await send(room, alice, { t: "start", config: {} });
   await drop(room, bob);
+  const t0 = now;
   await send(room, alice, { t: "leave" });
+  return { room, t0 };
+}
+
+test("the last connected player leaving keeps the game for a player who is only away", async () => {
+  const { room, t0 } = await leftWithAwayPlayer();
+  assert.notEqual(room.room.state, null, "Bob's game survives Alice leaving");
+  assert.equal(room.room.seats[0].kind, "bot");
+  assert.equal(room.room.pendingBotSeats[1], t0 + 5 * 60_000);
+  const bob2 = await join(room, "B", "Bob"); // back within the window
+  assert.equal(bob2.state.seat, 1);
+  assert.equal(room.room.hostSeat, 1);
+  assert.deepEqual(room.room.pendingBotSeats, {});
+});
+
+test("a table left with only away players resets once they miss the window", async () => {
+  const { room, t0 } = await leftWithAwayPlayer();
+  assert.equal(room.ctx.alarm !== null && room.ctx.alarm <= t0 + 5 * 60_000, true, "an alarm covers the deadline");
+  await fireAt(room, t0 + 5 * 60_000);
   assert.equal(room.room.state, null);
   assert.ok(room.room.seats.every((s: any) => s.kind === "empty"));
   const carol = await join(room, "C", "Carol");
   assert.equal(carol.state.seat, 0);
   assert.equal(room.room.hostSeat, 0);
+});
+
+test("a newcomer can take an absent player's seat in a finished game everyone has left", async () => {
+  const room = await open("hearts");
+  const alice = await join(room, "A", "Alice");
+  const bob = await join(room, "B", "Bob");
+  await send(room, alice, { t: "start", config: {} });
+  room.room.state = { ...room.room.state, phase: "gameOver" };
+  await drop(room, alice);
+  await drop(room, bob);
+  const carol = await join(room, "C", "Carol");
+  assert.equal(carol.state.seat, 1, "Carol takes Bob's seat, not the absent host's");
+  assert.equal(room.room.hostSeat, 1);
+  await send(room, carol, { t: "newGame" });
+  assert.deepEqual(carol.errors(), []);
+  assert.equal(room.room.state, null);
+  // Alice still gets her own seat (and hosting) back if she returns.
+  const alice2 = await join(room, "A", "Alice");
+  assert.equal(alice2.state.seat, 0);
 });
 
 // ---------- step timing across hibernation ----------

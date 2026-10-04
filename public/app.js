@@ -691,7 +691,7 @@ async function connectLocal(handoff = null) {
   const hotseats = S.hotseats;
   S.hotseats = {};
   try {
-    if (!localMod) localMod = await import("/local.js?v=20261004b");
+    if (!localMod) localMod = await import("/local.js?v=20261004c");
   } catch (err) {
     // No offline bundle (e.g. never cached): back to the start screen, still
     // prefilled with this game and room, rather than a dead "Connecting…".
