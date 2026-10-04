@@ -632,102 +632,514 @@ function lobbyView(config: HeartsConfig, seat: number | null, meta: RoomMeta): H
   };
 }
 
-// ---------- heuristic AI ----------
-// A "decent club player": shed danger when passing; lead low; duck under tricks
-// to dodge points; when void, slough the most dangerous card (Q(S) first, then
-// high hearts, then the bare spade honors that could later catch the Queen).
+// ---------- AI ----------
+// The bot reads only what a human in its seat could know: its own hand, the
+// hand it was dealt (so it knows which cards it passed, and to whom), and public
+// information — every card played this hand (rebuilt from the move log), the
+// trick in progress, points taken, hand sizes, and whether hearts are broken.
+// From the played cards it infers which seats have shown out of which suits.
+//
+// Play is a determinized Monte-Carlo search (aiPlay): deal the cards this seat
+// cannot see among the other seats in many ways consistent with what it knows,
+// try every distinct legal card in each deal, finish the hand with a fast
+// heuristic policy for every seat (HandSim), and keep the card that costs the
+// fewest points on average. Passing (aiPass) works the same way over whole
+// hands: it tries the likely 3-card sets against random deals. Cards are 13-bit
+// masks per suit (bit rank-2), so a rollout costs about a microsecond; the work
+// per decision is capped so each aiMove fits the bot CPU budget. Randomness
+// comes only from a PRNG seeded from the state, so the same state always yields
+// the same move.
 
-// Higher = more eager to be rid of the card.
-function danger(c: HeartsCard): number {
-  if (isQueenOfSpades(c)) return 1000; // the Black Lady — dump first
-  if (c.suit === "S" && c.rank >= 13) return 500 + c.rank; // A/K of spades: can win the Queen onto you
-  if (isHeart(c)) return 100 + c.rank; // hearts, highest first
-  return c.rank; // otherwise just shed your highest
+// Suit indexes follow SUITS (C, D, H, S).
+const CLUBS = 0, DIAMONDS = 1, HEARTS = 2, SPADES = 3;
+const NON_HEARTS = [CLUBS, DIAMONDS, SPADES];
+const SUIT_INDEX: Record<Suit, number> = { C: 0, D: 1, H: 2, S: 3 };
+const Q_BIT = 1 << (QUEEN - 2); // the Black Lady within the spade mask
+const AK_BITS = (1 << 11) | (1 << 12); // K and A of a suit
+const ALL_RANKS = (1 << 13) - 1;
+
+const bitOf = (c: HeartsCard): number => 1 << (c.rank - 2);
+const lowest = (m: number): number => m & -m;
+const highest = (m: number): number => 1 << (31 - Math.clz32(m));
+const bitsAbove = (b: number): number => ALL_RANKS & ~(b * 2 - 1);
+function bitCount(m: number): number {
+  m -= (m >>> 1) & 0x55555555;
+  m = (m & 0x33333333) + ((m >>> 2) & 0x33333333);
+  return (((m + (m >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
+}
+// A card packed as suit << 4 | (rank - 2), the rollout's move currency.
+const pack = (suit: number, bit: number): number => (suit << 4) | (31 - Math.clz32(bit));
+
+// ---------- what one seat knows ----------
+
+type SeatView = {
+  N: number;
+  seat: number;
+  hand: number[]; // [suit] this seat's cards
+  unseen: number[]; // [suit] cards still in other seats' hands
+  known: number[]; // [seat * 4 + suit] cards known to be in that seat's hand (ones we passed there)
+  ban: number[]; // [seat * 4 + suit] cards the seat cannot hold (suits it has shown out of)
+  counts: number[]; // [seat] cards left in hand (public)
+};
+
+// Rebuild the seat's knowledge. Returns null only if the log no longer holds
+// every card played this hand (it always does: a hand logs < LOG_CAP entries).
+function readSeatView(state: HeartsState, seat: number): SeatView | null {
+  const N = state.players;
+  const hand = [0, 0, 0, 0];
+  for (const c of state.hands[seat]) hand[SUIT_INDEX[c.suit]] |= bitOf(c);
+  const unseen = [ALL_RANKS, ALL_RANKS, ALL_RANKS, ALL_RANKS];
+  for (const r of removedFor(N)) unseen[SUIT_INDEX[r.suit]] &= ~(1 << (r.rank - 2));
+  for (let u = 0; u < 4; u++) unseen[u] &= ~hand[u];
+  const ban: number[] = Array(N * 4).fill(0);
+  const known: number[] = Array(N * 4).fill(0);
+
+  // Every card played this hand, oldest first: the newest "played" log entries.
+  const want = state.phase === "passing" ? 0 : state.trickNo * N + state.currentTrick.length;
+  const plays: { seat: number; suit: number; bit: number; points: boolean }[] = [];
+  for (let i = state.log.length - 1; i >= 0 && plays.length < want; i--) {
+    const e = state.log[i];
+    const c = e.cards?.[0];
+    if (e.msg !== "played" || e.seat === null || !c || "joker" in c) continue;
+    plays.push({ seat: e.seat, suit: SUIT_INDEX[c.suit as Suit], bit: 1 << (c.rank - 2), points: c.suit === "H" || (c.suit === "S" && c.rank === QUEEN) });
+  }
+  if (plays.length < want) return null;
+  plays.reverse();
+
+  // Shown voids: not following the led suit; leading a heart before they are
+  // broken (only hearts left); dumping points on the first trick (only points left).
+  const mine = [0, 0, 0, 0];
+  let broken = false;
+  for (let i = 0; i < plays.length; i++) {
+    const p = plays[i];
+    const lead = plays[i - (i % N)];
+    const o = p.seat * 4;
+    unseen[p.suit] &= ~p.bit;
+    if (p.seat === seat) mine[p.suit] |= p.bit;
+    if (i % N === 0) {
+      if (p.suit === HEARTS && !broken) for (const u of NON_HEARTS) ban[o + u] = ALL_RANKS;
+    } else if (p.suit !== lead.suit) {
+      ban[o + lead.suit] = ALL_RANKS;
+      if (i < N && p.points) {
+        ban[o + DIAMONDS] = ALL_RANKS;
+        if (p.suit === SPADES) ban[o + SPADES] = ALL_RANKS; // the Q(S) went, hearts are all that's left
+      }
+    }
+    if (p.suit === HEARTS) broken = true;
+  }
+
+  // The cards we passed sit in the receiver's hand until they show up in a trick.
+  if (state.phase !== "passing" && state.passOffset !== 0 && state.dealtHands) {
+    const to = (seat + state.passOffset) % N;
+    for (const c of state.dealtHands[seat]) {
+      const u = SUIT_INDEX[c.suit], b = bitOf(c);
+      if (!(hand[u] & b) && !(mine[u] & b)) known[to * 4 + u] |= b & unseen[u];
+    }
+  }
+  return { N, seat, hand, unseen, known, ban, counts: state.hands.map((h) => h.length) };
 }
 
+// Deals the cards this seat cannot see to the other seats (into
+// world[seat * 4 + suit]), once per sampled world of a decision. It honours
+// known cards, hand sizes, and the suits each seat has shown out of: cards that
+// fewer seats can hold are placed first (shuffled within each such group) and
+// each lands on an eligible seat weighted by its open slots. After a few dead
+// ends (rare) a card with no eligible seat left goes to any seat with room.
+class Dealer {
+  private readonly v: SeatView;
+  private readonly cards: number[] = []; // packed card | (mask of seats that may hold it) << 8
+  private readonly groups: number[] = [0]; // bounds of the runs of equally constrained cards
+  private readonly need0: number[]; // open slots per seat once known cards are placed
+  private readonly need: number[];
+  private readonly others: number; // mask of the seats being dealt to
+
+  constructor(v: SeatView) {
+    const { N, seat } = v;
+    this.v = v;
+    this.need0 = v.counts.map((n, s) => {
+      for (let u = 0; u < 4; u++) n -= bitCount(v.known[s * 4 + u]);
+      return s === seat ? 0 : n;
+    });
+    this.need = this.need0.slice();
+    let others = 0;
+    for (let s = 0; s < N; s++) if (this.need0[s] > 0) others |= 1 << s;
+    this.others = others;
+    const byEligible: number[][] = Array.from({ length: N + 1 }, () => []);
+    for (let u = 0; u < 4; u++) {
+      let free = v.unseen[u];
+      for (let s = 0; s < N; s++) free &= ~v.known[s * 4 + u];
+      for (let m = free; m; m &= m - 1) {
+        const b = lowest(m);
+        let mask = 0;
+        for (let s = 0; s < N; s++) if (others & (1 << s) && !(v.ban[s * 4 + u] & b)) mask |= 1 << s;
+        byEligible[bitCount(mask)].push(pack(u, b) | (mask << 8));
+      }
+    }
+    for (const g of byEligible) if (g.length) { this.cards.push(...g); this.groups.push(this.cards.length); }
+  }
+
+  deal(rng: () => number, world: Int32Array): void {
+    const { v, cards, need } = this;
+    for (let attempt = 0; ; attempt++) {
+      const strict = attempt < 6;
+      for (let s = 0; s < v.N; s++) {
+        need[s] = this.need0[s];
+        for (let u = 0; u < 4; u++) world[s * 4 + u] = s === v.seat ? v.hand[u] : v.known[s * 4 + u];
+      }
+      for (let g = 1; g < this.groups.length; g++) {
+        for (let i = this.groups[g] - 1; i > this.groups[g - 1]; i--) {
+          const j = this.groups[g - 1] + Math.floor(rng() * (i - this.groups[g - 1] + 1));
+          const t = cards[i]; cards[i] = cards[j]; cards[j] = t;
+        }
+      }
+      let ok = true;
+      for (const c of cards) {
+        let mask = c >> 8, total = 0;
+        for (let s = 0; s < v.N; s++) if (mask & (1 << s)) total += need[s];
+        if (total === 0 && strict) { ok = false; break; }
+        if (total === 0) {
+          mask = this.others;
+          for (let s = 0; s < v.N; s++) if (mask & (1 << s)) total += need[s];
+        }
+        let r = rng() * total, to = -1;
+        for (let s = 0; s < v.N; s++) {
+          if (mask & (1 << s) && need[s] > 0) { to = s; r -= need[s]; if (r < 0) break; }
+        }
+        world[to * 4 + ((c >> 4) & 3)] |= 1 << (c & 15);
+        need[to]--;
+      }
+      if (ok) return;
+    }
+  }
+}
+
+// ---------- rollout simulator ----------
+// One hand from the current position on, every seat played by the heuristic
+// policy below (which, like a real player, looks only at its own hand and the
+// cards already played). Mutable and reused across rollouts of one decision.
+
+class HandSim {
+  readonly N: number;
+  readonly tricks: number;
+  readonly hand: Int32Array; // [seat * 4 + suit]
+  readonly out = new Int32Array(4); // [suit] cards not yet played (all hands)
+  readonly pts: Int32Array; // points taken this hand
+  broken = false;
+  trickNo = 0;
+  leader = 0;
+  len = 0; // cards in the trick in progress
+  led = 0; // its suit
+  winBit = 0; // its winning card's bit, and seat
+  winSeat = 0;
+  trickPts = 0;
+
+  constructor(N: number) {
+    this.N = N;
+    this.tricks = handSize(N);
+    this.hand = new Int32Array(N * 4);
+    this.pts = new Int32Array(N);
+  }
+
+  // Start from `root` (a HandSim holding the real position) with `world`'s hands.
+  load(root: HandSim, world: Int32Array): void {
+    this.hand.set(world);
+    this.out.set(root.out);
+    this.pts.set(root.pts);
+    this.broken = root.broken; this.trickNo = root.trickNo; this.leader = root.leader;
+    this.len = root.len; this.led = root.led; this.winBit = root.winBit; this.winSeat = root.winSeat;
+    this.trickPts = root.trickPts;
+  }
+
+  play(seat: number, suit: number, bit: number): void {
+    this.hand[seat * 4 + suit] &= ~bit;
+    this.out[suit] &= ~bit;
+    if (this.len === 0) { this.led = suit; this.winBit = bit; this.winSeat = seat; this.trickPts = 0; }
+    else if (suit === this.led && bit > this.winBit) { this.winBit = bit; this.winSeat = seat; }
+    if (suit === HEARTS) { this.trickPts++; this.broken = true; }
+    else if (suit === SPADES && bit === Q_BIT) this.trickPts += 13;
+    if (++this.len === this.N) {
+      this.pts[this.winSeat] += this.trickPts;
+      this.leader = this.winSeat;
+      this.len = 0;
+      this.trickNo++;
+    }
+  }
+
+  toAct(): number { return (this.leader + this.len) % this.N; }
+
+  // Play the hand out with the policy, stopping once every point card has been
+  // taken (the tricks after that can't change the score).
+  finish(): void {
+    while (this.len > 0 || (this.trickNo < this.tricks && (this.out[HEARTS] | (this.out[SPADES] & Q_BIT)))) {
+      const seat = this.toAct();
+      const c = this.pick(seat);
+      this.play(seat, c >> 4, 1 << (c & 15));
+    }
+  }
+
+  // Final points for `seat`, moon-adjusted (a shooter takes 0, everyone else 26).
+  score(seat: number): number {
+    for (let s = 0; s < this.N; s++) if (this.pts[s] === 26) return s === seat ? 0 : 26;
+    return this.pts[seat];
+  }
+
+  // The rollout policy: a packed legal card for `seat`.
+  pick(seat: number): number {
+    if (this.len === 0) return this.pickLead(seat);
+    const mine = this.hand[seat * 4 + this.led];
+    return mine ? this.pickFollow(this.led, mine) : this.pickDiscard(seat);
+  }
+
+  // Lead the suit whose lowest card is least likely to win the trick; fish for
+  // the Queen with spades below her when we can't be the one to catch her.
+  private pickLead(seat: number): number {
+    const o = seat * 4, H = this.hand;
+    if (this.trickNo === 0 && H[o + CLUBS]) return pack(CLUBS, lowest(H[o + CLUBS])); // opener's lowest club
+    const qOut = (this.out[SPADES] & Q_BIT) !== 0;
+    const holdQ = (H[o + SPADES] & Q_BIT) !== 0;
+    const onlyHearts = !(H[o + CLUBS] | H[o + DIAMONDS] | H[o + SPADES]);
+    let best = -1, bestScore = Infinity;
+    for (let u = 0; u < 4; u++) {
+      const m = H[o + u];
+      if (!m || (u === HEARTS && !this.broken && !onlyHearts)) continue;
+      const others = this.out[u] & ~m;
+      let b = lowest(m);
+      let score = 0;
+      if (u === SPADES && qOut) {
+        if (holdQ) score += 1;
+        else if (m & AK_BITS) score += 0.5;
+        else { b = highest(m); score -= 1; } // all our spades are below her: flush her out
+      }
+      const overs = bitCount(others & bitsAbove(b));
+      const unders = bitCount(others & (b - 1));
+      score += overs === 0 ? (others ? 1 : 4) : unders / (overs + unders);
+      if (u === HEARTS) score += 0.1;
+      score += bitCount(m) * 0.25; // prefer emptying short suits
+      if (score < bestScore) { bestScore = score; best = pack(u, b); }
+    }
+    return best;
+  }
+
+  // Following suit: drop the Queen under a played A/K; otherwise duck with our
+  // highest card under the winner, or unload the top card on a clean trick we
+  // close.
+  private pickFollow(led: number, mine: number): number {
+    const w = this.winBit;
+    if (led === SPADES && (mine & Q_BIT) && w > Q_BIT) return pack(SPADES, Q_BIT);
+    const last = this.len === this.N - 1;
+    const below = mine & (w - 1);
+    if (below) {
+      const top = mine & ~below & ~Q_BIT;
+      if (last && this.trickPts === 0 && led !== HEARTS && top) return pack(led, highest(top));
+      return pack(led, highest(below));
+    }
+    // Forced over: if we're last, or the trick looks clean (no points yet, no
+    // Queen to catch, enough cards out for everyone behind us to follow), we win
+    // it with our top card; otherwise go over as low as we can.
+    const safe = mine & ~Q_BIT || mine;
+    const clean = this.trickPts === 0 && led !== HEARTS && (led !== SPADES || !(this.out[SPADES] & Q_BIT))
+      && bitCount(this.out[led] & ~mine) >= 2 * (this.N - 1 - this.len);
+    return pack(led, last || clean ? highest(safe) : lowest(safe));
+  }
+
+  // Void in the led suit: Queen first, then A/K of spades while she is out, then
+  // the highest heart, then the highest card left (shorter suit on ties).
+  private pickDiscard(seat: number): number {
+    const o = seat * 4, H = this.hand;
+    const qOut = (this.out[SPADES] & Q_BIT) !== 0;
+    const spades = H[o + SPADES];
+    const firstTrick = this.trickNo === 0 && (H[o + DIAMONDS] | (spades & ~Q_BIT)) !== 0; // no points allowed
+    if (!firstTrick) {
+      if (spades & Q_BIT) return pack(SPADES, Q_BIT);
+      if (qOut && spades & AK_BITS) return pack(SPADES, highest(spades & AK_BITS));
+      if (H[o + HEARTS]) return pack(HEARTS, highest(H[o + HEARTS]));
+    } else if (qOut && spades & AK_BITS) return pack(SPADES, highest(spades & AK_BITS));
+    let best = -1, bestKey = -Infinity;
+    for (const u of NON_HEARTS) {
+      const m = u === SPADES ? spades & ~Q_BIT : H[o + u];
+      if (!m) continue;
+      const key = highest(m) * 16 - bitCount(m);
+      if (key > bestKey) { bestKey = key; best = pack(u, highest(m)); }
+    }
+    return best >= 0 ? best : pack(HEARTS, highest(H[o + HEARTS])); // first trick, only points
+  }
+}
+
+// The real position as a HandSim: our own hand, the other hands empty (they
+// are filled per sampled world).
+function rootSim(state: HeartsState, v: SeatView): HandSim {
+  const root = new HandSim(state.players);
+  for (let u = 0; u < 4; u++) root.out[u] = v.unseen[u] | v.hand[u];
+  for (let u = 0; u < 4; u++) root.hand[v.seat * 4 + u] = v.hand[u];
+  root.pts.set(state.points);
+  root.broken = state.heartsBroken;
+  root.trickNo = state.trickNo;
+  root.leader = state.leader;
+  // Replay the trick in progress onto empty hands (play() only clears bits).
+  for (const p of state.currentTrick) root.play(p.seat, SUIT_INDEX[p.card.suit], bitOf(p.card));
+  return root;
+}
+
+// ---------- passing ----------
+// passOrder ranks a hand by how eager we are to pass each card: the Queen and
+// A/K of spades first unless four spades below her can hide them, then high
+// hearts and high minors (shorter minors first, toward a void); low spades are
+// protection and come last. aiPass tries every 3-card set drawn from the top
+// PASS_POOL cards over the same deals (the cards we can't see dealt at random,
+// every other seat passing its own top three, the whole hand played out by the
+// rollout policy), gives the most promising sets more deals, and passes the
+// set that costs the fewest points on average.
+
+function passOrder(hand: HeartsCard[]): HeartsCard[] {
+  const length = [0, 0, 0, 0];
+  let lowSpades = 0;
+  for (const c of hand) {
+    length[SUIT_INDEX[c.suit]]++;
+    if (c.suit === "S" && c.rank < QUEEN) lowSpades++;
+  }
+  const shortSpades = lowSpades < 4;
+  const eagerness = (c: HeartsCard): number => {
+    if (c.suit === "S") {
+      if (shortSpades && isQueenOfSpades(c)) return 1000;
+      if (c.rank > QUEEN) return shortSpades ? 500 + c.rank : c.rank - 10;
+      return c.rank - 20;
+    }
+    if (isHeart(c)) return c.rank + 1;
+    return c.rank + 2 * (4 - length[SUIT_INDEX[c.suit]]);
+  };
+  return hand.map((c) => ({ c, e: eagerness(c) })).sort((a, b) => b.e - a.e).map((x) => x.c);
+}
+
+const PASS_POOL = 7;
+const PASS_DEALS = 32; // deals every set is tried on,
+const PASS_KEEP = 8; // after which the best this many sets
+const PASS_MORE = 64; // get this many more
+
 function aiPass(state: HeartsState, seat: number): HeartsMove {
-  const hand = state.hands[seat];
-  const chosen: HeartsCard[] = [];
-  // 1. Always shed the Black Lady first if held.
-  const qs = hand.find(isQueenOfSpades);
-  if (qs) chosen.push(qs);
-  // 2. Void the shortest non-heart suit we can fully empty within our remaining passes —
-  //    a void lets us dump hearts / the Queen later. Repeat while slots remain.
-  let progress = true;
-  while (chosen.length < 3 && progress) {
-    progress = false;
-    const slots = 3 - chosen.length;
-    let bestSuit: Suit | null = null, bestLen = Infinity;
-    for (const su of ["S", "D", "C"] as Suit[]) {
-      const rem = hand.filter((c) => c.suit === su && !chosen.includes(c));
-      if (rem.length >= 1 && rem.length <= slots && rem.length < bestLen) { bestLen = rem.length; bestSuit = su; }
+  const N = state.players;
+  const offset = state.passOffset;
+  const pool = passOrder(state.hands[seat]).slice(0, PASS_POOL);
+  const sets: HeartsCard[][] = []; // sets[0] is the plain top three
+  for (let i = 0; i < pool.length; i++)
+    for (let j = i + 1; j < pool.length; j++)
+      for (let k = j + 1; k < pool.length; k++) sets.push([pool[i], pool[j], pool[k]]);
+
+  const mine = new Set(state.hands[seat].map((c) => c.id));
+  const unseen = buildDeck(N).filter((c) => !mine.has(c.id));
+  const rng = mulberry32((state.seed ^ Math.imul(state.handNo + 1, 0x9e3779b1) ^ Math.imul(seat + 1, 0x85ebca6b)) >>> 0);
+  const root = new HandSim(N);
+  for (const c of buildDeck(N)) root.out[SUIT_INDEX[c.suit]] |= bitOf(c);
+  const sim = new HandSim(N);
+  const world = new Int32Array(N * 4);
+  const give = (w: Int32Array, from: number, to: number, cards: HeartsCard[]) => {
+    for (const c of cards) {
+      const u = SUIT_INDEX[c.suit];
+      if (from >= 0) w[from * 4 + u] &= ~bitOf(c);
+      w[to * 4 + u] |= bitOf(c);
     }
-    if (bestSuit) {
-      for (const c of hand.filter((c) => c.suit === bestSuit && !chosen.includes(c))) chosen.push(c);
-      progress = true;
+  };
+  const lowClub = (w: Int32Array, s: number) => lowest(w[s * 4 + CLUBS]) || 1 << 13;
+  const total = new Float64Array(sets.length);
+  const hs = handSize(N);
+  let alive = sets.map((_, i) => i);
+  for (let d = 0; d < PASS_DEALS + PASS_MORE; d++) {
+    if (d === PASS_DEALS) alive = alive.sort((a, b) => total[a] - total[b] || a - b).slice(0, PASS_KEEP);
+    // Deal the unseen cards, then let every other seat pass its own top three.
+    for (let i = unseen.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [unseen[i], unseen[j]] = [unseen[j], unseen[i]];
+    }
+    world.fill(0);
+    give(world, -1, seat, state.hands[seat]);
+    let next = 0;
+    const passes: HeartsCard[][] = [];
+    for (let s = 0; s < N; s++) {
+      if (s === seat) continue;
+      const hand = unseen.slice(next, (next += hs));
+      give(world, -1, s, hand);
+      passes[s] = passOrder(hand).slice(0, 3);
+    }
+    for (let s = 0; s < N; s++) if (s !== seat) give(world, s, (s + offset) % N, passes[s]);
+    for (const i of alive) {
+      sim.load(root, world);
+      give(sim.hand, seat, (seat + offset) % N, sets[i]);
+      // The lowest club leads the first trick.
+      let lead = 0;
+      for (let s = 1; s < N; s++) if (lowClub(sim.hand, s) < lowClub(sim.hand, lead)) lead = s;
+      sim.leader = lead;
+      sim.finish();
+      total[i] += sim.score(seat);
     }
   }
-  // 3. Fill any remaining slots by danger (high spades → high hearts → high cards).
-  if (chosen.length < 3) {
-    const rest = hand.filter((c) => !chosen.includes(c)).sort((a, b) => danger(b) - danger(a));
-    for (const c of rest) { if (chosen.length >= 3) break; chosen.push(c); }
+  let best = alive[0];
+  for (const i of alive) if (total[i] < total[best] || (total[i] === total[best] && i < best)) best = i;
+  return { type: "pass", seat, cards: sets[best].map((c) => c.id) };
+}
+
+// ---------- playing ----------
+
+// Rollout work per decision, in simulated card plays, and the bounds on the
+// number of deals. Sized so aiMove stays well inside the bot CPU budget (about
+// 1 ms on average, a few ms at worst).
+const PLAY_BUDGET = 120000;
+const MIN_DEALS = 12;
+const MAX_DEALS = 300;
+
+// Legal cards with interchangeable ones merged: two cards of a suit with no
+// unseen card ranked between them win and lose exactly the same tricks (the
+// Q(S) never merges, she carries 13 points).
+function distinctPlays(legal: HeartsCard[], v: SeatView): HeartsCard[] {
+  const sorted = legal.slice().sort((a, b) => SUIT_INDEX[a.suit] - SUIT_INDEX[b.suit] || a.rank - b.rank);
+  const out: HeartsCard[] = [];
+  for (const c of sorted) {
+    const prev = out[out.length - 1];
+    if (prev && prev.suit === c.suit && !isQueenOfSpades(prev) && !isQueenOfSpades(c)) {
+      const between = (bitOf(c) - 1) & ~(bitOf(prev) * 2 - 1);
+      if (!(v.unseen[SUIT_INDEX[c.suit]] & between)) continue;
+    }
+    out.push(c);
   }
-  return { type: "pass", seat, cards: chosen.slice(0, 3).map((c) => c.id) };
+  return out;
 }
 
 function aiPlay(state: HeartsState, seat: number): HeartsMove {
   const legal = legalPlays(state, seat);
   const play = (c: HeartsCard): HeartsMove => ({ type: "play", seat, card: c.id });
-  const lowestBy = (cards: HeartsCard[], key: (c: HeartsCard) => number) =>
-    cards.reduce((lo, c) => (key(c) < key(lo) ? c : lo), cards[0]);
-  const highestBy = (cards: HeartsCard[], key: (c: HeartsCard) => number) =>
-    cards.reduce((hi, c) => (key(c) > key(hi) ? c : hi), cards[0]);
+  if (legal.length === 1) return play(legal[0]);
+  const v = readSeatView(state, seat);
+  if (!v) return play(legal[0]); // unreachable: the log always covers the hand
+  const cands = distinctPlays(legal, v);
+  if (cands.length === 1) return play(cands[0]);
 
-  // Leading: prefer to lead a low non-heart; fall back to the lowest legal card.
-  if (state.currentTrick.length === 0) {
-    const nonHearts = legal.filter((c) => !isHeart(c));
-    const pool = nonHearts.length ? nonHearts : legal;
-    return play(lowestBy(pool, (c) => c.rank));
-  }
+  const N = state.players;
+  const root = rootSim(state, v);
+  const sim = new HandSim(N);
+  const world = new Int32Array(N * 4);
+  const dealer = new Dealer(v);
+  const rng = mulberry32((state.seed ^ Math.imul(state.logSeq + 1, 0x9e3779b1) ^ Math.imul(seat + 1, 0x85ebca6b)) >>> 0);
+  const remaining = (root.tricks - root.trickNo) * N - root.len;
+  const deals = Math.max(MIN_DEALS, Math.min(MAX_DEALS, Math.floor(PLAY_BUDGET / (remaining * cands.length))));
 
-  // Moon defense: if one opponent already holds the Queen (>=13 pts) and ALL points so far, and
-  // we're following a points-carrying trick they're currently winning, overtake as cheaply as we
-  // can to grab the points and break the moon — far better than letting them collect all 26.
-  {
-    const pts = state.points;
-    const others = pts.map((p, i) => ({ i, p })).filter((o) => o.i !== seat);
-    const shooter = others.reduce((a, b) => (b.p > a.p ? b : a), others[0]);
-    const threat = shooter.p >= 13 && pts[seat] === 0
-      && !others.some((o) => o.i !== shooter.i && o.p > 0)
-      && pts.reduce((a, b) => a + b, 0) < 26;
-    if (threat) {
-      const ledSuit = state.currentTrick[0].card.suit;
-      const inLed = state.currentTrick.filter((tp) => tp.card.suit === ledSuit);
-      const curWin = inLed.reduce((hi, tp) => (tp.card.rank > hi.card.rank ? tp : hi), inLed[0]);
-      const trickPts = state.currentTrick.reduce((a, tp) => a + cardPoints(tp.card), 0);
-      const winners = legal.filter((c) => c.suit === ledSuit && c.rank > curWin.card.rank);
-      if (trickPts > 0 && curWin.seat === shooter.i && winners.length) {
-        return play(winners.reduce((lo, c) => (c.rank < lo.rank ? c : lo), winners[0]));
-      }
+  // The policy's own choice (it reads only our hand) breaks ties; it may be a
+  // merged card, so map it to its group's representative (the lowest of it).
+  const pick = root.pick(seat);
+  let preferred = 0;
+  cands.forEach((c, i) => { if (SUIT_INDEX[c.suit] === pick >> 4 && c.rank - 2 <= (pick & 15)) preferred = i; });
+  // Every candidate is scored over the same deals, the policy playing on.
+  const total = new Float64Array(cands.length);
+  for (let d = 0; d < deals; d++) {
+    dealer.deal(rng, world);
+    for (let i = 0; i < cands.length; i++) {
+      const c = cands[i];
+      sim.load(root, world);
+      sim.play(seat, SUIT_INDEX[c.suit], bitOf(c));
+      sim.finish();
+      total[i] += sim.score(seat);
     }
   }
-
-  const ledSuit = state.currentTrick[0].card.suit;
-  const inSuit = legal.filter((c) => c.suit === ledSuit);
-
-  if (inSuit.length) {
-    // Must follow suit. Duck as high as we safely can; if we can't avoid
-    // winning, win as cheaply as possible.
-    const curWin = state.currentTrick
-      .filter((p) => p.card.suit === ledSuit)
-      .reduce((hi, p) => (p.card.rank > hi.card.rank ? p : hi), state.currentTrick[0]);
-    const losing = inSuit.filter((c) => c.rank < curWin.card.rank);
-    if (losing.length) return play(highestBy(losing, (c) => c.rank)); // shed our highest safe card
-    return play(lowestBy(inSuit, (c) => c.rank)); // forced to win — take it cheaply
-  }
-
-  // Void in the led suit: throw away the most dangerous card we're allowed to.
-  return play(highestBy(legal, danger));
+  let best = preferred;
+  for (let i = 0; i < cands.length; i++) if (total[i] < total[best] - 1e-9) best = i;
+  return play(cands[best]);
 }
 
 function aiMove(state: HeartsState, seat: number): HeartsMove {
