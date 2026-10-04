@@ -2453,6 +2453,13 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   border-radius:3px;
 }
 
+/* ls-self / ls-actions always in DOM — hidden outside landscape, shown inside.
+   These defaults must come BEFORE every landscape block below: the blocks show
+   them with plain rules of the same specificity, so a later default would win
+   and hide every lobby / game button on landscape tablets and desktops. */
+.ls-self{ display:none; }
+.ls-actions{ display:none; }
+
 /* ============================================================
    LARGE-SCREEN OPTIMIZATION  (iPad / laptop / desktop)
    ------------------------------------------------------------
@@ -2568,19 +2575,24 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
    table and center the whole stack vertically (the table does NOT grow to fill
    the screen). Portrait iPad and phone landscape are unaffected. */
 @media (min-width:768px) and (min-height:600px) and (orientation:landscape){
-  /* Center the felt + hand + buttons stack vertically in the viewport. */
+  /* Center the felt + hand + buttons stack vertically in the viewport. The
+     column is exactly one screen tall so the felt below can give way. */
   #app:not(:has(.lby-outer)) .table,
   html.is-standalone .table{
     justify-content:center !important;
+    height:100dvh;
   }
-  /* Keep the felt at its current size — flex:none so it does not stretch to
-     fill; the same height the iPad table uses today (100dvh minus the old
-     appbar + bottom reserve), centered horizontally. */
+  /* Keep the felt at its current size — it does not grow to fill; the same
+     height the iPad table uses today (100dvh minus the old appbar + bottom
+     reserve), centered horizontally. It may only SHRINK, when a tall hand
+     (Hearts' pass row, Rummy's fan) plus the button row would otherwise push
+     the buttons off a short screen such as a 1024x768 iPad. */
   #app:not(:has(.lby-outer)) .table .felt-frame,
   html.is-standalone .table .felt-frame,
   .table .felt-frame{
-    flex:none !important;
-    height:calc(100dvh - 320px) !important;
+    flex:0 1 calc(100dvh - 320px) !important;
+    height:auto !important;
+    min-height:0 !important;
     margin:0 auto !important;
   }
 
@@ -2616,6 +2628,11 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .appbar-left{ order:10; flex:0 0 auto !important; margin-left:auto; display:flex; align-items:center; min-width:0; }
   .ls-actions{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
   .ls-actions .hint{ display:none !important; }
+  /* Lobby: the editable name block rides in the appbar beside Tutorial / Deal
+     (mobile parity — the selfbar that holds it in portrait is hidden here). */
+  .appbar:has(.lby-action-row) .ls-self{ display:flex !important; align-items:center; gap:8px; min-width:0; }
+  .appbar:has(.lby-action-row) .ls-self .me-pts{ display:none; }
+  .appbar:has(.lby-action-row) .ls-self .lby-name-row{ margin:0; }
   /* Align the Log/Leave controls to the felt's left edge and the A/B score
      pills / game buttons to its right edge (the felt is centered and capped at
      --lg-table-max, so each side gap is (100dvw - cap)/2). */
@@ -2814,10 +2831,6 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   font-size:11.5px; color:var(--ink-soft); pointer-events:none;
 }
 
-/* ls-self / ls-actions always in DOM — hidden outside landscape, shown inside */
-.ls-self{ display:none; }
-.ls-actions{ display:none; }
-
 /* ============================================================
    Mobile landscape — hide player bar, peek hand at bottom
    ============================================================ */
@@ -2962,6 +2975,21 @@ button.hlj-chip.steal{font-size:9px;font-family:"Hanken Grotesk",sans-serif;font
   .appbar:has(.hlj-scores) .hlj-score-pill.tB{
     position:fixed !important; z-index:60; margin:0 !important;
     bottom:16px; left:var(--hlj-gut); top:auto; right:auto;
+  }
+  /* Hearts landscape: the wide 13-card fan peeks over the bottom appbar and
+     would bury Log / Leave, so tuck them into the same top gutters as HLJ
+     (Leave top-left, Log top-right). Pass 3 stays in the bottom row. */
+  .table:has(.hearts-pod){ --hlj-gut: calc(100% - max(48px, 7vw) + 3px); }
+  .table:has(.hearts-pod) .appbar [data-action="leave"],
+  .table:has(.hearts-pod) .appbar [data-action="toggle-log"]{
+    position:fixed !important; z-index:60; margin:0 !important;
+    min-height:0 !important; padding:3px 6px !important; font-size:10px !important;
+  }
+  .table:has(.hearts-pod) .appbar [data-action="leave"]{
+    top:14px; right:var(--hlj-gut); left:auto; bottom:auto;
+  }
+  .table:has(.hearts-pod) .appbar [data-action="toggle-log"]{
+    top:14px; left:var(--hlj-gut); right:auto; bottom:auto;
   }
 
   /* Lobby landscape: flatten the room tag, controls and action buttons into a
