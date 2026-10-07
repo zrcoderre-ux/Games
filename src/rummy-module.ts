@@ -2,24 +2,30 @@
 //
 // Pure and runtime-independent (imports only Suit/SUITS from engine.ts and the
 // Game contract): no PartyServer, no I/O, randomness only via a seeded PRNG
-// threaded through state.seed, so it is deterministic, testable, and reusable
-// on the client for single-player.
+// threaded through state.seed (plus any fresh entropy the room folds in, see
+// reseed), so it is deterministic, testable, and reusable on the client for
+// single-player.
 //
-// SCOPE (remaining extension point: wild/joker cards, noted inline):
-//   - 2-8 players, NO wild/joker cards. One 52-card deck for 2-4 players, two
-//     decks (104 cards) for 5-8 — every card has a unique id, so duplicates
-//     across decks are unambiguous. With two decks a set may exceed four cards
-//     and repeat a suit; a run still forbids duplicate ranks.
-//   - Scoring: A = 15, 10/J/Q/K = 10, 2-9 = pip value. Melded cards score for
-//     whoever placed them (lay-offs score for the layer, not the meld owner);
-//     cards left in hand at round end score against you.
+// SCOPE:
+//   - 2-8 players. One deck (52 cards + 2 wild jokers) for 2-4 players, two
+//     decks (108 cards) for 5-8 — every card has a unique id, so duplicates
+//     across decks are unambiguous. A set is 3-4 cards of one rank in distinct
+//     suits, even with two decks; a run is 3+ cards of one suit in sequence
+//     (Ace low or high, never both). Jokers fill in for any card.
+//   - Scoring: A = 15, 10/J/Q/K = 10, 2-9 = pip value, joker = 15. Melded
+//     cards score for whoever placed them (lay-offs score for the layer, not
+//     the meld owner); cards left in hand at round end score against you.
 //   - A round ends when a player goes out (empties their hand) OR the stock is
-//     exhausted; then the next round is dealt automatically. Game ends when a
-//     player reaches `target` (default 500); highest total wins.
+//     exhausted; the next round is dealt after the handComplete pause. The game
+//     ends when one player alone leads with at least `target` (default 500); a
+//     tie for that lead is played out with another round.
 //
 // A TURN is several moves by the same seat (seatToAct stays put until a discard
-// advances it): draw -> any number of meld/layoff -> discard. A card drawn from
-// the discard pile MUST be melded or laid off before that turn's discard.
+// advances it): draw -> any number of meld/layoff -> discard. Taking just the
+// top discard carries no obligation (it may even go straight back). Taking a
+// deeper card sweeps every card above it too, and that deepest card MUST be
+// melded or laid off before the turn's discard. With requireDiscard a player
+// must go out by discarding, so no meld or layoff may empty the hand.
 
 import { SUITS, type Suit } from "./engine.ts";
 import type { Game, RoomMeta, LogEntry } from "./game.ts";
@@ -62,8 +68,31 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function shuffle<T>(items: T[], seed: number): { shuffled: T[]; nextSeed: number } {
-  const rng = mulberry32(seed);
+// ---------- entropy-seeded PRNG (sfc32) ----------
+// 32 bits of seed can be brute-forced from the cards a player sees, so live
+// rooms fold fresh entropy into every deal (see reseed) and shuffle with this
+// 128-bit generator instead. (Also duplicated from the HLJ engine.)
+
+function sfc32(a: number, b: number, c: number, d: number): () => number {
+  const next = () => {
+    a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+    let t = (a + b) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    d = (d + 1) | 0;
+    t = (t + d) | 0;
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < 15; i++) next(); // mix the seed words before use
+  return next;
+}
+
+// With entropy (4 uint32 words) the shuffle draws from sfc32; without, from the
+// seed alone, so tests and harnesses replay exactly.
+function shuffle<T>(items: T[], seed: number, entropy?: number[]): { shuffled: T[]; nextSeed: number } {
+  const rng = entropy ? sfc32(seed ^ entropy[0], entropy[1], entropy[2], entropy[3]) : mulberry32(seed);
   const a = items.slice();
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -75,9 +104,13 @@ function shuffle<T>(items: T[], seed: number): { shuffled: T[]; nextSeed: number
 
 // ---------- meld validity ----------
 
-// A run treats an Ace as low (A-2-3) OR high (Q-K-A), never wrapping (K-A-2).
+// A run treats an Ace as low (A-2-3) OR high (Q-K-A), never wrapping (K-A-2)
+// and never both at once, so the longest run is 13 cards (A-K or 2-A).
 // Jokers are wild: they fill internal gaps and extend either end. A run must
 // still contain at least one natural card.
+// Slots one Ace reading allows: ace low covers A(1)..K(13), ace high 2..A(14).
+const minSlot = (aceRank: number): number => (aceRank === 1 ? 1 : 2);
+const maxSlot = (aceRank: number): number => (aceRank === 1 ? 13 : 14);
 function isRun(cards: RummyCard[]): boolean {
   if (cards.length < 3) return false;
   const naturals = cards.filter((c) => !c.joker);
@@ -93,8 +126,7 @@ function isRun(cards: RummyCard[]): boolean {
     const gaps = high - low + 1 - ranks.length; // interior slots a joker must fill
     if (gaps < 0 || gaps > jokers) continue;
     const extra = jokers - gaps; // leftover jokers extend the ends
-    if (high - low + 1 + extra > 14) continue; // can't grow past a 14-rank span
-    if ((low - 1) + (14 - high) < extra) continue; // not enough room at the ends
+    if ((low - minSlot(aceRank)) + (maxSlot(aceRank) - high) < extra) continue; // not enough room at the ends
     return true;
   }
   return false;
@@ -142,44 +174,91 @@ function orderRunCards(cards: RummyCard[]): RummyCard[] {
 
 const validMeld = (cards: RummyCard[]): boolean => isSet(cards) || isRun(cards);
 
-// Can `target` be the bottom card of an immediate meld, given a pool of cards
-// available this turn (used to validate a discard-pile draw)?
-function canRunWith(pool: RummyCard[], target: RummyCard): boolean {
-  if (target.joker) return false;
-  const inSuit = pool.filter((c) => c.suit === target.suit && !c.joker);
-  const jokers = pool.filter((c) => c.joker).length;
+// ---------- the forced card (deep discard pickup) ----------
+// Sweeping the pile below its top card obliges the player to meld or lay off
+// that deepest card before discarding. The pickup, and every meld or layoff
+// made while the card is pending, is allowed only if some single move can
+// still put it down — and, with requireDiscard, leave a card to discard. So a
+// seat with a forced card always has a legal move.
+
+// A three-card meld of `f` plus two of `others`, or null.
+function trioWith(others: RummyCard[], f: RummyCard): RummyCard[] | null {
+  if (f.joker) {
+    // A joker melds with any two related naturals, or a second joker and any natural.
+    const nats = others.filter((c) => !c.joker);
+    const jk = others.find((c) => c.joker);
+    if (jk && nats.length) return [f, jk, nats[0]];
+    for (let i = 0; i < nats.length; i++)
+      for (let j = i + 1; j < nats.length; j++) if (validMeld([f, nats[i], nats[j]])) return [f, nats[i], nats[j]];
+    return null;
+  }
+  const pool = [f, ...others];
+  const set = findSetContaining(pool, f)?.slice(0, 3) ?? null;
+  if (set && isSet(set)) return set;
+  const run = findRunContaining(pool, f);
+  return run && run.length === 3 && isRun(run) ? run : null;
+}
+
+// The fewest `pool` cards that let `f` join the run `run`: none if it fits
+// alone, else naturals of the suit on the ranks between the run and f, then
+// jokers. null if it can't reach the run.
+function runBridge(run: RummyCard[], f: RummyCard, pool: RummyCard[]): RummyCard[] | null {
+  if (isRun([...run, f])) return [];
+  const nat = run.filter((c) => !c.joker);
+  if (f.joker || !nat.length || nat[0].suit !== f.suit) return null;
+  const runJokers = run.length - nat.length;
+  let best: RummyCard[] | null = null;
   for (const aceRank of [1, 14]) {
-    const ranks = new Set(inSuit.map((c) => (c.rank === 14 ? aceRank : c.rank)));
-    const tr = target.rank === 14 ? aceRank : target.rank;
-    ranks.add(tr);
-    for (let start = tr - 2; start <= tr; start++) {
-      let ok = true, need = 0;
-      for (let k = 0; k < 3; k++) { const r = start + k; if (r < 1 || r > 14) { ok = false; break; } if (!ranks.has(r)) need++; }
-      if (ok && need <= jokers) return true;
+    const eff = (c: RummyCard) => (c.rank === 14 ? aceRank : c.rank);
+    const ranks = new Set(nat.map(eff));
+    if (ranks.has(eff(f))) continue; // a run can't hold a rank twice
+    ranks.add(eff(f));
+    const lo = Math.min(...ranks), hi = Math.max(...ranks);
+    const holes: number[] = [];
+    for (let r = lo + 1; r < hi; r++) if (!ranks.has(r)) holes.push(r);
+    const need = holes.length - runJokers; // the run's own jokers fill the rest
+    const bridge: RummyCard[] = [];
+    for (const r of holes) {
+      if (bridge.length >= need) break;
+      const c = pool.find((x) => !x.joker && x.suit === f.suit && eff(x) === r);
+      if (c) bridge.push(c);
+    }
+    for (const j of pool) if (j.joker && bridge.length < need) bridge.push(j);
+    if (bridge.length < need || !isRun([...run, f, ...bridge])) continue;
+    if (!best || bridge.length < best.length) best = bridge;
+  }
+  return best;
+}
+
+// One-move ways to put `f` down from `hand` (which holds it) onto `melds`: a
+// new three-card meld (meldId null) or a layoff, each listing the hand cards
+// it plays.
+function forcedPlays(hand: RummyCard[], f: RummyCard, melds: Meld[]): { meldId: number | null; cards: RummyCard[] }[] {
+  const others = hand.filter((c) => c.id !== f.id);
+  const out: { meldId: number | null; cards: RummyCard[] }[] = [];
+  const trio = trioWith(others, f);
+  if (trio) out.push({ meldId: null, cards: trio });
+  for (const m of melds) {
+    if (m.kind === "set") {
+      if (isSet([...m.cards, f])) out.push({ meldId: m.id, cards: [f] });
+    } else {
+      const bridge = runBridge(m.cards, f, others);
+      if (bridge) out.push({ meldId: m.id, cards: [f, ...bridge] });
     }
   }
-  return false;
+  return out;
 }
 
-function canFormMeldWith(pool: RummyCard[], target: RummyCard): boolean {
-  if (target.joker) return false;
-  // Set check: target + other same-rank cards with distinct suits + jokers.
-  // Each suit may appear at most once, so count distinct other suits available.
-  const otherSuits = new Set(pool.filter((c) => !c.joker && c.rank === target.rank && c.suit !== target.suit).map((c) => c.suit));
-  const jokers = pool.filter((c) => c.joker).length;
-  if (1 + otherSuits.size + jokers >= 3) return true;
-  return canRunWith(pool, target);
-}
-
-function canLayoff(state: RummyState, target: RummyCard): boolean {
-  return state.melds.some((m) =>
-    m.kind === "set" ? isSet([...m.cards, target]) : isRun([...m.cards, target]),
-  );
-}
+// Can `f` still be put down in one move (keeping a card back to discard when
+// requireDiscard is on)?
+const forcedPlayable = (hand: RummyCard[], f: RummyCard, melds: Meld[], requireDiscard: boolean): boolean =>
+  forcedPlays(hand, f, melds).some((p) => !requireDiscard || p.cards.length < hand.length);
 
 // ---------- state, moves, config, view ----------
 
-export type Meld = { id: number; kind: "set" | "run"; cards: RummyCard[] };
+// `owner` is the seat that put the meld down; it stays put when others lay off
+// onto it (cards[0] of a run changes as cards are laid off at its low end).
+export type Meld = { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] };
 
 export type RummyState = {
   players: number;
@@ -208,6 +287,13 @@ export type RummyState = {
   nextMeldId: number;
   log: LogEntry[]; // authoritative move log
   logSeq: number; // monotonic id source for log entries
+
+  // Fresh entropy (4 uint32 words) folded into the next deal's shuffle; absent
+  // in seed-only (deterministic) play. See reseed.
+  entropy?: number[];
+  // True from createGame until the first reseed: the opening hand was shuffled
+  // from the seed alone, so that reseed deals it again.
+  seedOnlyDeal?: boolean;
 };
 
 export type RummyMove =
@@ -251,6 +337,7 @@ export type RummyView = {
   lastRound: { delta: number[]; outSeat: number | null; meldedPts: number[]; heldPts: number[]; heldCards: RummyCard[][]; lastMelds: { id: number; kind: "set" | "run"; owner: number; cards: RummyCard[] }[] } | null;
   requireDiscard: boolean;
   botDifficulty: number[]; // per-seat difficulty (public, for lobby display)
+  tiebreak: boolean; // target reached but the lead is shared: playing on until one seat leads alone
   log: LogEntry[]; // authoritative move log (public)
 };
 
@@ -259,7 +346,7 @@ export type RummyView = {
 const handSize = (players: number): number => (players === 2 ? 13 : 7);
 
 function dealRound(prev: RummyState): RummyState {
-  const { shuffled, nextSeed } = shuffle(buildDeck(decksFor(prev.players)), prev.seed);
+  const { shuffled, nextSeed } = shuffle(buildDeck(decksFor(prev.players)), prev.seed, prev.entropy);
   const hands: RummyCard[][] = Array.from({ length: prev.players }, () => []);
   const hs = handSize(prev.players);
   let i = 0;
@@ -283,15 +370,26 @@ function dealRound(prev: RummyState): RummyState {
   };
 }
 
+// Per-seat bot level 0-3. Anything else (missing, out of range, not a whole
+// number) becomes 2 (Hard), so a bad lobby value can't break a bot.
+const botLevels = (players: number, raw: unknown): number[] =>
+  Array.from({ length: players }, (_, i) => {
+    const d = Array.isArray(raw) ? raw[i] : undefined;
+    return Number.isInteger(d) && d >= 0 && d <= 3 ? d : 2;
+  });
+
+// Validate the lobby options (throws with a message the lobby can show).
 function createGame(config: RummyConfig, seed: number): RummyState {
-  if (config.players < 2 || config.players > 8) throw new Error(`Unsupported player count: ${config.players}`);
-  if (config.target <= 0) throw new Error("Target must be positive");
-  // Default all seats to Hard (2 = Aggressive) when not specified.
-  const botDifficulty = Array.from({ length: config.players }, (_, i) => config.botDifficulty?.[i] ?? 2);
+  const players = config.players;
+  if (!Number.isInteger(players) || players < 2 || players > 8) throw new Error(`Unsupported player count: ${players}`);
+  const target = config.target === undefined ? 500 : config.target;
+  if (!Number.isInteger(target) || target < 1 || target > 10000) throw new Error("Target must be a whole number from 1 to 10000");
+  const requireDiscard = config.requireDiscard ?? false;
+  if (typeof requireDiscard !== "boolean") throw new Error("Must discard to go out must be on or off");
   const base: RummyState = {
-    players: config.players,
-    target: config.target,
-    requireDiscard: config.requireDiscard ?? false,
+    players,
+    target,
+    requireDiscard,
     seed,
     phase: "playing",
     dealerSeat: 0,
@@ -303,16 +401,46 @@ function createGame(config: RummyConfig, seed: number): RummyState {
     melds: [],
     cardOwner: {},
     mustMeldCardId: null,
-    scores: Array(config.players).fill(0),
+    scores: Array(players).fill(0),
     winner: null,
     lastRound: null,
-    botDifficulty,
+    botDifficulty: botLevels(players, config.botDifficulty),
     nextMeldId: 0,
     log: [],
     logSeq: 0,
   };
   const dealt = dealRound(base);
-  return attachRummy(dealt, [], 0, [{ seat: dealt.dealerSeat, msg: "deals the first hand" }]);
+  return { ...attachRummy(dealt, [], 0, [{ seat: dealt.dealerSeat, msg: "deals the first hand" }]), seedOnlyDeal: true };
+}
+
+// Fold fresh entropy (4 uint32 words from a CSPRNG) into the state: every later
+// deal shuffles from it rather than from the seed chain, so no deal can be
+// worked out from cards seen earlier. The room calls this right after
+// createGame — before anyone has seen the opening hand, which was shuffled
+// from the 32-bit seed alone — so that first call deals the hand again.
+function reseed(state: RummyState, entropy: number[]): RummyState {
+  if (!Array.isArray(entropy) || entropy.length < 4) return state;
+  const next: RummyState = { ...state, entropy: entropy.slice(0, 4).map((w) => w >>> 0) };
+  const untouched = state.phase === "playing" && state.logSeq === 1 && state.lastRound === null;
+  if (!state.seedOnlyDeal || !untouched) return next;
+  return { ...dealRound(next), seedOnlyDeal: false };
+}
+
+// Saved games from older deploys: fill in fields added since (meld owners,
+// the move log) and normalize the options.
+function migrate(raw: unknown): RummyState {
+  const s = raw as RummyState;
+  if (!s || typeof s !== "object" || !Number.isInteger(s.players) || s.players < 2 || s.players > 8) throw new Error("Not a Rummy 500 game");
+  const log = Array.isArray(s.log) ? s.log : [];
+  return {
+    ...s,
+    // Older melds took their owner from cards[0]; that's the best guess left.
+    melds: (s.melds ?? []).map((m) => ({ ...m, owner: m.owner ?? s.cardOwner?.[m.cards[0]?.id] ?? -1 })),
+    requireDiscard: s.requireDiscard === true,
+    botDifficulty: botLevels(s.players, s.botDifficulty),
+    log,
+    logSeq: Number.isInteger(s.logSeq) ? s.logSeq : log.reduce((m, e) => Math.max(m, e.id), 0),
+  };
 }
 
 // ---------- move log ----------
@@ -362,7 +490,11 @@ function rummyEntries(prev: RummyState, next: RummyState, move: RummyMove): Omit
     if (lr.outSeat != null) out.push({ seat: lr.outSeat, msg: `goes out (+${lr.delta[lr.outSeat]} this round)` });
     else out.push({ seat: null, msg: "Stock exhausted \u2014 round scored" });
     if (next.phase === "gameOver" && next.winner !== null) out.push({ seat: next.winner, msg: "wins the game!" });
-    else if (next.dealerSeat !== prev.dealerSeat) out.push({ seat: next.dealerSeat, msg: "deals a new round" });
+    else if (next.dealerSeat !== prev.dealerSeat) {
+      const max = Math.max(...next.scores); // past the target without a winner: a tie
+      if (max >= next.target) out.push({ seat: null, msg: `Tied for the lead at ${max} \u2014 another round decides` });
+      out.push({ seat: next.dealerSeat, msg: "deals a new round" });
+    }
   }
 
   return out;
@@ -377,17 +509,24 @@ function meldedValue(state: RummyState, seat: number): number {
 }
 const heldValue = (state: RummyState, seat: number): number =>
   state.hands[seat].reduce((a, c) => a + cardValue(c), 0);
+// Suit, then rank, jokers last.
+const cardOrder = (a: RummyCard, b: RummyCard): number =>
+  Number(!!a.joker) - Number(!!b.joker) || SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit) || a.rank - b.rank || a.id - b.id;
 
 function endRound(state: RummyState, outSeat: number | null): RummyState {
   const meldedPts = state.scores.map((_, s) => meldedValue(state, s));
   const heldPts = state.scores.map((_, s) => heldValue(state, s));
   const delta = state.scores.map((_, s) => meldedPts[s] - heldPts[s]);
-  const heldCards = state.hands.map((h) => [...h]);
+  // Held cards are shown sorted, so they reveal nothing of the deal order.
+  const heldCards = state.hands.map((h) => [...h].sort(cardOrder));
   const scores = state.scores.map((v, s) => v + delta[s]);
-  const lastMelds = state.melds.map((m) => ({ ...m, owner: state.cardOwner[m.cards[0]?.id] ?? -1 }));
+  const lastMelds = state.melds.map((m) => ({ ...m }));
   const lastRound = { delta, outSeat, meldedPts, heldPts, heldCards, lastMelds };
+  // The game ends once ONE player leads with at least the target. A tie for
+  // that lead isn't broken by seat order: another round is played, and so on
+  // until a single leader stands at or past the target.
   const max = Math.max(...scores);
-  if (max >= state.target) {
+  if (max >= state.target && scores.filter((v) => v === max).length === 1) {
     return { ...state, scores, phase: "gameOver", winner: scores.indexOf(max), lastRound };
   }
   const nextDealer = (state.dealerSeat + 1) % state.players;
@@ -414,10 +553,8 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
       // The top card may always be taken, even if it can't be played this turn.
       if (idx === state.discard.length - 1) return true;
       // Taking deeper sweeps everything above too; the bottom card taken must be
-      // immediately meldable/layable (with hand + everything taken).
-      const taken = state.discard.slice(idx);
-      const target = state.discard[idx];
-      return canFormMeldWith([...hand, ...taken], target) || canLayoff(state, target);
+      // playable in one move from hand + everything taken (see forcedPlayable).
+      return forcedPlayable([...hand, ...state.discard.slice(idx)], state.discard[idx], state.melds, state.requireDiscard);
     }
     case "meld": {
       if (state.turnPhase !== "play" || !move.cards || move.cards.length < 3) return false;
@@ -426,19 +563,16 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
       if (objs.some((o) => !o)) return false;
       if (!validMeld(objs as RummyCard[])) return false;
       // If a deep-pile pickup is outstanding, this meld must not strand the forced card —
-      // after removing these cards from hand the forced card must still be meldable or
-      // layable (on any existing meld OR on the meld we're about to place).
+      // afterwards it must still be playable in one move (on any existing meld OR on
+      // the meld we're about to place).
       if (state.mustMeldCardId != null && !move.cards.includes(state.mustMeldCardId)) {
         const mustCard = hand.find((c) => c.id === state.mustMeldCardId);
         if (mustCard) {
           const remainHand = hand.filter((c) => !move.cards.includes(c.id));
           const newMeldCards = objs as RummyCard[];
           const newMeldKind: "set" | "run" = isSet(newMeldCards) ? "set" : "run";
-          const allMelds = [...state.melds, { id: -1, kind: newMeldKind, cards: newMeldCards }];
-          const canStillPlay =
-            canFormMeldWith(remainHand, mustCard) ||
-            allMelds.some((m) => m.kind === "set" ? isSet([...m.cards, mustCard]) : isRun([...m.cards, mustCard]));
-          if (!canStillPlay) return false;
+          const allMelds = [...state.melds, { id: -1, kind: newMeldKind, owner: move.seat, cards: newMeldCards }];
+          if (!forcedPlayable(remainHand, mustCard, allMelds, state.requireDiscard)) return false;
         }
       }
       // requireDiscard: block going out via meld alone (must keep ≥1 card to discard)
@@ -465,10 +599,7 @@ function isLegal(state: RummyState, move: RummyMove): boolean {
           const remainHand = hand.filter((c) => !move.cards.includes(c.id));
           const updatedMeldCards = m.kind === "run" ? orderRunCards(combined) : combined;
           const updatedMelds = state.melds.map((x) => x.id === move.meldId ? { ...x, cards: updatedMeldCards } : x);
-          const canStillPlay =
-            canFormMeldWith(remainHand, mustCard) ||
-            updatedMelds.some((mx) => mx.kind === "set" ? isSet([...mx.cards, mustCard]) : isRun([...mx.cards, mustCard]));
-          if (!canStillPlay) return false;
+          if (!forcedPlayable(remainHand, mustCard, updatedMelds, state.requireDiscard)) return false;
         }
       }
       // requireDiscard: block going out via layoff alone
@@ -524,7 +655,7 @@ function applyMoveCore(state: RummyState, move: RummyMove): RummyState {
       const objs = move.cards.map((id) => state.hands[seat].find((c) => c.id === id)!);
       const newHand = state.hands[seat].filter((c) => !move.cards.includes(c.id));
       const kind = isSet(objs) ? "set" : "run";
-      const meld: Meld = { id: state.nextMeldId, kind, cards: kind === "run" ? orderRunCards(objs) : objs };
+      const meld: Meld = { id: state.nextMeldId, kind, owner: seat, cards: kind === "run" ? orderRunCards(objs) : objs };
       const cardOwner = { ...state.cardOwner };
       for (const id of move.cards) cardOwner[id] = seat;
       const ns: RummyState = {
@@ -591,26 +722,33 @@ function legalMoves(state: RummyState): RummyMove[] {
     // Whole-pile pickup: any non-top card is legal if it can be immediately melded/laid off
     // using the hand plus all cards swept above it.
     for (let i = 0; i < state.discard.length - 1; i++) {
-      const target = state.discard[i];
-      const taken = state.discard.slice(i);
-      if (canFormMeldWith([...hand, ...taken], target) || canLayoff(state, target))
-        moves.push({ type: "drawDiscard", seat, cardId: target.id });
+      const move: RummyMove = { type: "drawDiscard", seat, cardId: state.discard[i].id };
+      if (isLegal(state, move)) moves.push(move);
     }
     return moves;
   }
 
+  moves.push(...forcedMoves(state, seat)); // always one, while a forced card is pending
   const set = findSet(hand);
   if (set) moves.push({ type: "meld", seat, cards: set.map((c) => c.id) });
   const run = findRun(hand);
   if (run) moves.push({ type: "meld", seat, cards: run.map((c) => c.id) });
   for (const m of state.melds)
-    for (const c of hand) {
-      const combined = [...m.cards, c];
-      if (m.kind === "set" ? isSet(combined) : isRun(combined))
-        moves.push({ type: "layoff", seat, meldId: m.id, cards: [c.id] });
-    }
-  if (state.mustMeldCardId == null) for (const c of hand) moves.push({ type: "discard", seat, cardId: c.id });
-  return moves;
+    for (const c of hand) moves.push({ type: "layoff", seat, meldId: m.id, cards: [c.id] });
+  for (const c of hand) moves.push({ type: "discard", seat, cardId: c.id });
+  return moves.filter((m) => isLegal(state, m));
+}
+
+// The legal moves that put down the pending forced card, if any.
+function forcedMoves(state: RummyState, seat: number): RummyMove[] {
+  const hand = state.hands[seat];
+  const mc = hand.find((c) => c.id === state.mustMeldCardId);
+  if (!mc) return [];
+  const moves: RummyMove[] = forcedPlays(hand, mc, state.melds).map((p) => {
+    const cards = p.cards.map((c) => c.id);
+    return p.meldId == null ? { type: "meld", seat, cards } : { type: "layoff", seat, meldId: p.meldId, cards };
+  });
+  return moves.filter((m) => isLegal(state, m));
 }
 
 // ---------- redaction ----------
@@ -638,11 +776,12 @@ function redact(state: RummyState, seat: number | null, meta: RoomMeta): RummyVi
     handCounts: state.hands.map((h) => h.length),
     stockCount: state.stock.length,
     discard: state.discard,
-    melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: state.cardOwner[m.cards[0].id] ?? -1, cards: m.cards })),
+    melds: state.melds.map((m) => ({ id: m.id, kind: m.kind, owner: m.owner, cards: m.cards })),
     mustMeldCardId: yours ? state.mustMeldCardId : null,
     lastRound: state.lastRound,
     requireDiscard: state.requireDiscard,
     botDifficulty: state.botDifficulty,
+    tiebreak: state.phase !== "gameOver" && Math.max(...state.scores) >= state.target,
     log: state.log,
   };
 }
@@ -672,67 +811,75 @@ function lobbyView(config: RummyConfig, seat: number | null, meta: RoomMeta): Ru
     melds: [],
     mustMeldCardId: null,
     lastRound: null,
-    requireDiscard: config.requireDiscard ?? false,
-    botDifficulty: Array.from({ length: players }, (_, i) => config.botDifficulty?.[i] ?? 2),
+    requireDiscard: config.requireDiscard === true,
+    botDifficulty: botLevels(players, config.botDifficulty),
+    tiebreak: false,
     log: [],
   };
 }
 
 // ---------- heuristic AI ----------
-// Four personalities, assigned by seat index (repeating mod 4 for 5+ players).
-// Parameters control aggression when evaluating deep discard pickups and
-// end-game shedding. The same core logic runs for all; only the weights differ.
+// One evaluation engine drives every difficulty level. Each decision scores a
+// whole-turn outcome on a single points scale — points banked this turn plus
+// the expected future worth of the cards still held — so drawing, melding and
+// discarding all pull in the same direction:
+//
+//   * handValue() estimates, card by card, the chance a held card gets melded
+//     before the round ends (sets, runs, extensions of table runs, wild jokers,
+//     needed cards visible in the discard pile). The chance comes from the
+//     cards still unseen BY THIS SEAT and an empirical horizon driven by the
+//     opponents' hand sizes. A card that will likely meld is worth +value, one
+//     likely to be caught in hand -value.
+//   * planTurn() searches which melds / layoffs to put down this turn; going
+//     out is worth the points the opponents are expected to be caught holding.
+//   * feedRisk() prices a discard by how likely an opponent can use it — meld
+//     it, lay it off, or use it to sweep the pile (sweepRisk) — from the unseen
+//     cards and the cards they publicly picked up from the pile.
+//   * chooseDraw() compares the expected value of an unseen stock card with
+//     taking the top discard or sweeping deeper into the pile.
+//
+// Honesty: a bot reads only its own hand and public information (table melds,
+// discard pile, hand/stock counts, the move log). Cards it cannot see are
+// treated as equally likely to be anywhere it cannot see.
+//
+// Measured with src/rummy.battle.ts (paired seeds, candidate vs a baseline).
 
-type AiPersonality = {
-  /** Minimum net gain (pts) required to prefer a deep pickup over drawing stock. */
-  pickupThreshold: number;
-  /**
-   * How much of the held-card penalty is discounted early in the round (0–1).
-   * 0 = no discount, 1 = ignore penalty entirely when stock is full.
-   * Discount fades linearly to zero as the stock empties.
-   */
-  earlyDiscount: number;
-  /** Consider "endgame" when min opponent hand count falls to this. */
-  endgameHandSize: number;
-  /**
-   * Multiplier on opponent-danger score when deciding what to discard.
-   * Low = more willing to dump dangerous cards for the point reduction.
-   */
-  dangerWeight: number;
-  /**
-   * Probability [0,1] of making a suboptimal choice on any given decision.
-   * Applied to discard selection and draw choices; produces human-like imperfection.
-   */
+// Per-difficulty knobs. The 0-3 encoding (state.botDifficulty) is persisted in
+// rooms and shown in the lobby, so it must stay stable.
+type AiLevel = {
+  /** Scales the empirical number of future draws (how patient the bot is). */
+  horizonScale: number;
+  /** Weight on an opponent's expected gain from our discard. */
+  feedWeight: number;
+  /** Weight on discards that would let an opponent sweep the pile (see sweepRisk). */
+  sweepWeight: number;
+  /** Deepest discard-pile pickup considered, in cards taken (sweeping the pile is the biggest skill). */
+  pickupDepth: number;
+  /** Probability of a deliberately non-best discard (human-like imperfection). */
   misplayRate: number;
 };
 
-const PERSONALITIES: AiPersonality[] = [
-  // 0 · Balanced — reliable execution, moderate risk tolerance
-  { pickupThreshold: 6,  earlyDiscount: 0.68, endgameHandSize: 3, dangerWeight: 1.8, misplayRate: 0.03 },
-  // 1 · Aggressive — highest pile appetite, sharpest execution, rarely misplays
-  { pickupThreshold: 3,  earlyDiscount: 0.76, endgameHandSize: 2, dangerWeight: 3,   misplayRate: 0.01 },
-  // 2 · Conservative — very selective pickups, strongest danger avoidance, patient
-  { pickupThreshold: 9,  earlyDiscount: 0.65, endgameHandSize: 5, dangerWeight: 3.5, misplayRate: 0.02 },
-  // 3 · Opportunist — erratic: swings between brilliance and blunder
-  { pickupThreshold: 5,  earlyDiscount: 0.60, endgameHandSize: 4, dangerWeight: 1.2, misplayRate: 0.05 },
+const AI_LEVELS: AiLevel[] = [
+  // 0 · Easy: short pile pickups only, ignores what its discards feed, slips often
+  { horizonScale: 1, feedWeight: 0, sweepWeight: 0, pickupDepth: 2, misplayRate: 0.2 },
+  // 1 · Medium: modest pickups, light discard caution, slips often
+  { horizonScale: 1, feedWeight: 1, sweepWeight: 0, pickupDepth: 3, misplayRate: 0.2 },
+  // 2 · Hard: the full evaluation, but sweeps at most 8 cards and slips now and then
+  { horizonScale: 2.4, feedWeight: 1.5, sweepWeight: 0.3, pickupDepth: 8, misplayRate: 0.2 },
+  // 3 · Expert: the full engine
+  { horizonScale: 2.4, feedWeight: 1.5, sweepWeight: 0.3, pickupDepth: 99, misplayRate: 0 },
 ];
 
-// Difficulty → personality index mapping.
-// 0=Easy→Conservative, 1=Medium→Balanced, 2=Hard→Aggressive, 3=Expert→Opportunist
-const DIFFICULTY_TO_PERSONALITY = [2, 0, 1, 3] as const;
+// Points an opponent gains beyond the card itself when they can use our
+// discard (tempo toward going out).
+const FEED_TEMPO = 4;
+// Chance credited for a needed card sitting on top of the discard pile (it
+// fades with depth): we may sweep it next turn if nobody else does.
+const PILE_OUT = 0.5;
 export const DIFFICULTY_LABELS = ["Easy", "Medium", "Hard", "Expert"] as const;
 
-function getPersonality(seat: number, state: RummyState): AiPersonality {
-  const difficulty = state.botDifficulty?.[seat] ?? 2;
-  return PERSONALITIES[DIFFICULTY_TO_PERSONALITY[difficulty]];
-}
-
-// 0 = very start of round, 1 = stock exhausted.
-function roundProgress(state: RummyState): number {
-  const deckSize = 54 * decksFor(state.players); // 54 = 52 naturals + 2 jokers
-  const hs = handSize(state.players);
-  const initialStock = Math.max(1, deckSize - state.players * hs - 1);
-  return Math.min(1, Math.max(0, 1 - state.stock.length / initialStock));
+function aiLevel(state: RummyState, seat: number): AiLevel {
+  return AI_LEVELS[botLevels(state.players, state.botDifficulty)[seat] ?? 2];
 }
 
 // ---------- deterministic per-decision RNG ----------
@@ -743,135 +890,9 @@ function aiRng(state: RummyState, seat: number): () => number {
   return mulberry32(seed);
 }
 
-// ---------- opponent hand modelling ----------
-
-// A suspected card in an opponent's hand, with a confidence [0,1].
-type SuspectedCard = { card: RummyCard; confidence: number };
-
-// Build a probabilistic model of what each opponent seat is likely holding.
-// Two information sources:
-//   1. Deduction: when the stock is empty every unseen card must be in an
-//      opponent's hand.  In a 2-player game that gives perfect knowledge;
-//      in 3+ it gives a shared pool partitioned by hand-size ratio.
-//   2. Log inference: discard-pile pickups reveal the bottom card taken and
-//      therefore what the opponent was building toward (set or run in that
-//      rank/suit). Cards adjacent to known pickups get elevated confidence.
-function buildOpponentModel(state: RummyState, seat: number): Map<number, SuspectedCard[]> {
-  const model = new Map<number, SuspectedCard[]>();
-  for (let i = 0; i < state.players; i++) if (i !== seat) model.set(i, []);
-
-  const fullDeck = buildDeck(decksFor(state.players));
-  const visibleIds = new Set(visibleCards(state, seat).map((c) => c.id));
-  const unknownPool = fullDeck.filter((c) => !visibleIds.has(c.id));
-
-  // ── 1. Deduction when stock is exhausted ──────────────────────────────────
-  if (state.stock.length === 0 && unknownPool.length > 0) {
-    const opponentSeats = Array.from({ length: state.players }, (_, i) => i).filter((i) => i !== seat);
-    const totalOppCards = opponentSeats.reduce((s, i) => s + state.hands[i].length, 0);
-
-    for (const opp of opponentSeats) {
-      const fraction = totalOppCards > 0 ? state.hands[opp].length / totalOppCards : 0;
-      // 2-player: fraction = 1.0 → perfect knowledge of the one opponent's hand.
-      // 3+ players: proportional confidence by relative hand size.
-      model.set(opp, unknownPool.map((card) => ({ card, confidence: fraction })));
-    }
-    return model; // deduction dominates; log inference isn't needed here
-  }
-
-  // ── 2. Log inference from observed discard-pile pickups ───────────────────
-  // The log entry for a discard pickup records the bottom card taken.
-  // From that we infer:
-  //   - The opponent was building toward a meld containing that rank/suit.
-  //   - Cards of the same rank (set) or adjacent in suit (run) that are still
-  //     unknown may be in their hand.
-  // Confidence decays with turns elapsed since the pickup (they may have melded
-  // or discarded the relevant cards since then) and with speculative distance.
-
-  // Count total log entries so we can estimate "turns ago" for each pickup.
-  const totalEntries = state.log.length;
-
-  for (const entry of state.log) {
-    const opp = entry.seat;
-    if (opp === null || opp === seat) continue;
-    if (!model.has(opp)) continue;
-    if (entry.msg !== "took" || !entry.cards || entry.cards.length === 0) continue;
-
-    const lc = entry.cards[0]; // the bottom card they took
-    if ("joker" in lc) continue; // joker pickup — no directional inference
-    const { rank, suit } = lc as { rank: number; suit: string };
-
-    // Recency: how many log entries ago was this? Older = lower confidence.
-    const turnsAgo = totalEntries - entry.id;
-    const recency = Math.max(0.1, 1 - turnsAgo / 30); // decays to 0.1 after ~30 entries
-
-    const suspected = model.get(opp)!;
-
-    for (const uc of unknownPool) {
-      if (uc.joker) continue;
-      let conf = 0;
-      // Set inference: they likely hold other cards of the same rank.
-      if (uc.rank === rank && uc.suit !== suit) conf = Math.max(conf, 0.45 * recency);
-      // Run inference: adjacent rank in same suit.
-      const ucR = uc.rank === 14 ? 1 : uc.rank; // treat Ace as 1 for adjacency
-      const tR = rank === 14 ? 1 : rank;
-      if (uc.suit === suit && Math.abs(ucR - tR) <= 2 && uc.rank !== rank) conf = Math.max(conf, 0.30 * recency);
-      if (conf > 0) suspected.push({ card: uc, confidence: conf });
-    }
-  }
-
-  // Deduplicate: if the same card appears multiple times keep highest confidence.
-  for (const [opp, list] of model) {
-    const best = new Map<number, SuspectedCard>();
-    for (const s of list) {
-      const prev = best.get(s.card.id);
-      if (!prev || s.confidence > prev.confidence) best.set(s.card.id, s);
-    }
-    model.set(opp, [...best.values()]);
-  }
-
-  return model;
-}
-
-// Opponent danger score augmented by the model.
-// Base: extends a visible meld, same rank on table, high face value.
-// Model bonus: other opponents likely hold cards that meld with this discard.
-function opponentDangerWithModel(
-  state: RummyState,
-  card: RummyCard,
-  seat: number,
-  model: Map<number, SuspectedCard[]>,
-): number {
-  if (card.joker) return 0;
-  let danger = 0;
-
-  // Extends an existing table meld (any player can lay off)
-  for (const m of state.melds) {
-    const combined = [...m.cards, card];
-    if (m.kind === "set" ? isSet(combined) : isRun(combined)) { danger += 4; break; }
-  }
-  const sameRankOnTable = state.melds.flatMap((m) => m.cards).filter((c) => !c.joker && c.rank === card.rank).length;
-  if (sameRankOnTable >= 1) danger += 2;
-  danger += Math.floor(cardValue(card) / 5);
-
-  // Model: how confident are we that some opponent is building toward this card?
-  for (const suspected of model.values()) {
-    let modelDanger = 0;
-    for (const { card: sc, confidence } of suspected) {
-      if (sc.joker) continue;
-      // Partner for a set (same rank)
-      if (sc.rank === card.rank) modelDanger = Math.max(modelDanger, confidence * 4);
-      // Partner for a run (same suit, adjacent rank)
-      if (sc.suit === card.suit && Math.abs(sc.rank - card.rank) <= 2) modelDanger = Math.max(modelDanger, confidence * 3);
-    }
-    danger += modelDanger;
-  }
-
-  return Math.min(danger, 10);
-}
-
-// The AI spends its wild jokers, but sparingly: it always prefers a meld made
-// of natural cards and only fills gaps/ends with jokers when that's what it
-// takes to lay something down. Every meld these return satisfies isSet/isRun.
+// ---------- simple meld finders ----------
+// Used by legalMoves() and as the bot's last-resort fallback. Every meld these
+// return satisfies isSet/isRun.
 const naturalsOf = (hand: RummyCard[]): RummyCard[] => hand.filter((c) => !c.joker);
 const jokersOf = (hand: RummyCard[]): RummyCard[] => hand.filter((c) => c.joker);
 
@@ -918,6 +939,7 @@ function bestRunInSuit(naturals: RummyCard[], jokers: RummyCard[]): RummyCard[] 
     if (!byRank.size) continue;
     for (let lo = 1; lo <= 12; lo++) {
       for (let hi = lo + 2; hi <= 14; hi++) {
+        if (lo === 1 && hi === 14) break; // the ace can't sit at both ends
         const span = hi - lo + 1;
         let nat = 0;
         for (let r = lo; r <= hi; r++) if (byRank.has(r)) nat++;
@@ -968,510 +990,879 @@ function findRunContaining(hand: RummyCard[], c: RummyCard): RummyCard[] | null 
   }
   return null;
 }
-function layoffOnto(state: RummyState, m: Meld, c: RummyCard, seat: number): RummyMove | null {
-  const combined = [...m.cards, c];
-  const ok = m.kind === "set" ? isSet(combined) : isRun(combined);
-  return ok ? { type: "layoff", seat, meldId: m.id, cards: [c.id] } : null;
+
+// ---------- compact meld summaries ----------
+// Cards are indexed by key = suit * 16 + rank (rank 2..14, ace = 14). Rank 1 is
+// used only as the ace's low position inside run windows.
+
+const SUIT_IDX: Record<Suit, number> = { C: 0, D: 1, H: 2, S: 3 };
+const keyOf = (c: RummyCard): number => SUIT_IDX[c.suit] * 16 + c.rank;
+const keyValue = (key: number): number => cardValue({ id: -1, rank: key & 15, suit: "C" });
+
+function popcount(x: number): number {
+  x -= (x >>> 1) & 0x55555555;
+  x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);
+  return (((x + (x >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
 }
 
-// ── AI helpers ────────────────────────────────────────────────────────────────
+// A table (or planned) meld reduced to what extension checks need. Mirrors
+// isSet / isRun exactly for single-card additions.
+type MeldInfo = {
+  run: boolean;
+  suit: number; // run: suit index
+  rank: number; // set: rank
+  mask: number; // set: suits present; run: natural ranks present (bit 14 = ace)
+  size: number;
+  jokers: number;
+  id: number; // table meld id, or -1 for a meld planned this turn
+  view?: TableView; // lazily cached by meldView()
+};
 
-// How many unmelded points does `hand` carry?
-function handPoints(hand: RummyCard[]): number {
-  return hand.reduce((s, c) => s + cardValue(c), 0);
+function meldInfo(cards: RummyCard[], run: boolean, id: number): MeldInfo {
+  let mask = 0, jokers = 0, suit = -1, rank = 0;
+  for (const c of cards) {
+    if (c.joker) { jokers++; continue; }
+    if (run) { suit = SUIT_IDX[c.suit]; mask |= 1 << c.rank; }
+    else { rank = c.rank; mask |= 1 << SUIT_IDX[c.suit]; }
+  }
+  return { run, suit, rank, mask, size: cards.length, jokers, id };
 }
 
-// Simulated-turn score: meld/layoff everything possible from `hand` given
-// the current melds on the table, return leftover point total.
-function simulatePlayPoints(hand: RummyCard[], melds: Meld[]): number {
-  let h = [...hand];
-  // iterate until stable
-  for (let pass = 0; pass < 12; pass++) {
-    const before = h.length;
-    const set = findSet(h);
-    if (set) { h = h.filter((c) => !set.includes(c)); continue; }
-    const run = findRun(h);
-    if (run) { h = h.filter((c) => !run.includes(c)); continue; }
-    // layoffs onto existing melds
-    let laid = false;
-    for (const m of melds) {
-      for (const c of h) {
-        const combined = [...m.cards, c];
-        if (m.kind === "set" ? isSet(combined) : isRun(combined)) {
-          h = h.filter((x) => x !== c);
-          laid = true;
-          break;
-        }
-      }
-      if (laid) break;
+// Run validity on a bitmask of natural ranks (ace = bit 14) plus wild jokers,
+// mirroring isRun: ace low or high, interior gaps filled by jokers, leftover
+// jokers extend the ends up to 13 cards in all. Returns the covered span of
+// natural cards as a bitmask of effective ranks (ace low = bit 1), or 0.
+function runSpan(nat: number, jokers: number): number {
+  if (nat === 0) return 0;
+  for (let mode = 0; mode < 2; mode++) {
+    let m = nat;
+    if (mode === 1) {
+      if (!(m & (1 << 14))) break;
+      m = (m & ~(1 << 14)) | 2;
     }
-    if (!laid && h.length === before) break;
+    const lo = 31 - Math.clz32(m & -m);
+    const hi = 31 - Math.clz32(m);
+    const gaps = hi - lo + 1 - popcount(m);
+    if (gaps > jokers) continue;
+    const extra = jokers - gaps;
+    if (hi - lo + 1 + extra > 13) continue;
+    return ((1 << (hi + 1)) - 1) & ~((1 << lo) - 1);
   }
-  return handPoints(h);
+  return 0;
 }
 
-// ---------- probability accounting ----------
-
-// Cards that are fully visible to the AI at `seat`: own hand + discard pile + melds.
-function visibleCards(state: RummyState, seat: number): RummyCard[] {
-  return [
-    ...state.hands[seat],
-    ...state.discard,
-    ...state.melds.flatMap((m) => m.cards),
-  ];
+// Can card `c` be laid off onto meld `m`?
+function fits(m: MeldInfo, c: RummyCard): boolean {
+  if (c.joker) return m.run ? runSpan(m.mask, m.jokers + 1) !== 0 : m.size < 4;
+  if (!m.run) return c.rank === m.rank && m.size < 4 && !(m.mask & (1 << SUIT_IDX[c.suit]));
+  return SUIT_IDX[c.suit] === m.suit && !(m.mask & (1 << c.rank)) && runSpan(m.mask | (1 << c.rank), m.jokers) !== 0;
 }
 
-// Total cards whose location is unknown (stock + other players' hands).
-function unknownCount(state: RummyState, seat: number): number {
-  return (
-    state.stock.length +
-    state.hands.reduce((s, h, i) => (i !== seat ? s + h.length : s), 0)
-  );
+function extend(m: MeldInfo, c: RummyCard): MeldInfo {
+  if (c.joker) return { ...m, size: m.size + 1, jokers: m.jokers + 1, view: undefined };
+  return { ...m, size: m.size + 1, mask: m.mask | (1 << (m.run ? c.rank : SUIT_IDX[c.suit])), view: undefined };
 }
 
-// Probability that one specific rank+suit is drawable from the remaining unknowns.
-// With double-deck there can be 2 copies; we account for how many are already visible.
-function probDraw(state: RummyState, seat: number, rank: number, suit: Suit): number {
-  const totalDecks = decksFor(state.players);
-  const seen = visibleCards(state, seat);
-  const visibleCopies = seen.filter((c) => !c.joker && c.rank === rank && c.suit === suit).length;
-  const remaining = Math.max(0, totalDecks - visibleCopies);
-  if (remaining === 0) return 0;
-  const unk = unknownCount(state, seat);
-  return unk > 0 ? Math.min(1, remaining / unk) : 0;
+// What a set of table melds offers a single card: per suit, a bitmask of the
+// ranks that could be laid off right now (`lay`) and of the ranks its runs
+// already span (`anchors`). Cached on each meld (a MeldInfo is never changed
+// once made) and per meld-list array, so a list must not be mutated once viewed.
+type TableView = { lay: number[]; anchors: number[] };
+const TABLE_VIEWS = new WeakMap<MeldInfo[], TableView>();
+
+function meldView(m: MeldInfo): TableView {
+  if (m.view) return m.view;
+  const v: TableView = { lay: [0, 0, 0, 0], anchors: [0, 0, 0, 0] };
+  if (m.run) {
+    v.anchors[m.suit] = runSpan(m.mask, m.jokers);
+    for (let r = 2; r <= 14; r++) if (!(m.mask & (1 << r)) && runSpan(m.mask | (1 << r), m.jokers)) v.lay[m.suit] |= 1 << r;
+  } else if (m.size < 4) {
+    for (let t = 0; t < 4; t++) if (!(m.mask & (1 << t))) v.lay[t] |= 1 << m.rank;
+  }
+  m.view = v;
+  return v;
 }
 
-// Probability of drawing at least one copy of a needed card in `draws` future draws,
-// given `pPerDraw` probability on each individual draw.
-// Uses the binomial complement: P(at least 1) = 1 - (1 - p)^draws.
-function probEventually(pPerDraw: number, draws: number): number {
-  if (pPerDraw <= 0 || draws <= 0) return 0;
-  return Math.min(1, 1 - Math.pow(1 - pPerDraw, draws));
+function tableView(tbl: MeldInfo[]): TableView {
+  let v = TABLE_VIEWS.get(tbl);
+  if (v) return v;
+  v = { lay: [0, 0, 0, 0], anchors: [0, 0, 0, 0] };
+  for (const m of tbl) {
+    const mv = meldView(m);
+    for (let t = 0; t < 4; t++) { v.lay[t] |= mv.lay[t]; v.anchors[t] |= mv.anchors[t]; }
+  }
+  TABLE_VIEWS.set(tbl, v);
+  return v;
 }
 
-// Expected number of future draws this seat will get before the round ends.
-// Approximation: stock cards / players (each player draws once per full round of turns).
-function expectedFutureDraws(state: RummyState, seat: number): number {
-  return Math.max(0, state.stock.length / state.players);
+// ---------- what this seat knows ----------
+
+// Opponents' cards that are public knowledge: everything they picked up from
+// the discard pile this round and have not melded, laid off or discarded since
+// (read from the public move log, as a human at the table would remember).
+function revealedCards(state: RummyState, seat: number): RummyCard[][] {
+  const held: Map<number, RummyCard>[] = Array.from({ length: state.players }, () => new Map());
+  const log = state.log;
+  let start = 0;
+  for (let i = log.length - 1; i >= 0; i--) {
+    const m = log[i].msg;
+    if (m === "deals a new round" || m === "deals the first hand" || m.startsWith("goes out") || m.startsWith("Stock exhausted")) { start = i + 1; break; }
+  }
+  for (let i = start; i < log.length; i++) {
+    const e = log[i];
+    if (e.seat === null || e.seat === seat || !held[e.seat]) continue;
+    const cards = [...(e.cards ?? []), ...(e.extraCards ?? [])] as unknown as RummyCard[];
+    for (const c of cards) {
+      if (typeof c?.id !== "number") continue;
+      if (e.msg === "took") held[e.seat].set(c.id, c);
+      else if (e.msg === "melded" || e.msg === "laid off" || e.msg === "discarded") held[e.seat].delete(c.id);
+    }
+  }
+  return held.map((m) => [...m.values()]);
 }
 
-// ---------- card hold-value (probability-weighted) ----------
+// Empirical (2-player self-play) number of further turns we get, indexed by the
+// smallest opponent hand, and the chance an opponent holding h cards goes out
+// on their next turn.
+const HORIZON_BY_HAND = [0, 1.2, 2.1, 2.7, 3.3, 3.9, 4.8, 5.7, 5.7, 5.9, 6.7, 7, 7, 7.2];
+const OUT_HAZARD = [1, 0.46, 0.25, 0.21, 0.09, 0.06, 0.04, 0.03, 0.02, 0.02, 0.01];
 
-// Expected point contribution of holding `card` given the current known state:
-// how likely is it that we eventually meld it vs. get stuck with it?
-//
-// Returns a value in [-cardValue, +cardValue]:
-//   positive → card is likely to be melded (worth keeping)
-//   negative → card is likely to be deadweight (worth discarding)
-//
-// Set completion and run completion are both evaluated; the best path wins.
-function cardMeldEV(state: RummyState, seat: number, card: RummyCard): number {
-  if (card.joker) return cardValue(card); // jokers are always meldable
-  const hand = state.hands[seat];
-  const draws = expectedFutureDraws(state, seat);
-  const val = cardValue(card);
+type OppInfo = {
+  seat: number;
+  rho: number; // P(a given unseen card is in this hand)
+  jokerP: number; // P(this hand holds a joker)
+  known: Int8Array; // per key: copies publicly known to be in this hand
+};
 
-  // --- set potential ---
-  const sameRankInHand = hand.filter((c) => !c.joker && c.rank === card.rank && c.id !== card.id);
-  const jokersInHand = jokersOf(hand).length;
-  let pSet = 0;
+type AiCtx = {
+  state: RummyState;
+  seat: number;
+  lv: AiLevel;
+  live: Int8Array; // per key: copies whose location is unknown to us
+  liveJokers: number;
+  unknown: number; // cards whose location is unknown (stock + unrevealed opponent cards)
+  pileCredit: Float64Array; // per key: credit for a copy visible in the discard pile
+  p1: Float64Array; // p1[k]: P(>=1 of k specific unseen cards arrives within the horizon)
+  p2: Float64Array; // p2[k]: P(>=2 of them arrive)
+  pairDraw: number; // correction for needing two different specific cards
+  keep: number; // P(we get another turn): worth of a complete meld still in hand
+  opps: OppInfo[];
+  goOutBonus: number; // expected points the opponents are caught holding if we go out
+  table: MeldInfo[];
+  feedCache: Map<number, number>;
+  leavesLeft: number; // search budget left for this decision (see planTurn)
+};
 
-  if (sameRankInHand.length + jokersInHand >= 2) {
-    // Already have a complete set (or joker-assisted): contribution is certain.
-    pSet = 1;
-  } else if (sameRankInHand.length === 1) {
-    // Have a pair; need one more of any remaining suit.
-    const usedSuits = new Set([card.suit, sameRankInHand[0].suit]);
-    let pOneMore = 0;
-    for (const s of SUITS) if (!usedSuits.has(s)) pOneMore += probDraw(state, seat, card.rank, s);
-    pSet = probEventually(pOneMore, draws);
-  } else if (jokersInHand >= 1) {
-    // One joker plus this card; need one more of same rank.
-    let pOneMore = 0;
-    const usedSuits = new Set([card.suit]);
-    for (const s of SUITS) if (!usedSuits.has(s)) pOneMore += probDraw(state, seat, card.rank, s);
-    pSet = probEventually(pOneMore, draws) * 0.7; // joker might be used elsewhere
+function buildCtx(state: RummyState, seat: number, lv: AiLevel): AiCtx {
+  const decks = decksFor(state.players);
+  const live = new Int8Array(64);
+  for (let s = 0; s < 4; s++) for (let r = 2; r <= 14; r++) live[s * 16 + r] = decks;
+  let liveJokers = 2 * decks;
+  const see = (c: RummyCard) => { if (c.joker) liveJokers--; else live[keyOf(c)]--; };
+  const visible = new Set<number>();
+  for (const c of state.hands[seat]) { see(c); visible.add(c.id); }
+  for (const c of state.discard) { see(c); visible.add(c.id); }
+  for (const m of state.melds) for (const c of m.cards) { see(c); visible.add(c.id); }
+
+  const revealed = revealedCards(state, seat);
+  const opps: OppInfo[] = [];
+  const knownCount: number[] = [], knownJokers: number[] = [];
+  for (let i = 1; i < state.players; i++) {
+    const o = (seat + i) % state.players;
+    const known = new Int8Array(64);
+    let n = 0, jokers = 0;
+    for (const c of revealed[o]) {
+      if (visible.has(c.id)) continue;
+      visible.add(c.id);
+      see(c);
+      n++;
+      if (c.joker) jokers++; else known[keyOf(c)]++;
+    }
+    knownCount.push(n);
+    knownJokers.push(jokers);
+    opps.push({ seat: o, rho: 0, jokerP: jokers > 0 ? 1 : 0, known });
+  }
+  let unknown = liveJokers, liveVal = liveJokers * 15;
+  for (let k = 0; k < 64; k++) if (live[k] > 0) { unknown += live[k]; liveVal += live[k] * keyValue(k); }
+  unknown = Math.max(1, unknown);
+  const avgVal = liveVal / unknown;
+
+  // Horizon: further draws we expect before someone goes out or the stock ends.
+  let minOpp = 99, pCont = 1, goOut = 0;
+  opps.forEach((o, i) => {
+    const h = state.hands[o.seat].length;
+    minOpp = Math.min(minOpp, h);
+    pCont *= 1 - OUT_HAZARD[Math.min(h, OUT_HAZARD.length - 1)];
+    const hidden = Math.max(0, h - knownCount[i]);
+    o.rho = hidden / unknown;
+    if (o.jokerP < 1) o.jokerP = 1 - Math.pow(1 - o.rho, liveJokers);
+    let knownVal = 0;
+    for (let k = 0; k < 64; k++) knownVal += o.known[k] * keyValue(k);
+    goOut += knownVal + 15 * knownJokers[i] + hidden * avgVal;
+  });
+  const horizon = Math.max(0, Math.min(
+    state.stock.length / state.players,
+    lv.horizonScale * HORIZON_BY_HAND[Math.min(minOpp, HORIZON_BY_HAND.length - 1)] / (1 + 0.2 * (opps.length - 1)),
+  ));
+
+  const p1 = new Float64Array(12), p2 = new Float64Array(12);
+  for (let k = 0; k < 12; k++) {
+    const p = Math.min(1, k / unknown);
+    const miss = Math.pow(1 - p, horizon);
+    p1[k] = 1 - miss;
+    p2[k] = Math.max(0, 1 - miss - (p < 1 ? horizon * p * Math.pow(1 - p, horizon - 1) : 0));
   }
 
-  // --- run potential ---
-  // Find the best run window containing this card, counting missing natural ranks.
+  const pileCredit = new Float64Array(64);
+  const pile = state.discard;
+  for (let i = 0; i < pile.length; i++) {
+    const c = pile[i];
+    if (c.joker) continue;
+    const depth = pile.length - i;
+    const credit = PILE_OUT / (1 + 0.25 * (depth - 1));
+    if (credit > pileCredit[keyOf(c)]) pileCredit[keyOf(c)] = credit;
+  }
+
+  return {
+    state, seat, lv, live, liveJokers, unknown, pileCredit, p1, p2,
+    pairDraw: horizon > 1 ? (horizon - 1) / horizon : 0,
+    keep: pCont,
+    opps,
+    goOutBonus: goOut,
+    table: state.melds.map((m) => meldInfo(m.cards, m.kind === "run", m.id)),
+    feedCache: new Map(),
+    leavesLeft: DECISION_LEAVES,
+  };
+}
+
+// ---------- hand evaluation ----------
+
+// Scratch buffers reused across calls (fully rewritten on every use).
+const HAS = new Int8Array(64); // natural copies held by key, ace mirrored at rank 1
+const RANK_SUITS = new Int8Array(16); // per rank: bitmask of suits held
+let PROB = new Float64Array(64);
+let PROB2 = new Float64Array(64);
+
+// Load `rest` into HAS / RANK_SUITS; returns how many jokers it holds.
+function loadHand(rest: RummyCard[]): number {
+  HAS.fill(0);
+  RANK_SUITS.fill(0);
+  let jokers = 0;
+  for (const c of rest) {
+    if (c.joker) { jokers++; continue; }
+    const s = SUIT_IDX[c.suit];
+    HAS[s * 16 + c.rank]++;
+    if (c.rank === 14) HAS[s * 16 + 1]++;
+    RANK_SUITS[c.rank] |= 1 << s;
+  }
+  if (PROB.length < rest.length) { PROB = new Float64Array(rest.length * 2); PROB2 = new Float64Array(rest.length * 2); }
+  return jokers;
+}
+
+// Take one natural card out of (or back into) the loaded hand.
+function shiftCard(c: RummyCard, delta: number): void {
+  const s = SUIT_IDX[c.suit];
+  HAS[s * 16 + c.rank] += delta;
+  if (c.rank === 14) HAS[s * 16 + 1] += delta;
+  if (HAS[s * 16 + c.rank] > 0) RANK_SUITS[c.rank] |= 1 << s;
+  else RANK_SUITS[c.rank] &= ~(1 << s);
+}
+
+// Could a and b combine into a meld (same rank, or near each other in a suit)?
+function related(a: RummyCard, b: RummyCard): boolean {
+  if (a.rank === b.rank) return true;
+  if (a.suit !== b.suit) return false;
+  const d = Math.abs(a.rank - b.rank);
+  return d <= 2 || (a.rank === 14 && b.rank <= 3) || (b.rank === 14 && a.rank <= 3);
+}
+
+// Chance that natural card `c` gets melded before the round ends, given the
+// rest of the hand (already loaded into HAS / RANK_SUITS) and the table.
+function meldChance(ctx: AiCtx, c: RummyCard, view: TableView): number {
+  const s = SUIT_IDX[c.suit], r = c.rank;
+  if ((view.lay[s] >> r) & 1) return ctx.keep; // can be laid off next turn
+  const { live, pileCredit, p1, p2 } = ctx;
+
+  // Set: other suits of this rank.
+  const mask = RANK_SUITS[r];
+  const k = popcount(mask);
+  let pSet: number;
+  if (k >= 3) pSet = ctx.keep;
+  else {
+    let outs = 0, pile = 0;
+    for (let t = 0; t < 4; t++) {
+      if (mask & (1 << t)) continue;
+      outs += live[t * 16 + r];
+      if (pileCredit[t * 16 + r] > pile) pile = pileCredit[t * 16 + r];
+    }
+    pSet = k === 2 ? Math.max(p1[outs], pile) : p2[outs];
+  }
+
+  // Run: every 3-rank window containing c, counting held cards and table runs
+  // it could extend; the missing ranks must still be live (or in the pile).
   let pRun = 0;
-  for (const aceRank of [1, 14]) {
-    const cr = card.rank === 14 ? aceRank : card.rank;
-    if (cr < 1 || cr > 14) continue;
-    const byRank = new Map<number, true>();
-    for (const c of hand) {
-      if (c.joker || c.suit !== card.suit) continue;
-      const r = c.rank === 14 ? aceRank : c.rank;
-      byRank.set(r, true);
+  const own = view.anchors[s];
+  for (let mode = 0; mode < (r === 14 ? 2 : 1); mode++) {
+    const cr = mode === 1 ? 1 : r;
+    const anc = own & (1 << cr) ? 0 : own; // c already inside a table run can't extend it
+    for (let lo = Math.max(1, cr - 2); lo <= Math.min(cr, 12); lo++) {
+      let miss = 0, a = 0, b = 0, fromPile = false, ok = true;
+      for (let rr = lo; rr < lo + 3; rr++) {
+        if (rr === cr || HAS[s * 16 + rr] || anc & (1 << rr)) continue;
+        const key = s * 16 + (rr === 1 ? 14 : rr);
+        const pd = p1[live[key]], pc = pileCredit[key];
+        if (pd === 0 && pc === 0) { ok = false; break; }
+        if (pc > pd) fromPile = true;
+        if (miss === 0) a = Math.max(pd, pc); else b = Math.max(pd, pc);
+        miss++;
+      }
+      if (!ok) continue;
+      const pw = miss === 0 ? ctx.keep : miss === 1 ? a : a * b * (fromPile ? 1 : ctx.pairDraw);
+      if (pw > pRun) pRun = pw;
     }
-    byRank.set(cr, true);
-    // Evaluate all run windows of length 3–5 that include cr.
-    for (let lo = Math.max(1, cr - 4); lo <= cr; lo++) {
-      for (let hi = cr; hi <= Math.min(14, lo + 6); hi++) {
-        if (hi - lo + 1 < 3) continue;
-        const needed: number[] = [];
-        for (let r = lo; r <= hi; r++) if (!byRank.has(r)) needed.push(r);
-        const canFillWithJokers = needed.length <= jokersInHand;
-        if (canFillWithJokers) {
-          // Run is already completable — the card is basically secured.
-          pRun = Math.max(pRun, 0.95);
-          continue;
+  }
+  return 1 - (1 - pSet) * (1 - pRun);
+}
+
+// Each joker completes the most valuable two-card combo (pair or run
+// connector) still short of a meld; `skip` marks a card left out of the hand.
+// Returns the chance the jokers themselves get melded.
+function applyJokers(ctx: AiCtx, rest: RummyCard[], P: Float64Array, jokers: number, skip: number, tableMelds: number): number {
+  let usedJoker = false;
+  const n = rest.length;
+  for (let j = 0; j < jokers; j++) {
+    let best = 0, bi = -1, bj = -1;
+    for (let x = 0; x < n; x++) {
+      const a = rest[x];
+      if (x === skip || a.joker || P[x] >= ctx.keep) continue;
+      for (let y = x + 1; y < n; y++) {
+        const b = rest[y];
+        if (y === skip || b.joker || P[y] >= ctx.keep || (a.rank === b.rank && a.suit === b.suit) || !related(a, b)) continue;
+        const gain = cardValue(a) * (ctx.keep - P[x]) + cardValue(b) * (ctx.keep - P[y]);
+        if (gain > best) { best = gain; bi = x; bj = y; }
+      }
+    }
+    if (bi < 0) break;
+    P[bi] = P[bj] = ctx.keep;
+    usedJoker = true;
+  }
+  return usedJoker || tableMelds > 0 ? ctx.keep : 0.85 * ctx.keep;
+}
+
+function sumValue(rest: RummyCard[], P: Float64Array, jokerP: number, skip: number): number {
+  let total = 0;
+  for (let i = 0; i < rest.length; i++) {
+    if (i === skip) continue;
+    const c = rest[i];
+    total += cardValue(c) * (2 * (c.joker ? jokerP : P[i]) - 1);
+  }
+  return total;
+}
+
+// Expected round worth of keeping `rest` in hand: each card counts +value if it
+// will likely be melded, -value if it will likely be caught in hand.
+function handValue(ctx: AiCtx, rest: RummyCard[], tbl: MeldInfo[]): number {
+  if (rest.length === 0) return 0;
+  const jokers = loadHand(rest);
+  const view = tableView(tbl);
+  for (let i = 0; i < rest.length; i++) PROB[i] = rest[i].joker ? 0 : meldChance(ctx, rest[i], view);
+  const jokerP = jokers ? applyJokers(ctx, rest, PROB, jokers, -1, tbl.length) : 0;
+  return sumValue(rest, PROB, jokerP, -1);
+}
+
+// ---------- discard risk ----------
+
+// Ranks (2..14) that would complete a run with same-suit ranks a and b.
+function thirdRanks(a: number, b: number): number[] {
+  const out: number[] = [];
+  for (let mode = 0; mode < 2; mode++) {
+    if (mode === 1 && a !== 14 && b !== 14) break; // second pass: ace low
+    const ea = mode === 1 && a === 14 ? 1 : a, eb = mode === 1 && b === 14 ? 1 : b;
+    const lo = Math.min(ea, eb), hi = Math.max(ea, eb);
+    if (hi - lo === 2) out.push(lo + 1);
+    if (hi - lo === 1) { if (lo > 1) out.push(lo - 1); if (hi < 14) out.push(hi + 1); }
+  }
+  return out.map((r) => (r === 1 ? 14 : r));
+}
+
+// Expected points an opponent gains if our discard `c` lets them sweep the
+// pile: c, a buried pile card t and one card they hold (or a joker) make a meld
+// with t at the bottom, so they take t, everything above it, and c. `hold`
+// gives the chance they hold a card by key.
+function sweepRisk(ctx: AiCtx, c: RummyCard, hold: (key: number) => number, jokerP: number): number {
+  const pile = ctx.state.discard;
+  const s = SUIT_IDX[c.suit];
+  let above = 0, best = 0;
+  for (let i = pile.length - 1; i >= 0; i--) {
+    const t = pile[i];
+    if (!t.joker && related(t, c) && !(t.rank === c.rank && t.suit === c.suit)) {
+      let none = 1; // P(they hold no completing card)
+      if (t.rank === c.rank) {
+        for (let u = 0; u < 4; u++) if (u !== s && u !== SUIT_IDX[t.suit]) none *= 1 - hold(u * 16 + c.rank);
+      } else {
+        for (const x of thirdRanks(t.rank, c.rank)) none *= 1 - hold(s * 16 + x);
+      }
+      const pX = 1 - none * (1 - jokerP);
+      const gain = pX * (cardValue(t) + cardValue(c) + 0.3 * above);
+      if (gain > best) best = gain;
+    }
+    above += cardValue(t);
+  }
+  return best;
+}
+
+// Expected points the opponents gain from our discarding `c`: for each
+// opponent, the chance they can meld it (holding partners) or lay it off, times
+// its value plus a tempo bonus; plus the chance it lets them sweep the pile
+// (sweepRisk).
+function feedRisk(ctx: AiCtx, c: RummyCard): number {
+  if (c.joker) return 60; // never hand an opponent a wild card
+  const cacheKey = keyOf(c);
+  const hit = ctx.feedCache.get(cacheKey);
+  if (hit !== undefined) return hit;
+  const { live } = ctx;
+  let layable = false;
+  for (const m of ctx.table) if (fits(m, c)) { layable = true; break; }
+  const s = SUIT_IDX[c.suit], r = c.rank;
+  let risk = 0, pileRisk = 0;
+  for (const o of ctx.opps) {
+    let pUse = 1;
+    const hold = (key: number): number => (o.known[key] > 0 ? 1 : live[key] > 0 ? 1 - Math.pow(1 - o.rho, live[key]) : 0);
+    if (ctx.lv.sweepWeight > 0) pileRisk += sweepRisk(ctx, c, hold, o.jokerP);
+    if (!layable) {
+      // Set: at least two other suits of this rank, or one plus a joker.
+      let p0 = 1, pOne = 0, pTwo = 0;
+      for (let t = 0; t < 4; t++) {
+        if (t === s) continue;
+        const q = hold(t * 16 + r);
+        pTwo += pOne * q;
+        pOne = pOne * (1 - q) + p0 * q;
+        p0 *= 1 - q;
+      }
+      const pSet = pTwo + pOne * o.jokerP;
+      // Run: both other cards of some 3-rank window, or one plus a joker.
+      let pRun = 0;
+      for (let mode = 0; mode < (r === 14 ? 2 : 1); mode++) {
+        const cr = mode === 1 ? 1 : r;
+        for (let lo = Math.max(1, cr - 2); lo <= Math.min(cr, 12); lo++) {
+          const need: number[] = [];
+          for (let rr = lo; rr < lo + 3; rr++) if (rr !== cr) need.push(hold(s * 16 + (rr === 1 ? 14 : rr)));
+          const pw = need[0] * need[1] + (need[0] + need[1] - 2 * need[0] * need[1]) * o.jokerP;
+          if (pw > pRun) pRun = pw;
         }
-        const stillNeed = needed.length - jokersInHand;
-        if (stillNeed > 2) continue; // too many gaps
-        // Probability of drawing ALL still-needed cards.
-        let pAll = 1;
-        for (const r of needed.slice(jokersInHand)) {
-          pAll *= probEventually(probDraw(state, seat, r, card.suit), draws / Math.max(1, stillNeed));
-        }
-        pRun = Math.max(pRun, pAll * (hi - lo + 1 >= 4 ? 1.0 : 0.8)); // prefer longer runs
+      }
+      pUse = 1 - (1 - pSet) * (1 - pRun);
+    }
+    risk += pUse;
+  }
+  risk = risk * (cardValue(c) + FEED_TEMPO) + ctx.lv.sweepWeight * pileRisk;
+  ctx.feedCache.set(cacheKey, risk);
+  return risk;
+}
+
+// ---------- turn planning ----------
+
+// A meld that could be put down from the hand: natural card indices plus how
+// many jokers it needs.
+type Cand = { idx: number[]; jokers: number; run: boolean; pts: number };
+
+// With `only` >= 0, just the candidates that use hand[only] (a natural card).
+function meldCandidates(hand: RummyCard[], only = -1): Cand[] {
+  const jokers = hand.filter((c) => c.joker).length;
+  const oc = only >= 0 ? hand[only] : null;
+  const allowSingles = hand.length <= 4; // one natural + two jokers: only worth it to go out
+  const out: Cand[] = [];
+  const seen = new Set<string>();
+  const add = (idx: number[], jk: number, run: boolean) => {
+    if (oc && !idx.includes(only)) return;
+    if (jk > 0) { // a joker padding either end of the same naturals repeats a meld
+      const sig = [...idx].sort((a, b) => a - b).join(",") + "/" + jk + (run ? "r" : "s");
+      if (seen.has(sig)) return;
+      seen.add(sig);
+    }
+    out.push({ idx, jokers: jk, run, pts: idx.reduce((a, i) => a + cardValue(hand[i]), 0) + 15 * jk });
+  };
+
+  // Sets: one card per suit of a rank (a second copy in a double deck waits for
+  // a later plan), with up to one joker — or two for a lone natural.
+  const byRank = new Map<number, number[]>();
+  hand.forEach((c, i) => {
+    if (c.joker || (oc && c.rank !== oc.rank)) return;
+    const g = byRank.get(c.rank) ?? [];
+    if (!g.some((j) => hand[j].suit === c.suit)) g.push(i);
+    byRank.set(c.rank, g);
+  });
+  for (const g of byRank.values()) {
+    const k = g.length;
+    if (k >= 3) add(g, 0, false);
+    if (k === 4) for (let skip = 0; skip < 4; skip++) add(g.filter((_, x) => x !== skip), 0, false);
+    if (k === 3 && jokers >= 1) add(g, 1, false);
+    if (jokers >= 1 && k >= 2) for (let x = 0; x < k; x++) for (let y = x + 1; y < k; y++) add([g[x], g[y]], 1, false);
+    if (jokers >= 2 && allowSingles) for (const x of g) add([x], 2, false);
+  }
+
+  // Runs: every window of effective ranks with natural ends (jokers fill gaps),
+  // plus three-card windows padded by a joker at one end.
+  for (let s = 0; s < 4; s++) {
+    if (oc && SUIT_IDX[oc.suit] !== s) continue;
+    const at = new Array<number>(15).fill(-1);
+    hand.forEach((c, i) => {
+      if (c.joker || SUIT_IDX[c.suit] !== s) return;
+      if (at[c.rank] < 0) at[c.rank] = i;
+    });
+    at[1] = at[14];
+    for (let lo = 1; lo <= 12; lo++) {
+      for (let hi = lo + 2; hi <= 14; hi++) {
+        if (lo === 1 && hi === 14) break; // the ace can't sit at both ends
+        let nat = 0;
+        for (let r = lo; r <= hi; r++) if (at[r] >= 0) nat++;
+        const missing = hi - lo + 1 - nat;
+        if (missing > jokers) break; // widening only adds gaps
+        if (nat === 0 || (nat === 1 && !allowSingles)) continue;
+        const endsNatural = at[lo] >= 0 && at[hi] >= 0;
+        if (!endsNatural && (hi - lo > 2 || (at[lo] < 0 && at[hi] < 0))) continue;
+        const idx: number[] = [];
+        for (let r = lo; r <= hi; r++) if (at[r] >= 0) idx.push(at[r]);
+        add(idx, missing, true);
       }
     }
   }
-
-  const pMeld = Math.min(1, Math.max(pSet, pRun));
-  // Expected value: +val if melded, -val if stuck. Weighted by probability.
-  return val * pMeld - val * (1 - pMeld);
+  return out.sort((a, b) => b.pts - a.pts);
 }
 
-// Is `card` likely useful to any opponent? Returns a danger score 0–10.
-// Checks: does it extend a visible meld, or match the rank/suit-run of recent discards?
-function opponentDanger(state: RummyState, card: RummyCard, seat: number): number {
-  if (card.joker) return 0; // wild – we never discard it anyway
-  let danger = 0;
-  // Extends an existing meld on the table (any player can lay off)
-  for (const m of state.melds) {
-    const combined = [...m.cards, card];
-    if (m.kind === "set" ? isSet(combined) : isRun(combined)) { danger += 4; break; }
-  }
-  // If there's already one of the same rank visible in melds, a second gives
-  // opponents a pair (dangerous if they have the third)
-  const sameRankOnTable = state.melds.flatMap((m) => m.cards).filter((c) => !c.joker && c.rank === card.rank).length;
-  if (sameRankOnTable >= 1) danger += 2;
-  // High-value cards are universally more dangerous (opponent will meld them for big points)
-  danger += Math.floor(cardValue(card) / 5);
-  return Math.min(danger, 10);
-}
+// A planned layoff: `at` indexes the plan's meld list (table melds, then the
+// new melds); meldId is the table meld's id, or -1 for a new meld.
+type Layoff = { card: RummyCard; meldId: number; at: number };
 
-// Connectivity score for a card within a hand — how many meld partners does it have?
-function meldPotential(hand: RummyCard[]): number {
-  let score = 0;
-  for (const c of hand) {
-    if (c.joker) { score += 20; continue; }
-    const sameRank = hand.filter((x) => !x.joker && x.rank === c.rank && x.id !== c.id).length;
-    const inSuitAdj = hand.filter(
-      (x) => !x.joker && x.suit === c.suit && x.id !== c.id && Math.abs(x.rank - c.rank) <= 2,
-    ).length;
-    score += sameRank * 3 + inSuitAdj * 2;
-  }
-  return score;
-}
+type Plan = {
+  chosen: Cand[]; // the candidates the new melds came from
+  melds: RummyCard[][]; // new melds, in play order
+  layoffs: Layoff[]; // in an order that can be played
+  rest: RummyCard[]; // cards still in hand afterwards
+  tbl: MeldInfo[]; // table melds afterwards (existing + planned, with layoffs)
+  banked: number; // points put on the table this turn
+  value: number; // banked + worth of the rest (or the go-out bonus)
+};
 
-// Minimum cards remaining across all opponents.
-function minOpponentHandSize(state: RummyState, seat: number): number {
-  let min = Infinity;
-  for (let i = 0; i < state.players; i++) {
-    if (i !== seat) min = Math.min(min, state.hands[i].length);
-  }
-  return min === Infinity ? 99 : min;
-}
+const PLAY_LEAVES = 1500; // search budget for a hand actually held
+const DEEP_LEAVES = 400; // search budget per hypothetical deep pickup
+const DECISION_LEAVES = 4000; // shared by every search in one decision (bounds CPU)
+const MIN_LEAVES = 30; // a search always gets at least this many leaves
 
-// Evaluate picking up the discard pile down to `targetCard`.
-// Returns a net-gain score (positive = worth doing, negative = not).
-//
-// Key insight: the penalty for unplayable cards is discounted early in the round
-// because those cards may become meldable later. That discount is parametrised by
-// the personality's `earlyDiscount` and fades to zero as the stock empties.
-function evaluateDeepPickup(
-  state: RummyState,
-  seat: number,
-  targetCardId: number,
-  personality: AiPersonality,
-): { gain: number; cards: RummyCard[] } {
-  const discardPile = state.discard;
-  const targetIdx = discardPile.findIndex((c) => c.id === targetCardId);
-  if (targetIdx < 0) return { gain: -Infinity, cards: [] };
-
-  const taken = discardPile.slice(targetIdx); // targetCard + everything above it
-  const combined = [...state.hands[seat], ...taken];
-
-  // Simulate playing everything we can from the combined hand.
-  const leftoverPts = simulatePlayPoints(combined, state.melds);
-  const handPts = handPoints(state.hands[seat]);
-
-  // Points we capture: taken pile value minus the increase in held-card penalty.
-  const takenPts = taken.reduce((s, c) => s + cardValue(c), 0);
-  const extraHeldPts = Math.max(0, leftoverPts - handPts);
-
-  // Early-game: discount the held-card penalty because there's time to meld them.
-  // The discount is personality.earlyDiscount at the start and fades to 0 at end.
-  const progress = roundProgress(state);
-  const discount = personality.earlyDiscount * (1 - progress);
-  const effectiveHeldPenalty = extraHeldPts * (1 - discount);
-
-  // Gross benefit: pile points we'd convert to melds (not counting what we already held).
-  const grossGain = takenPts - extraHeldPts;
-
-  // Net = gross benefit minus what we're still effectively penalised for holding.
-  return { gain: grossGain - effectiveHeldPenalty, cards: taken };
-}
-
-// Choose the best discard from `hand`.
-// Uses probability-weighted meld EV so the AI pivots away from stranded high-value
-// cards. Uses the opponent model to avoid feeding suspected builds.
-function bestDiscard(
-  state: RummyState,
-  hand: RummyCard[],
-  seat: number,
-  personality: AiPersonality,
-  model: Map<number, SuspectedCard[]>,
-): RummyCard {
-  const opponentLow = minOpponentHandSize(state, seat) <= personality.endgameHandSize;
-  const ranked = [...hand].map((c) => {
-    if (c.joker) return { card: c, score: -200 };
-    const mev = cardMeldEV(state, seat, c);
-    let discardScore = -mev;
-    const danger = opponentDangerWithModel(state, c, seat, model);
-    discardScore -= danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
-    if (opponentLow) discardScore += Math.max(0, -mev) * 0.5;
-    return { card: c, score: discardScore };
-  }).sort((a, b) => b.score - a.score);
-
-  return ranked[0].card;
-}
-
-// Apply misplay: with probability personality.misplayRate, return a suboptimal choice.
-// Uses a deterministic per-decision RNG so replays are consistent.
-// `ranked` must be sorted best-first; we pick randomly from the bottom two-thirds.
-function maybeMisplay<T>(ranked: T[], rng: () => number, misplayRate: number): T {
-  if (ranked.length <= 1 || rng() >= misplayRate) return ranked[0];
-  // Pick a random card from the non-optimal portion of the ranking.
-  const worstZone = ranked.slice(Math.max(1, Math.floor(ranked.length / 3)));
-  return worstZone[Math.floor(rng() * worstZone.length)];
-}
-
-// Speculative top-card value: should we take the top discard even without an
-// immediate meld? Returns a score; > 0 means "yes, it's worth it".
-//
-// Uses probability-weighted meld EV of the top card given it joins our hand,
-// minus a personality-discounted holding cost.
-function speculativeTopValue(hand: RummyCard[], top: RummyCard, state: RummyState, personality: AiPersonality): number {
-  if (top.joker) return 40; // always worth a speculative grab
-  const progress = roundProgress(state);
-  const futureDiscount = personality.earlyDiscount * (1 - progress);
-  // Simulate adding top to hand, then evaluate its meld EV in that context.
-  const hypotheticalState = { ...state, hands: state.hands.map((h, i) => i === state.turn ? [...h, top] : h) };
-  const mev = cardMeldEV(hypotheticalState, state.turn, top);
-  // mev is in [-val, +val]; if positive the card is likely to meld.
-  // Still apply a holding cost discount so speculative grabs fade late in round.
-  return mev * (0.5 + futureDiscount * 0.5);
-}
-
-// Find all complete melds in `hand`, returning them in play order (largest first
-// by point value, so we empty hand and maximize scored points).
-function allMeldsInHand(hand: RummyCard[]): RummyCard[][] {
+// Complete a plan from a chosen set of new melds: lay off whatever then fits,
+// decide on joker layoffs, and value the result. null if the forced card
+// (deep pickup) would be stranded or the plan breaks requireDiscard.
+function planLeaf(ctx: AiCtx, hand: RummyCard[], forcedId: number | null, chosen: Cand[]): Plan | null {
+  const n = hand.length;
+  let banked = 0;
+  // Assign real jokers to the chosen melds.
+  const jokerIdx: number[] = [];
+  hand.forEach((c, i) => { if (c.joker) jokerIdx.push(i); });
+  let jx = 0;
   const melds: RummyCard[][] = [];
-  let remaining = [...hand];
-  for (let pass = 0; pass < 20; pass++) {
-    const run = findRun(remaining);
-    const set = findSet(remaining);
-    // Pick whichever scores more points
-    const runPts = run ? run.reduce((s, c) => s + cardValue(c), 0) : -1;
-    const setPts = set ? set.reduce((s, c) => s + cardValue(c), 0) : -1;
-    const pick = runPts >= setPts ? run : set;
-    if (!pick) break;
-    melds.push(pick);
-    remaining = remaining.filter((c) => !pick.includes(c));
+  let infos = ctx.table.slice();
+  const inMeld = new Uint8Array(n);
+  for (const cd of chosen) {
+    const cards = cd.idx.map((i) => hand[i]);
+    for (const i of cd.idx) inMeld[i] = 1;
+    for (let k = 0; k < cd.jokers; k++) { const ji = jokerIdx[jx++]; cards.push(hand[ji]); inMeld[ji] = 1; }
+    melds.push(cards);
+    infos.push(meldInfo(cards, cd.run && cd.idx.length > 1, -1)); // 1 natural + 2 jokers counts as a set
+    banked += cd.pts;
   }
-  return melds;
-}
+  let rest: RummyCard[] = [];
+  for (let i = 0; i < n; i++) if (!inMeld[i]) rest.push(hand[i]);
 
-// ---------- strategic meld withholding ----------
-// "Going-out surprise": deliberately hold back complete melds so opponents
-// don't realise you're one draw away from emptying your hand. Next turn you
-// play everything in one sweep, capturing full opponent held-card penalties
-// before anyone can react.
-//
-// Returns the set of card IDs that form the withheld melds (protected from
-// discard selection this turn), or null if withholding is not indicated.
-function evaluateGoOutSurprise(
-  state: RummyState,
-  seat: number,
-  personality: AiPersonality,
-  rng: () => number,
-): Set<number> | null {
-  if (state.mustMeldCardId != null) return null; // forced card blocks the strategy
-
-  const hand = state.hands[seat];
-
-  // Find every complete meld currently in hand.
-  const meldGroups = allMeldsInHand(hand);
-  if (meldGroups.length === 0) return null;
-
-  // Identify cards committed to complete melds.
-  const meldedIds = new Set(meldGroups.flatMap((g) => g.map((c) => c.id)));
-
-  // Simulate playing all current melds + layoffs; count what would remain.
-  let remaining = hand.filter((c) => !meldedIds.has(c.id));
-  for (const tm of state.melds) {
-    for (const c of [...remaining]) {
-      const combined = [...tm.cards, c];
-      if (tm.kind === "set" ? isSet(combined) : isRun(combined)) {
-        remaining = remaining.filter((x) => x !== c);
-      }
+  const layoffs: Layoff[] = [];
+  const layOff = (t: number, c: RummyCard) => {
+    infos[t] = extend(infos[t], c);
+    layoffs.push({ card: c, meldId: infos[t].id, at: t });
+    banked += cardValue(c);
+  };
+  // A forced card not in a new meld is laid off first, onto a meld as it
+  // stands: the rules check each layoff leaves it playable in one step.
+  const fi = rest.findIndex((c) => c.id === forcedId);
+  if (fi >= 0) {
+    const t = infos.findIndex((m) => fits(m, rest[fi]));
+    if (t < 0) return null; // forced card stranded
+    layOff(t, rest[fi]);
+    rest.splice(fi, 1);
+  }
+  // Lay off every natural card that fits (repeat: one layoff can open another).
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (let i = 0; i < rest.length; i++) {
+      const c = rest[i];
+      if (c.joker) continue;
+      const t = infos.findIndex((m) => fits(m, c));
+      if (t < 0) continue;
+      layOff(t, c);
+      rest.splice(i--, 1);
+      changed = true;
     }
   }
+  // Jokers: lay one off only when that beats keeping it for a combo.
+  let restValue = handValue(ctx, rest, infos);
+  for (let i = 0; i < rest.length; i++) {
+    const c = rest[i];
+    if (!c.joker) continue;
+    const t = infos.findIndex((m) => fits(m, c));
+    if (t < 0) continue;
+    const without = rest.filter((x) => x !== c);
+    const v = handValue(ctx, without, infos);
+    if (v + cardValue(c) > restValue) {
+      infos = infos.slice(); // already viewed by handValue: replace, don't mutate
+      layOff(t, c);
+      rest = without;
+      restValue = v;
+      i--;
+    }
+  }
+  // Going out: no cards left, or one left to discard.
+  if (rest.length === 0 && ctx.state.requireDiscard) {
+    // Keep the last layoff back to discard (no later layoff builds on it). A
+    // meld can't take the last card, and the forced card can't be discarded.
+    if (!layoffs.length || layoffs[layoffs.length - 1].card.id === forcedId) return null;
+    const back = layoffs.pop()!;
+    banked -= cardValue(back.card);
+    rest = [back.card];
+  }
+  const value = banked + (rest.length <= 1 ? ctx.goOutBonus : restValue);
+  return { chosen: chosen.slice(), melds, layoffs, rest, tbl: infos, banked, value };
+}
 
-  if (remaining.length === 0) return null; // already going out this turn — no withholding needed
-  if (remaining.length > 3) return null;   // too far from going out to set up a surprise
+// Choose which melds and layoffs to put down from `hand`: a depth-first search
+// over disjoint meld candidates (biggest first), each leaf completed by
+// planLeaf. Every plan places the forced card if there is one; null when none can.
+function planTurn(ctx: AiCtx, hand: RummyCard[], forcedId: number | null, maxLeaves: number): Plan | null {
+  const cands = meldCandidates(hand);
+  const used = new Uint8Array(hand.length);
+  const chosen: Cand[] = [];
+  let jokersLeft = hand.filter((c) => c.joker).length;
+  let best: Plan | null = null;
+  let leaves = 0;
+  maxLeaves = Math.max(MIN_LEAVES, Math.min(maxLeaves, ctx.leavesLeft));
+  const dfs = (start: number) => {
+    leaves++;
+    const p = planLeaf(ctx, hand, forcedId, chosen);
+    if (p && (!best || p.value > best.value)) best = p;
+    for (let j = start; j < cands.length && leaves < maxLeaves; j++) {
+      const cd = cands[j];
+      if (cd.jokers > jokersLeft || cd.idx.some((i) => used[i])) continue;
+      for (const i of cd.idx) used[i] = 1;
+      jokersLeft -= cd.jokers;
+      chosen.push(cd);
+      dfs(j + 1);
+      chosen.pop();
+      jokersLeft += cd.jokers;
+      for (const i of cd.idx) used[i] = 0;
+    }
+  };
+  dfs(0);
+  ctx.leavesLeft -= leaves;
+  return best;
+}
 
-  // The remaining cards must have genuine meld potential — otherwise we're just
-  // stalling with deadweight, which is -EV.
-  const remainingEV = remaining.reduce((s, c) => s + cardMeldEV(state, seat, c), 0);
-  if (remainingEV <= 0) return null; // remaining cards are likely stuck; abandon plan
+// Plan for `hand` plus one extra card (appended last), searched locally around
+// `base` (the plan for `hand` alone): keep the base melds and either hold or
+// lay off the new card, or swap in one meld that uses it.
+function planWithExtra(ctx: AiCtx, hand: RummyCard[], base: Plan): Plan | null {
+  const n = hand.length - 1;
+  const jokers = hand.filter((c) => c.joker).length;
+  let best = planLeaf(ctx, hand, null, base.chosen);
+  for (const cd of meldCandidates(hand, n)) {
+    const kept = base.chosen.filter((b) => !b.idx.some((i) => cd.idx.includes(i)));
+    let jk = cd.jokers;
+    const fit = kept.filter((b) => (jk + b.jokers <= jokers ? ((jk += b.jokers), true) : false));
+    const p = planLeaf(ctx, hand, null, [...fit, cd]);
+    if (p && (!best || p.value > best.value)) best = p;
+  }
+  return best;
+}
 
-  // Going out is only worth delaying if opponents are still holding significant value.
-  const opponentHeld = state.hands.reduce(
-    (s, h, i) => (i !== seat ? s + h.reduce((hs, c) => hs + cardValue(c), 0) : s),
-    0,
-  );
-  // Conservative threshold: the opponent-held bonus must exceed what we'd score
-  // by playing our melds now, otherwise we're better off scoring immediately.
-  const immediateScore = meldGroups.flat().reduce((s, c) => s + cardValue(c), 0);
-  if (opponentHeld < immediateScore * 0.6) return null; // not enough upside
+// Discards ranked best-first: keep the most promising hand, avoid feeding
+// opponents. handValue(rest - d) is computed incrementally: removing d only
+// changes the chances of cards that could combine with it.
+function rankDiscards(ctx: AiCtx, rest: RummyCard[], tbl: MeldInfo[], avoidId: number | null): { card: RummyCard; score: number }[] {
+  const n = rest.length;
+  const jokers = loadHand(rest);
+  const view = tableView(tbl);
+  for (let i = 0; i < n; i++) PROB[i] = rest[i].joker ? 0 : meldChance(ctx, rest[i], view);
+  const anyNatural = rest.some((c) => !c.joker && c.id !== avoidId);
+  const out: { card: RummyCard; score: number }[] = [];
+  for (let d = 0; d < n; d++) {
+    const card = rest[d];
+    if (anyNatural ? card.joker || card.id === avoidId : false) continue;
+    PROB2.set(PROB.subarray(0, n));
+    let jokersLeft = jokers;
+    if (card.joker) jokersLeft--;
+    else {
+      shiftCard(card, -1);
+      for (let i = 0; i < n; i++) if (i !== d && !rest[i].joker && related(rest[i], card)) PROB2[i] = meldChance(ctx, rest[i], view);
+      shiftCard(card, +1);
+    }
+    const jokerP = jokersLeft ? applyJokers(ctx, rest, PROB2, jokersLeft, d, tbl.length) : 0;
+    out.push({ card, score: sumValue(rest, PROB2, jokerP, d) - ctx.lv.feedWeight * feedRisk(ctx, card) });
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
 
-  // Abort if any opponent is dangerously close to going out themselves.
-  if (minOpponentHandSize(state, seat) <= 3) return null;
+// Value of a whole turn after drawing: the plan's banked points plus the best
+// discard (or the go-out bonus when at most one card is left).
+function planValue(ctx: AiCtx, plan: Plan): number {
+  if (plan.rest.length <= 1) return plan.value;
+  return plan.banked + rankDiscards(ctx, plan.rest, plan.tbl, null)[0].score;
+}
 
-  // Personality gate: each profile has a different appetite for this gambit.
-  // We derive a "gambit probability" from earlyDiscount (risk tolerance proxy)
-  // and apply an extra penalty for the opportunist's erratic nature.
-  const gamblerFactor = (personality.earlyDiscount - 0.60) / 0.16; // 0 at 0.60, 1 at 0.76
-  const gamblerProb = Math.max(0, Math.min(1, gamblerFactor));
-  if (rng() > gamblerProb) return null;
+const handPoints = (cards: RummyCard[]): number => cards.reduce((a, c) => a + cardValue(c), 0);
 
-  return meldedIds;
+const planUses = (plan: Plan, id: number): boolean =>
+  plan.melds.some((m) => m.some((c) => c.id === id)) || plan.layoffs.some((l) => l.card.id === id);
+
+// ---------- draw decision ----------
+
+// Does a drawn natural card interact with the hand or table at all (same rank,
+// a nearby card of its suit, a layoff or a table run within reach)?
+function relatedCard(hand: RummyCard[], key: number, view: TableView): boolean {
+  const s = key >> 4, r = key & 15;
+  if ((view.lay[s] >> r) & 1) return true;
+  const near = (x: number, y: number) => Math.abs(x - y) <= 2 || (x === 14 && y <= 3) || (y === 14 && x <= 3);
+  for (let t = Math.max(1, r - 2); t <= Math.min(14, r + 2); t++) if (view.anchors[s] & (1 << t)) return true;
+  if (r === 14 && view.anchors[s] & 0b1110) return true; // ace low next to a 2-3 run
+  let jokers = 0;
+  for (const c of hand) {
+    if (c.joker) { jokers++; continue; }
+    if (c.rank === r || (SUIT_IDX[c.suit] === s && near(c.rank, r))) return true;
+  }
+  return jokers >= 2;
+}
+
+// Expected turn value of drawing an unseen stock card: every live card is
+// equally likely. Each outcome is planned locally around the plan for the
+// current hand (a full search for a drawn joker, which reshapes everything).
+// A card unrelated to the hand changes nothing else: we either throw it
+// straight back or keep it and make the base plan's best discard.
+function stockValue(ctx: AiCtx, hand: RummyCard[]): number {
+  const base = planTurn(ctx, hand, null, PLAY_LEAVES);
+  if (!base) return -Infinity;
+  const view = tableView(ctx.table);
+  const keepRest = base.rest.length ? handValue(ctx, base.rest, base.tbl) : 0;
+  const baseDiscard = base.rest.length ? rankDiscards(ctx, base.rest, base.tbl, null)[0].score : 0;
+  let sum = 0;
+  for (let k = 0; k < 64; k++) {
+    if (ctx.live[k] <= 0) continue;
+    const card: RummyCard = { id: -1000 - k, rank: k & 15, suit: SUITS[k >> 4] };
+    let v: number;
+    if (relatedCard(hand, k, view)) {
+      const p = planWithExtra(ctx, [...hand, card], base);
+      if (!p) continue;
+      v = planValue(ctx, p);
+    } else if (!base.rest.length) {
+      v = base.banked + ctx.goOutBonus; // everything else melds: discard it and go out
+    } else {
+      const solo = handValue(ctx, [card], base.tbl);
+      v = base.banked + Math.max(keepRest - ctx.lv.feedWeight * feedRisk(ctx, card), baseDiscard + solo);
+    }
+    sum += ctx.live[k] * v;
+  }
+  if (ctx.liveJokers > 0) {
+    const p = planTurn(ctx, [...hand, { id: -2000, rank: 0, suit: "S", joker: true }], null, DEEP_LEAVES);
+    if (p) sum += ctx.liveJokers * planValue(ctx, p);
+  }
+  return sum / ctx.unknown;
+}
+
+function chooseDraw(ctx: AiCtx): RummyMove {
+  const { state, seat } = ctx;
+  const hand = state.hands[seat];
+  const pile = state.discard;
+  let bestMove: RummyMove | null = null;
+  let bestValue = -Infinity;
+  const consider = (move: RummyMove, value: number) => { if (value > bestValue) { bestValue = value; bestMove = move; } };
+
+  if (state.stock.length > 0) consider({ type: "drawStock", seat }, stockValue(ctx, hand));
+  if (pile.length > 0) {
+    // Top card: only worth taking when it goes straight onto the table.
+    const top = pile[pile.length - 1];
+    const tp = planTurn(ctx, [...hand, top], null, PLAY_LEAVES);
+    if (tp && (planUses(tp, top.id) || state.stock.length === 0)) consider({ type: "drawDiscard", seat, cardId: top.id }, planValue(ctx, tp));
+    // Deeper (as far as this level looks): the bottom card taken must be
+    // melded or laid off this turn.
+    for (let i = Math.max(0, pile.length - ctx.lv.pickupDepth); i < pile.length - 1; i++) {
+      const target = pile[i];
+      const move: RummyMove = { type: "drawDiscard", seat, cardId: target.id };
+      if (!isLegal(state, move)) continue;
+      const dp = planTurn(ctx, [...hand, ...pile.slice(i)], target.id, DEEP_LEAVES);
+      if (dp) consider(move, planValue(ctx, dp));
+    }
+  }
+  return bestMove ?? { type: "drawStock", seat };
+}
+
+// ---------- play phase ----------
+
+// The single-card take from the pile this turn, if any (never thrown straight back).
+function takenTopThisTurn(state: RummyState, seat: number): number | null {
+  for (let i = state.log.length - 1; i >= 0 && state.log[i].seat === seat; i--) {
+    const e = state.log[i];
+    if (e.msg === "took" && !e.extraCards?.length) return (e.cards?.[0] as unknown as RummyCard | undefined)?.id ?? null;
+  }
+  return null;
+}
+
+function choosePlay(ctx: AiCtx, rng: () => number): RummyMove | null {
+  const { state, seat } = ctx;
+  const forced = state.mustMeldCardId;
+  const plan = planTurn(ctx, state.hands[seat], forced, PLAY_LEAVES);
+  if (!plan) return null;
+
+  // Put the forced card down first (its own meld, its layoff, or the new meld
+  // it goes onto), then the biggest melds, then layoffs onto melds already on
+  // the table in plan order, which puts a card before any it makes room for
+  // (layoffs onto new melds follow on the next call).
+  const forcedMeld = plan.melds.find((m) => m.some((c) => c.id === forced));
+  const forcedLay = plan.layoffs.find((l) => l.card.id === forced);
+  if (forcedMeld) return { type: "meld", seat, cards: forcedMeld.map((c) => c.id) };
+  if (forcedLay && forcedLay.meldId >= 0) return { type: "layoff", seat, meldId: forcedLay.meldId, cards: [forced!] };
+  if (forcedLay) return { type: "meld", seat, cards: plan.melds[forcedLay.at - ctx.table.length].map((c) => c.id) };
+  if (plan.melds.length) {
+    const biggest = plan.melds.reduce((a, b) => (handPoints(b) > handPoints(a) ? b : a));
+    return { type: "meld", seat, cards: biggest.map((c) => c.id) };
+  }
+  const lay = plan.layoffs.find((l) => l.meldId >= 0);
+  if (lay) return { type: "layoff", seat, meldId: lay.meldId, cards: [lay.card.id] };
+  if (forced != null || !plan.rest.length) return null;
+
+  const ranked = rankDiscards(ctx, plan.rest, ctx.table, takenTopThisTurn(state, seat));
+  let pick = ranked[0];
+  if (ranked.length > 1 && rng() < ctx.lv.misplayRate) pick = ranked[1 + Math.floor(rng() * Math.min(3, ranked.length - 1))]; // a plausible slip: one of the next three
+  return { type: "discard", seat, cardId: pick.card.id };
+}
+
+// Last resort when the planner has nothing legal: put a forced card down (the
+// rules guarantee a way), else discard the costliest non-joker, else any legal move.
+function fallbackMove(state: RummyState, seat: number): RummyMove {
+  const hand = state.hands[seat];
+  const legal = (m: RummyMove) => isLegal(state, m);
+  if (state.turnPhase === "draw") {
+    const stock: RummyMove = { type: "drawStock", seat };
+    if (legal(stock)) return stock;
+  } else {
+    const forced = forcedMoves(state, seat);
+    if (forced.length) return forced[0];
+    const costly = hand.filter((c) => !c.joker).sort((a, b) => cardValue(b) - cardValue(a))[0] ?? hand[0];
+    if (costly) {
+      const m: RummyMove = { type: "discard", seat, cardId: costly.id };
+      if (legal(m)) return m;
+    }
+  }
+  return legalMoves(state).find(legal) ?? { type: "drawStock", seat };
 }
 
 function aiMove(state: RummyState, seat: number): RummyMove {
-  const hand = state.hands[seat];
-  const personality = getPersonality(seat, state);
-  const opponentLow = minOpponentHandSize(state, seat) <= personality.endgameHandSize;
-  const rng = aiRng(state, seat);
-  const model = buildOpponentModel(state, seat);
-
-  // ── Draw phase ──────────────────────────────────────────────────────────────
-  if (state.turnPhase === "draw") {
-    const discard = state.discard;
-    const top = discard[discard.length - 1];
-
-    // Always take the top card if it immediately enables a meld or layoff
-    // (misplay doesn't apply to clear forced-win situations).
-    if (top && (canFormMeldWith([...hand, top], top) || canLayoff(state, top))) {
-      // Only misplay by sometimes missing the opportunity entirely (draw stock instead).
-      if (rng() < personality.misplayRate && state.stock.length > 0)
-        return { type: "drawStock", seat };
-      return { type: "drawDiscard", seat, cardId: top.id };
-    }
-
-    // Speculative top-card grab: take it even without an immediate use when EV > 0.
-    if (!opponentLow && top) {
-      const specScore = speculativeTopValue(hand, top, state, personality);
-      if (specScore > 0) {
-        // Misplay: occasionally skip a good speculative grab and draw stock instead.
-        if (rng() >= personality.misplayRate) return { type: "drawDiscard", seat, cardId: top.id };
-      }
-    }
-
-    // Evaluate deep pile pickups across the full pile (no arbitrary depth cap).
-    const deepAllowed = !opponentLow || personality.pickupThreshold <= 5;
-    if (deepAllowed && discard.length >= 2) {
-      let bestGain = personality.pickupThreshold;
-      let bestTarget: RummyCard | null = null;
-      for (let i = 0; i < discard.length - 1; i++) {
-        const candidate = discard[i];
-        const combined = [...hand, ...discard.slice(i)];
-        if (!canFormMeldWith(combined, candidate) && !canLayoff(state, candidate)) continue;
-        const { gain } = evaluateDeepPickup(state, seat, candidate.id, personality);
-        if (gain > bestGain) { bestGain = gain; bestTarget = candidate; }
-      }
-      if (bestTarget) {
-        // Misplay: occasionally pass on a profitable deep pickup.
-        if (rng() >= personality.misplayRate) return { type: "drawDiscard", seat, cardId: bestTarget.id };
-      }
-    }
-
-    if (state.stock.length > 0) return { type: "drawStock", seat };
-    if (top) return { type: "drawDiscard", seat, cardId: top.id };
-    return { type: "drawStock", seat };
-  }
-
-  // ── Play phase ───────────────────────────────────────────────────────────────
-
-  // 1. Handle the forced card from a deep discard pickup first (no misplay here —
-  //    failing to resolve it would leave the AI stuck and unable to discard).
-  if (state.mustMeldCardId != null) {
-    const mc = hand.find((c) => c.id === state.mustMeldCardId);
-    if (mc) {
-      const s2 = findSetContaining(hand, mc);
-      if (s2) return { type: "meld", seat, cards: s2.map((c) => c.id) };
-      const r2 = findRunContaining(hand, mc);
-      if (r2) return { type: "meld", seat, cards: r2.map((c) => c.id) };
-      for (const m of state.melds) { const lo = layoffOnto(state, m, mc, seat); if (lo) return lo; }
-    }
-  }
-
-  // 2. Check for the "going-out surprise" gambit before committing to playing melds.
-  //    If active, we suppress meld/layoff play and discard only from non-meld cards.
-  const withheldIds = !opponentLow ? evaluateGoOutSurprise(state, seat, personality, rng) : null;
-
-  if (withheldIds === null) {
-    // Normal path: lay down all complete melds, highest value first.
-    const allMelds = allMeldsInHand(hand);
-    if (allMelds.length > 0) return { type: "meld", seat, cards: allMelds[0].map((c) => c.id) };
-
-    // Lay off cards onto existing table melds.
-    const layoffCandidates: Array<{ move: RummyMove; value: number }> = [];
-    for (const m of state.melds) {
-      for (const c of hand) {
-        const lo = layoffOnto(state, m, c, seat);
-        if (lo) layoffCandidates.push({ move: lo, value: cardValue(c) });
-      }
-    }
-    if (layoffCandidates.length > 0) {
-      layoffCandidates.sort((a, b) => {
-        if (opponentLow) return b.value - a.value;
-        const aCard = hand.find((c) => c.id === (a.move as { cards: number[] }).cards[0])!;
-        const bCard = hand.find((c) => c.id === (b.move as { cards: number[] }).cards[0])!;
-        const aPot = meldPotential([aCard, ...hand.filter((c) => c !== aCard)]);
-        const bPot = meldPotential([bCard, ...hand.filter((c) => c !== bCard)]);
-        return aPot - bPot;
-      });
-      return layoffCandidates[0].move;
-    }
-  }
-
-  // 3. Discard — either from the full hand (normal) or from non-withheld cards (gambit).
-  //    Withheld cards are excluded from discard candidates; discard from the remainder.
-  //    Apply misplay: occasionally pick from the suboptimal end of the ranking.
-  const discardPool = withheldIds ? hand.filter((c) => !withheldIds.has(c.id)) : hand;
-  // Safety: if withholding leaves nothing to discard (shouldn't happen given the ≤3
-  // remaining check, but guard anyway), fall through to full hand.
-  const discardSource = discardPool.length > 0 ? discardPool : hand;
-
-  const discardRanked = discardSource.map((c) => {
-    if (c.joker) return { card: c, score: -200 };
-    const mev = cardMeldEV(state, seat, c);
-    const danger = opponentDangerWithModel(state, c, seat, model);
-    let score = -mev;
-    score -= danger * (opponentLow ? personality.dangerWeight * 0.5 : personality.dangerWeight);
-    if (opponentLow) score += Math.max(0, -mev) * 0.5;
-    return { card: c, score };
-  }).sort((a, b) => b.score - a.score);
-
-  const chosen = maybeMisplay(discardRanked, rng, personality.misplayRate);
-  return { type: "discard", seat, cardId: chosen.card.id };
+  const ctx = buildCtx(state, seat, aiLevel(state, seat));
+  const move = state.turnPhase === "draw" ? chooseDraw(ctx) : choosePlay(ctx, aiRng(state, seat));
+  return move && isLegal(state, move) ? move : fallbackMove(state, seat);
 }
 
 // ---------- pacing ----------
@@ -1488,6 +1879,8 @@ export const rummy500Module: Game<RummyState, RummyMove, RummyConfig, RummyView>
   botStepMs: 900,
   seatCount: (config) => config.players,
   createGame,
+  reseed,
+  migrate,
   seatToAct,
   isLegal,
   legalMoves,

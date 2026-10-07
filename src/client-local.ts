@@ -15,10 +15,12 @@ import { heartsModule } from "./hearts-module.ts";
 import { pegsAndJokersModule } from "./pj-module.ts";
 
 // Keyed by the party id app.js uses (its GAMES keys), each with the same lobby
-// default the worker's Durable Object subclass uses.
+// default the worker's Durable Object subclass uses. The lobby merges every
+// setConfig/start over this, so it must not carry LocalRoom's fixed-deal
+// options (dealerSeat/seed/ensureAce): they would make every first deal identical.
 const REGISTRY: Record<string, { game: Game<any, any, any, any>; config: any }> = {
   rummy500: { game: rummy500Module, config: { players: 4, target: 500 } },
-  "high-low-jack": { game: hljModule, config: { players: 6, target: 21, dealerSeat: -2, ensureAce: true } },
+  "high-low-jack": { game: hljModule, config: { players: 6, target: 21 } },
   hearts: { game: heartsModule, config: { players: 4, target: 100 } },
   "pegs-and-jokers": { game: pegsAndJokersModule, config: { players: 4, marbles: 5 } },
 };

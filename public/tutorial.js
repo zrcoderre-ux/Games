@@ -16,8 +16,10 @@
 //   id      unique string (shown once per practice hand)
 //   when    (view, ctx) => bool   — fire this step when true
 //   title   heading text
-//   body    HTML string (explanation: rules AND/OR app function)
-//   anchor  optional CSS selector to spotlight + point at (degrades to centered)
+//   body    HTML string (explanation: rules AND/OR app function), or
+//           (view) => string when the text depends on the table (seats, target)
+//   anchor  optional CSS selector to spotlight + point at (degrades to centered
+//           when nothing matching is on screen)
 //   place   optional "above" | "below" | "center" (default: auto)
 //   gate    "tap" (default) advance on the Next button;
 //           "action" advance automatically when done() becomes true
@@ -61,6 +63,12 @@
     appearance:none;border:1px solid rgba(230,207,120,.35);background:rgba(6,18,12,.6);color:rgba(238,243,230,.8);
     font:600 11px/1 ui-monospace,monospace;letter-spacing:.04em;padding:6px 10px;border-radius:999px;
     cursor:pointer;backdrop-filter:blur(4px)}
+  @media (max-height:500px){
+    .tut-card{max-width:270px;padding:12px 14px 10px}
+    .tut-card h4{font-size:15px;margin-bottom:4px}
+    .tut-card p{font-size:12.5px;line-height:1.4}
+    .tut-foot{margin-top:9px}.tut-hint{margin-top:8px}
+  }
   `;
   function injectCSS() {
     if (document.getElementById("tut-style")) return;
@@ -81,6 +89,7 @@
     ctx: {},            // derived facts carried across frames
     root: null,         // overlay DOM container
     lastView: null,
+    skipSpot: null,     // index into SKIP_SPOTS the Skip pill is parked at
   };
 
   function el(cls, tag) {
@@ -106,9 +115,54 @@
     return r;
   }
 
+  // Park the Skip pill in the first spot (screen corners, then just inside the
+  // felt) where it hides no control: each layout puts Log / Leave / the game
+  // buttons in different corners. When every spot is taken, prefer covering a
+  // score pill or pod over a button.
+  const SKIP_SPOTS = [
+    { top: "max(10px, env(safe-area-inset-top))", right: "12px" },
+    { top: "max(10px, env(safe-area-inset-top))", left: "12px" },
+    // just inside the felt's top corners (landscape tables keep Log / Leave in the gutters)
+    { top: "max(10px, env(safe-area-inset-top))", right: "calc(max(48px, 7vw) + 12px)" },
+    { top: "max(10px, env(safe-area-inset-top))", left: "calc(max(48px, 7vw) + 12px)" },
+    { bottom: "max(10px, env(safe-area-inset-bottom))", left: "12px" },
+    { bottom: "max(10px, env(safe-area-inset-bottom))", right: "12px" },
+  ];
+  function parkSkip() {
+    const pill = T.root && T.root.querySelector(".tut-skip");
+    if (!pill) return;
+    const rects = (sel) => [...document.querySelectorAll(sel)].filter((e) => !e.closest(".tut-root"))
+      .map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+    const controls = rects("[data-action], button, input");
+    const minor = rects(".hlj-score-pill, .pod");
+    const put = (i) => Object.assign(pill.style, { top: "auto", right: "auto", bottom: "auto", left: "auto" }, SKIP_SPOTS[i]);
+    let best = null;
+    // Try the spot it already holds first so it doesn't hop about between frames.
+    for (const i of [T.skipSpot ?? 0, ...SKIP_SPOTS.keys()]) {
+      put(i);
+      const p = pill.getBoundingClientRect();
+      const hit = (r) => !(r.right < p.left || r.left > p.right || r.bottom < p.top || r.top > p.bottom);
+      const cost = controls.filter(hit).length * 10 + minor.filter(hit).length;
+      if (!best || cost < best.cost) best = { i, cost };
+      if (cost === 0) break;
+    }
+    put(best.i);
+    T.skipSpot = best.i;
+  }
+
   function clearPopup() {
     if (!T.root) return;
     [...T.root.querySelectorAll(".tut-ring,.tut-card")].forEach((n) => n.remove());
+  }
+
+  // First element matching `sel` that is actually laid out on screen (a hidden
+  // copy, e.g. the portrait selfbar in landscape, would pin the card to 0,0).
+  function visibleEl(sel) {
+    for (const e of document.querySelectorAll(sel)) {
+      const r = e.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) return e;
+    }
+    return null;
   }
 
   // Compute card + ring geometry for a given anchor element (or null for centered).
@@ -118,13 +172,27 @@
       const pad = 6;
       const ch = card.offsetHeight || 150;
       const cw = card.offsetWidth || 300;
-      const below = a.bottom + 12;
-      const wantAbove = card._step?.place === "above" ||
-        (below + ch > window.innerHeight - 12 && a.top - 12 - ch > 12);
-      let top = wantAbove ? a.top - 12 - ch : below;
-      top = Math.max(12, Math.min(top, window.innerHeight - ch - 12));
+      const H = window.innerHeight, W = window.innerWidth;
+      // Take the requested side (default below) and flip when only the other
+      // side fits; on a short screen where neither does, beside the anchor, else
+      // the roomier side. The card should never sit on the control it points at
+      // if there is any way around it.
+      const fitsAbove = a.top - 12 - ch >= 12;
+      const fitsBelow = a.bottom + 12 + ch <= H - 12;
+      let wantAbove = card._step?.place === "above" ? fitsAbove || !fitsBelow : !fitsBelow && fitsAbove;
+      let top = wantAbove ? a.top - 12 - ch : a.bottom + 12;
       let left = a.left + a.width / 2 - cw / 2;
-      left = Math.max(12, Math.min(left, window.innerWidth - cw - 12));
+      if (!fitsAbove && !fitsBelow) {
+        const roomR = W - a.right - 24, roomL = a.left - 24;
+        if (Math.max(roomR, roomL) >= cw) {
+          left = roomR >= roomL ? a.right + 12 : a.left - 12 - cw;
+          top = a.top + a.height / 2 - ch / 2;
+        } else {
+          top = a.top > H - a.bottom ? a.top - 12 - ch : a.bottom + 12;
+        }
+      }
+      top = Math.max(12, Math.min(top, H - ch - 12));
+      left = Math.max(12, Math.min(left, W - cw - 12));
       return {
         card: { top, left },
         ring: { left: a.left - pad, top: a.top - pad, width: a.width + pad * 2, height: a.height + pad * 2 },
@@ -140,7 +208,7 @@
   // elements without tearing them down (avoids the tutIn animation flashing).
   function place(step, repin) {
     const r = ensureRoot();
-    const anchorEl = step.anchor ? document.querySelector(step.anchor) : null;
+    const anchorEl = step.anchor ? visibleEl(step.anchor) : null;
 
     let card = repin ? T.root.querySelector(".tut-card") : null;
     let ring = repin ? T.root.querySelector(".tut-ring") : null;
@@ -148,10 +216,13 @@
     if (!card) {
       if (!repin) clearPopup();
       card = el("tut-card");
-      card.style.pointerEvents = "auto";
+      // An action-gated card has nothing to tap, so let taps fall through to the
+      // table: on a cramped screen it may have to overlap the control it names.
+      card.style.pointerEvents = step.gate === "action" ? "none" : "auto";
       const total = T.script.length;
+      const body = typeof step.body === "function" ? step.body(T.lastView || {}) : step.body;
       card.innerHTML =
-        `<h4>${step.title}</h4><p>${step.body}</p>` +
+        `<h4>${step.title}</h4><p>${body}</p>` +
         (step.gate === "action"
           ? `<div class="tut-hint">${step.hint || "Your move — do it on the table to continue."}</div>`
           : `<div class="tut-foot"><span class="tut-progress">${T.idx + 1} / ${total}</span>` +
@@ -238,6 +309,7 @@
       T.shown = false;
       T.ctx = {};
       T.lastView = null;
+      T.skipSpot = null;
       T.running = T.script.length > 0;
       if (T.running) ensureRoot();
     },
@@ -248,6 +320,7 @@
       // Update carried context BEFORE evaluating (so transition detectors work).
       updateCtx(view);
       evaluate(view);
+      parkSkip();
     },
 
     stop() {
@@ -267,18 +340,29 @@
       ? v.bidHistory.some((b) => b.seat === v.you) : c.youBid;
     if (v.trump) c.trumpSeen = true;
     if (v.phase === "playing") c.playStarted = true;
-    // Rummy 500: remember once meld/layoff intro has been shown so we skip it next round
-    if (T.party === "rummy500" && Array.isArray(v.melds) && v.melds.length > 0) c.meldShown = true;
+    // Rummy 500: once a round has been scored, skip the meld/layoff intros (a
+    // bot melding before your first turn must NOT count — you haven't seen them)
+    if (T.party === "rummy500" && v.lastRound) c.meldShown = true;
     // Hearts: track one-shot steps
     if (T.party === "hearts") {
+      // Play can't pass trick 0 without your card, so a later trick means you've played.
       if (!c.firstPlayDone && v.phase === "playing" && !v.yourTurn && v.trickNo > 0) c.firstPlayDone = true;
       if (v.heartsBroken) c.heartsShown = true;
-      if (v.phase === "trickComplete") c.trickShown = true;
-      if (v.trickNo >= 6) c.moonShown = true;
     }
   }
 
-  window.addEventListener("resize", () => Tutorial.reflow());
+  // Ranks dealt per table size (High Low Jack trims the deck from the bottom).
+  const hljLowRank = (v) => ({ 4: "8", 6: "5", 8: "2" })[v.players] || "2";
+  // Hearts: tricks per hand and pass rotation by player count (see hearts-module).
+  const heartsN = (v) => v.players || (v.handCounts && v.handCounts.length) || 4;
+  const heartsTricks = (v) => ({ 3: 17, 4: 13, 5: 10 })[heartsN(v)] || 13;
+  const heartsRotation = (v) => ({
+    3: "left, right, then a <b>hold hand</b>",
+    5: "left, two to the left, two to the right, right, then a <b>hold hand</b>",
+  })[heartsN(v)] || "left, across, right, then a <b>hold hand</b>";
+  const ORDINAL = { 3: "third", 4: "fourth", 5: "fifth" };
+
+  window.addEventListener("resize", () => { Tutorial.reflow(); if (T.running) parkSkip(); });
   window.addEventListener("scroll", () => Tutorial.reflow(), true);
 
   // =====================================================================
@@ -294,7 +378,16 @@
         id: "welcome",
         when: (v) => v.phase === "bidding",
         title: "Welcome to High Low Jack",
-        body: "You and the player across from you are <b>partners</b> (Team A). The other seats are Team B. Each hand, one team bids for the right to name <b>trump</b>, then both teams fight for points. First team to the target score wins. Let's play one practice hand.",
+        // Teams are seat parity: across is a partner only at 4 seats.
+        body: (v) => {
+          const n = v.players || (v.seats && v.seats.length) || 4;
+          const team = v.you != null && v.you % 2 ? "B" : "A";
+          const other = team === "A" ? "B" : "A";
+          const mates = n === 4
+            ? `You and the player across from you are <b>partners</b> (Team ${team}). The other two seats are Team ${other}.`
+            : `You and every other seat around the table are <b>partners</b> (Team ${team}: ${n / 2 - 1} teammates, in your team colour). The seats in between are Team ${other}.`;
+          return `${mates} Each hand, one team bids for the right to name <b>trump</b>, then both teams fight for points. First team to the target score wins. Let's play one practice hand.`;
+        },
         gate: "tap", cta: "Show me",
       },
       {
@@ -303,7 +396,7 @@
         anchor: ".fan-inner",
         place: "above",
         title: "Your hand",
-        body: "These are your six cards. Cards rank <b>A K Q J 10 … 2</b>. You'll play exactly one card per trick. Strong cards in one suit are what you bid on.",
+        body: (v) => `These are your six cards. Cards rank <b>A K Q J 10 … ${hljLowRank(v)}</b> (the deck is trimmed to fit the table), plus the Joker. You'll play exactly one card per trick. Strong cards in one suit are what you bid on.`,
         gate: "tap",
       },
       {
@@ -321,7 +414,7 @@
         anchor: ".hlj-bid-overlay",
         place: "above",
         title: "Bidding",
-        body: "A bid is a promise: how many of the hand's points your team will capture (2–6). The <b>highest bidder names trump</b> and must take at least that many points — fall short and you're <b>set back</b> (the bid is subtracted from your score instead). Bidding <b>6 is an automatic win</b> — unless your team is in the hole (negative score) going into that hand.",
+        body: "A bid is a promise: how many of the hand's points your team will capture (2–6). The <b>highest bidder names trump</b> and must take at least that many points — fall short and you're <b>set back</b> (the bid is subtracted from your score instead). Bidding <b>6 and making it wins the game outright</b> — unless your team is in the hole (negative score) going into that hand.",
         gate: "tap",
       },
       {
@@ -348,12 +441,12 @@
       },
       {
         id: "signals",
-        when: (v) => v.pendingSignal === true,
+        when: (v) => v.pendingSignal === true && (v.pendingSignalSeat == null || v.pendingSignalSeat === v.you),
         skipWhen: (v) => v.phase !== "bidding" && v.pendingSignal !== true,
-        anchor: ".selfbar",
+        anchor: ".hlj-signal-felt",
         place: "above",
         title: "Hand signals",
-        body: "Because a teammate still has to bid, you may flash a <b>confidence signal</b> — a legal way to hint how strong your hand is. Pick <b>High</b>, <b>Medium</b>, or <b>Low</b>; your partner sees the badge and bids smarter. Opponents see it too, so it's a real tell.",
+        body: "Because a teammate still has to bid, you may flash a <b>confidence signal</b> — a legal way to hint how strong your hand is. Pick <b>Weak</b>, <b>Medium</b>, or <b>Strong</b>; your partner sees the badge and bids smarter. Opponents see it too, so it's a real tell.",
         hint: "Pick a signal to continue.",
         gate: "action",
         done: (v) => v.pendingSignal !== true,
@@ -365,7 +458,7 @@
           && !(Array.isArray(v.signals) && v.signals.some((s) => s != null)),
         anchor: ".pod .signal-img, .signal-img",
         title: "Reading a signal",
-        body: "That badge is a teammate's (or opponent's) confidence signal. A <b>High</b> badge from your partner means lean in; a <b>Low</b> one means don't overbid expecting help.",
+        body: "That badge is a teammate's (or opponent's) confidence signal. A <b>Strong</b> badge from your partner means lean in; a <b>Weak</b> one means don't overbid expecting help.",
         gate: "tap",
       },
       {
@@ -382,7 +475,7 @@
         anchor: ".fan-inner",
         place: "above",
         title: "Playing a trick",
-        body: "Tap a card to play it. You must <b>follow the led suit</b> if you can; if you can't, you may play anything — including trump. Highest trump wins the trick; with no trump, the highest card of the led suit wins.",
+        body: "Tap a card to play it. Follow the led suit if you can — or <b>trump in</b> at any time. If you can't follow, you may play anything. Highest trump wins the trick; with no trump, the highest card of the led suit wins.",
         hint: "Tap a card to play it.",
         gate: "action",
         done: (v) => !v.yourTurn, // your turn flips off the instant you play
@@ -399,14 +492,14 @@
         id: "honors",
         when: (v) => v.phase === "playing",
         title: "Where points come from",
-        body: "Each hand has up to <b>six</b> points to win: <b>High</b> (highest trump played), <b>Low</b> (lowest trump played), <b>Jack</b> (the jack of trump), <b>Bonhomme</b> (the Joker) — worth <b>2 points</b>, not 1 — and <b>Game</b> (most card value: A=4, K=3, Q=2, J=1, 10=10). Capture them in your tricks.",
+        body: "Each hand has up to <b>six</b> points to win: <b>High</b> (the highest trump in play), <b>Low</b> (the lowest natural trump in play — the Joker never counts as Low), <b>Jack</b> (the jack of trump), <b>Bonhomme</b> (the Joker) — worth <b>2 points</b>, not 1 — and <b>Game</b> (most card value: A=4, K=3, Q=2, J=1, 10=10). Capture them in your tricks.",
         gate: "tap",
       },
       {
         id: "scored",
         when: (v) => !!v.lastHand || v.phase === "gameOver",
         title: "Scoring the hand",
-        body: "The hand is scored: each captured honor counts (Bonhomme counts for 2). If the bidding team made its bid, those points count; if not, the bid is subtracted (<b>set back</b>). The game is played to <b>21 points</b> — first team there wins.",
+        body: (v) => `The hand is scored: each captured honor counts (Bonhomme counts for 2). If the bidding team made its bid, those points count; if not, the bid is subtracted (<b>set back</b>). This game is played to <b>${v.target || 21} points</b> — first team there wins.`,
         gate: "tap",
       },
       {
@@ -422,7 +515,7 @@
         id: "welcome",
         when: (v) => v.phase === "playing",
         title: "Welcome to Rummy 500",
-        body: "Everyone plays for themselves — no teams. Each round you draw, meld cards onto the table, and discard. Cards you meld score <b>for you</b>; cards left in your hand score <b>against you</b>. First to <b>500 points</b> wins.",
+        body: (v) => `Everyone plays for themselves — no teams. Each round you draw, meld cards onto the table, and discard. Cards you meld score <b>for you</b>; cards left in your hand score <b>against you</b>. First to <b>${v.target || 500} points</b> wins; a tie for the lead plays another round.`,
         gate: "tap", cta: "Show me",
       },
       {
@@ -465,7 +558,7 @@
       },
       {
         id: "layoff-intro",
-        when: (v, c) => v.phase === "playing" && v.yourTurn && v.turnPhase === "play" && !c.meldShown,
+        when: (v) => v.phase === "playing" && v.yourTurn && v.turnPhase === "play",
         skipWhen: (v, c) => c.meldShown || v.phase !== "playing",
         anchor: ".rummy-melds-scroll",
         title: "Laying off",
@@ -521,7 +614,7 @@
         id: "welcome",
         when: (v) => v.phase === "passing" || v.phase === "playing",
         title: "Welcome to Hearts",
-        body: "Hearts is a trick-avoidance game — <b>lowest score wins</b>. Each heart is worth 1 point, and the <b>Queen of Spades is worth 13</b>. You want to capture as few of these as possible. First player to reach the target score ends the game; whoever has the fewest points wins.",
+        body: "Hearts is a trick-avoidance game — <b>lowest score wins</b>. Each heart is worth 1 point, and the <b>Queen of Spades is worth 13</b>. You want to capture as few of these as possible. First player to reach the target score ends the game; whoever has the fewest points wins. If the lowest total is shared, another hand is played until one player is alone at the bottom.",
         gate: "tap", cta: "Show me",
       },
       {
@@ -540,7 +633,7 @@
         anchor: ".fan-inner",
         place: "above",
         title: "Passing cards",
-        body: "Before play begins, pass <b>3 cards</b> to your neighbor. The direction rotates each hand — left, across, right, then a <b>hold hand</b> with no pass. Tap 3 cards to select them, then tap <b>Pass</b>. Dump your highest hearts or the Ace/King of Spades — anything that might land you points.",
+        body: (v) => `Before play begins, pass <b>3 cards</b> to another player. The direction rotates each hand — ${heartsRotation(v)} with no pass. Tap 3 cards to select them, then tap <b>Pass</b>. Dump your highest hearts or the Ace/King of Spades — anything that might land you points.`,
         hint: "Select 3 cards and tap Pass.",
         gate: "action",
         done: (v) => v.youPassed || v.phase !== "passing",
@@ -548,25 +641,25 @@
       {
         id: "hold-hand",
         when: (v) => v.phase === "playing" && v.passOffset === 0 && v.trickNo === 0,
-        skipWhen: (v) => v.phase !== "playing" || v.passOffset !== 0,
+        skipWhen: (v) => v.passOffset !== 0 || v.trickNo > 0 || v.phase === "gameOver",
         title: "Hold hand — no pass",
-        body: "Every fourth hand is a <b>hold hand</b>: no passing. You play exactly what you were dealt. Hold hands reward players who've built safe hands — and punish those who rely on passing away danger.",
+        body: (v) => `Every ${ORDINAL[heartsN(v)] || "fourth"} hand is a <b>hold hand</b>: no passing. You play exactly what you were dealt. Hold hands reward players who've built safe hands — and punish those who rely on passing away danger.`,
         gate: "tap",
       },
       {
         id: "first-trick",
         when: (v) => v.phase === "playing" && v.trickNo === 0,
-        skipWhen: (v) => v.phase !== "playing" || v.trickNo !== 0,
+        skipWhen: (v) => v.trickNo > 0 || v.phase === "trickComplete" || v.phase === "gameOver",
         anchor: ".fan-inner",
         place: "above",
         title: "The first trick",
-        body: "The player holding the <b>lowest club</b> leads it. Everyone must follow suit if they can — the highest card of the led suit wins the trick. <b>No point cards</b> (hearts or Queen of Spades) may be played on the first trick unless you have no clubs at all.",
+        body: "The player holding the <b>lowest club</b> leads it. Everyone must follow suit if they can — the highest card of the led suit wins the trick. <b>No point cards</b> (hearts or the Queen of Spades) may be played on the first trick — unless you have no clubs and nothing but point cards in your hand.",
         gate: "tap",
       },
       {
         id: "play-card",
         when: (v) => v.phase === "playing" && v.yourTurn,
-        skipWhen: (v, c) => v.phase !== "playing" || c.firstPlayDone,
+        skipWhen: (v, c) => c.firstPlayDone || v.phase === "gameOver" || !!v.lastHand,
         anchor: ".fan-inner",
         place: "above",
         title: "Play a card",
@@ -578,7 +671,7 @@
       {
         id: "bleeding-hearts",
         when: (v) => v.phase === "playing" && !v.heartsBroken,
-        skipWhen: (v, c) => v.phase !== "playing" || v.heartsBroken || c.heartsShown,
+        skipWhen: (v, c) => v.heartsBroken || c.heartsShown || v.phase === "gameOver" || !!v.lastHand,
         anchor: ".trump-watermark",
         title: "Hearts aren't broken yet",
         body: "You <b>cannot lead hearts</b> until a heart has been played to a trick — that's called breaking hearts. Once broken, hearts are fair game to lead. Until then, if you can only lead hearts, you may lead one anyway.",
@@ -587,7 +680,7 @@
       {
         id: "trick-complete",
         when: (v) => v.phase === "trickComplete",
-        skipWhen: (v, c) => v.phase !== "trickComplete" || c.trickShown,
+        skipWhen: (v) => v.phase === "gameOver" || !!v.lastHand,
         anchor: ".trick-gate",
         title: "Trick won",
         body: "The cards stay on screen so everyone can see who took what. Tap the trick (or wait) to sweep it and continue. Points in the pile go to the winner — watch for red cards and the Queen of Spades.",
@@ -596,7 +689,7 @@
       {
         id: "shoot-the-moon",
         when: (v) => v.phase === "playing" && v.trickNo >= 3,
-        skipWhen: (v, c) => c.moonShown || v.phase !== "playing",
+        skipWhen: (v) => v.phase === "gameOver" || !!v.lastHand,
         title: "Shooting the moon",
         body: "Here's the wild card: if one player captures <b>all 26 points</b> in a hand — every heart and the Queen of Spades — that's <b>shooting the moon</b>. They score 0 and <b>everyone else gets 26</b>. It's a high-risk comeback move; watch out for opponents loading up on hearts.",
         gate: "tap",
@@ -605,7 +698,7 @@
         id: "scoring",
         when: (v) => !!(v.lastHand),
         title: "End of hand",
-        body: "After all 13 tricks the hand is scored. Check the <b>scorecard</b>: each player's hearts and Q♠ are totalled. If someone shot the moon, everyone else takes 26. The running totals update and a new hand deals. Game ends when anyone reaches the target — lowest total wins.",
+        body: (v) => `After all ${heartsTricks(v)} tricks the hand is scored. Check the <b>scorecard</b>: each player's hearts and Q♠ are totalled. If someone shot the moon, everyone else takes 26. The running totals update and a new hand deals. Game ends when anyone reaches the target — lowest total wins; a tie for lowest plays another hand.`,
         gate: "tap",
       },
       {

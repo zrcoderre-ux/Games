@@ -57,15 +57,20 @@ const S = {
   awaitingPass: false, // showing the privacy hand-off screen
   passTo: null, // seat we're passing the device to
   passReady: false, // hand-off delay elapsed; reveal button enabled
+  passTimer: null, // hand-off delay setTimeout handle
   connected: false,
   intentionalClose: false,
+  joinedOnline: false, // a socket to this room has opened at least once (drops then retry, never go offline)
+  connectSlow: false, // first join is taking a while: offer "Play offline"
+  retryMs: 0, // current reconnect backoff
+  retryTimer: null, // pending reconnect setTimeout handle
   view: null,
+  sentFor: null, // the view a move / advance tap was last sent for (see sendOnce)
   rummySel: new Set(), // selected card ids
   rummyLayoff: null, // selected meld id for layoff
   rummyMeldOpen: null, // meld id whose popup is open
-  rummyRoundAcked: null, // JSON key of the lastRound already dismissed
-  rummyRoundTimer: null, // auto-dismiss setTimeout handle
-  rummyRoundVisible: false, // true once the pause after going-out has elapsed
+  rummyRoundShown: null, // round key (rummyRoundKey) whose summary screen this device showed
+  rummyRoundAcked: null, // round key whose summary this device dismissed ("Next hand" / Close)
   hljHandAcked: null, // JSON key of the lastHand already dismissed
   hljHandTimer: null, // auto-dismiss setTimeout handle
   hljShowDealtHands: false,
@@ -75,7 +80,7 @@ const S = {
   heartsLastTrickOpen: false, // same, for Hearts
   heartsLastTrickKey: null,   // key of last seen lastTrick (for collecting animation trigger)
   heartsCollecting: null,     // { plays, winSeat, ts } while scatter→fan anim is playing
-  heartsHandAcked: null, // JSON key of lastHand already dismissed
+  heartsHandAcked: null, // hand key (heartsHandKey) of the lastHand already dismissed
   heartsHandTimer: null, // auto-dismiss setTimeout handle
   heartsReceivedCards: [], // card ids just received via pass, shown in selrow for 5s
   heartsReceivedTimer: null, // clears heartsReceivedCards after 5s
@@ -84,7 +89,6 @@ const S = {
   rummySort: "suit", // last sort mode used; next click alternates
   rummyDrawnCard: null, // card just drawn from stock (shown as preview above hand)
   rummyDrawnTimer: null, // auto-dismiss timer for drawn card preview
-  rummyPrevHandIds: new Set(), // hand ids from previous render (for new-card detection)
   theme: "midnight", // "midnight" | "velvet" | "baize" | "parchment"
 
   discardOpen: false, // discard-pile popup open?
@@ -127,6 +131,7 @@ function morphNode(a, b) {
   // for unrelated state changes (e.g. picking a game) doesn't strip it for a
   // frame and cause a visible jump before the next rAF reapplies it.
   const keepStyle = a.classList && (a.classList.contains("hs-wm-wrap") || a.classList.contains("hs-wm"));
+  const prevValue = a.getAttribute("value"); // rendered value before this morph
   for (let i = a.attributes.length - 1; i >= 0; i--) {
     const n = a.attributes[i].name;
     if (keepStyle && n === "style") continue;
@@ -135,10 +140,12 @@ function morphNode(a, b) {
   for (const at of b.attributes) {
     if (a.getAttribute(at.name) !== at.value) a.setAttribute(at.name, at.value);
   }
-  // keep form fields usable: sync value/checked unless the user is editing it now
+  // keep form fields usable: sync value/checked unless the user is editing it now,
+  // and only when the rendered value actually changed — an unrelated re-render must
+  // not wipe what the user typed (e.g. a room code, then tapping a game card).
   if ((a.nodeName === "INPUT" || a.nodeName === "TEXTAREA" || a.nodeName === "SELECT") && a !== document.activeElement) {
     const bv = b.getAttribute("value");
-    if (bv != null && a.value !== bv) a.value = bv;
+    if (bv != null && bv !== prevValue && a.value !== bv) a.value = bv;
   }
   morphList(a, b);
 }
@@ -254,6 +261,21 @@ function avatarHTML(name, o = {}) {
   return `<div class="avatar${o.big ? " big" : ""}${teamCls}"${style}>${label}${o.host && !o.team ? `<span class="crown">\u265B</span>` : ""}</div>`;
 }
 
+// "away" chip and the host's Replace button for a seat whose human dropped.
+// Shared by the table pods and the Rummy phone ledger, so every layout can
+// unstick a game that is waiting on a disconnected player.
+function seatPresence(v, i) {
+  const away = !!(v.disconnectedSeats && v.disconnectedSeats.includes(i));
+  const isHost = v.you === v.hostSeat && v.you !== null;
+  return {
+    away,
+    badge: away ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "",
+    replaceBtn: away && isHost && !S.offline
+      ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
+      : "",
+  };
+}
+
 // opponent pod
 function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
@@ -265,12 +287,12 @@ function podHTML(v, i, o = {}) {
       : `<span class="mb"></span>`
   );
   const mb = mbArr.join("");
-  const isDisconnected = v.disconnectedSeats && v.disconnectedSeats.includes(i);
-  const isHost = v.you === v.hostSeat && v.you !== null;
-  const replaceBtn = isDisconnected && isHost && !S.offline
-    ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
+  const { away: isDisconnected, badge: disconnectedBadge, replaceBtn } = seatPresence(v, i);
+  // HLJ confidence signal: a small badge on the card stack's lower outer corner,
+  // apart from the dealer / bid chip slot.
+  const signalEl = o.signal
+    ? `<span class="pod-dealer-badge signal pod-signal" style="position:absolute;top:auto;right:auto;bottom:-6px;left:-6px;width:22px;height:22px;margin:0;transform:none;z-index:3">${o.signal}</span>`
     : "";
-  const disconnectedBadge = isDisconnected ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "";
   const mainBlock = o.avatar
     ? `<div class="pod-av-id" style="--avseat:${i}">
         <span class="pod-av">${(esc(name)[0] || "?").toUpperCase()}</span>
@@ -279,11 +301,12 @@ function podHTML(v, i, o = {}) {
       </div>`
     : `<div class="ministack">
         ${mb}
+        ${signalEl}
         <span class="back-name">${esc(name)}${disconnectedBadge}</span>
       </div>`;
   return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""} ${o.extraClass || ""}">
     ${mainBlock}
-    ${o.highBid != null ? `<div class="pod-dealer-badge bid">${o.highBid}</div>` : o.signalIcon != null ? `<div class="pod-dealer-badge signal">${o.signalIcon}</div>` : o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
+    ${o.highBid != null ? `<div class="pod-dealer-badge bid">${o.highBid}</div>` : o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
     ${o.pts != null || o.count != null ? `<div class="pod-info">
       ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
       ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
@@ -313,6 +336,10 @@ function fanHand(cards, optFn, { scrollable = false, arcScale = 1 } = {}) {
       const lift = -arc * (1 - (off / mid) ** 2);
       const o = optFn(c, i) || {};
       o.style = `${i ? `margin-left:${overlap.toFixed(1)}px;` : ""}transform:rotate(${rot.toFixed(2)}deg) translateY(${lift.toFixed(1)}px);z-index:${i + 1};`;
+      // Drag-to-play: a touch drag on a card must reach the pointer handlers,
+      // not become a browser pan (which fires pointercancel). A .fan-scroll fan
+      // keeps its own pan-x so it can still scroll sideways.
+      if (!scrollable && (o.action === "play-card" || o.action === "toggle-card")) o.style += "touch-action:none;";
       return cardHTML(c, o);
     })
     .join("");
@@ -360,6 +387,16 @@ function logEntryHTML(v, e) {
 function send(m) {
   if (S.ws && S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify(m));
 }
+// A turn move or a gate tap is sent at most once per view: a double tap, a tap
+// racing the auto-play timer, or a second tap on a held trick waits for the
+// next frame (or an error, which re-arms it) instead of drawing an error toast.
+function sendOnce(m) {
+  if (S.view && S.sentFor === S.view) return;
+  S.sentFor = S.view;
+  clearTimeout(_autoPlayTimer);
+  _autoPlayTimer = null;
+  send(m);
+}
 
 // Shared frame handler for both the real socket and the offline LocalRoom.
 function onFrame(e) {
@@ -368,6 +405,30 @@ function onFrame(e) {
   if (msg.t === "view") {
     const prev = S.view;
     S.view = msg.view;
+    // A game starting or ending (for every client, not just the host who dealt)
+    // drops the last game's client-side UI state; and in pass-and-play, when the
+    // device starts showing a different seat's hand, none of the previous seat's
+    // hand state may carry over.
+    if (prev && msg.view && (prev.phase === "lobby") !== (msg.view.phase === "lobby")) resetGameUi();
+    else if (prev && msg.view && prev.you !== msg.view.you) resetSeatUi(msg.view);
+    // HLJ: lastHand stays in the view for the whole next hand. Arriving mid-game
+    // (a reload, a late join) must not put an old hand's result page over the
+    // table — only one that ended moments ago (next hand not yet bid on) shows.
+    if (!prev && S.party === "high-low-jack" && msg.view?.lastHand
+        && !(msg.view.phase === "bidding" && !(msg.view.bidHistory ?? []).length)) {
+      S.hljHandAcked = JSON.stringify(msg.view.lastHand);
+    }
+    // Hearts likewise: once the next hand's first trick is under way, the last
+    // hand's result page is old news.
+    if (!prev && S.party === "hearts" && msg.view?.lastHand && (msg.view.trickNo > 0 || msg.view.currentTrick?.length)) {
+      S.heartsHandAcked = heartsHandKey(msg.view);
+    }
+    // Pass-and-play reservations only make sense on seats that are still open.
+    if (msg.view?.phase === "lobby") {
+      for (const k of Object.keys(S.hotseats)) {
+        if (+k >= msg.view.seats.length || msg.view.seats[+k].kind !== "empty") delete S.hotseats[k];
+      }
+    }
     // HLJ: freeze bid overlay briefly when bidding ends so the dealer's chip is visible
     if (S.party === "high-low-jack" && prev?.phase === "bidding" && msg.view?.phase === "playing") {
       if (S.hljBidHoldTimer) clearTimeout(S.hljBidHoldTimer);
@@ -382,30 +443,44 @@ function onFrame(e) {
     }
     // HLJ trick pacing now lives entirely on the server: the `trickComplete` gate
     // holds the full trick + winner, and the render reads it straight from the view.
-    // If the round result changed (new round ended), reset the ack so the popup shows again.
-    const prevKey = prev?.lastRound ? JSON.stringify(prev.scores) : null;
-    const newKey  = msg.view?.lastRound ? JSON.stringify(msg.view.scores) : null;
-    if (newKey && newKey !== prevKey && newKey !== S.rummyRoundAcked) {
-      if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
-      S.rummyRoundVisible = false;
-    }
-    // Auto-sort rummy hand on draw: whenever the hand gains card(s), re-apply the current sort.
     const v = msg.view;
     if (S.party === "rummy500" && v && v.yourHand && v.you != null) {
+      // Auto-sort: whenever the hand gains card(s) or a new round is dealt, re-apply the current sort.
       const prevHand = prev?.yourHand ?? [];
-      if (v.yourHand.length > prevHand.length) {
-        const rank = (c) => (c.joker ? 100 : c.rank);
-        const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
-        const by = S.rummySort === "suit"
-          ? (a, b) => (a.joker - b.joker) || (suitOrder[a.suit] - suitOrder[b.suit]) || (rank(a) - rank(b))
-          : (a, b) => (rank(a) - rank(b)) || (suitOrder[a.suit] - suitOrder[b.suit]);
-        S.rummyOrder = [...v.yourHand].sort(by).map((c) => c.id);
+      if (v.yourHand.length > prevHand.length || (prev && prev.phase !== v.phase)) {
+        S.rummyOrder = [...v.yourHand].sort(rummyCmp(S.rummySort)).map((c) => c.id);
+      }
+      // "You drew this": only for your own stock draw (the stock shrank by one
+      // and one unseen card came in), never for a discard everyone saw taken.
+      if (prev && prev.you === v.you && prev.yourTurn && prev.turnPhase === "draw"
+          && v.yourTurn && v.turnPhase === "play" && v.stockCount === prev.stockCount - 1) {
+        const had = new Set(prevHand.map((c) => c.id));
+        const drawn = v.yourHand.filter((c) => !had.has(c.id));
+        if (drawn.length === 1) showDrawn(drawn[0]);
+      }
+    }
+    // Hearts: the cards a pass brings in sit apart for a few seconds — only for
+    // a pass this seat was seen making (passing -> play, same hand and seat), so
+    // a hold hand, a reload or a pass-and-play hand-off never flags a whole hand.
+    if (S.party === "hearts" && prev && v && prev.phase === "passing" && (v.phase === "playing" || v.phase === "trickComplete")
+        && v.you != null && prev.you === v.you && prev.handNo === v.handNo) {
+      const had = new Set(prev.yourHand.map((c) => c.id));
+      const received = v.yourHand.filter((c) => !had.has(c.id)).map((c) => c.id);
+      if (received.length) {
+        clearTimeout(S.heartsReceivedTimer);
+        S.heartsReceivedCards = received;
+        S.heartsReceivedTimer = setTimeout(() => {
+          S.heartsReceivedCards = [];
+          S.heartsReceivedTimer = null;
+          render();
+        }, 5000);
       }
     }
     maybePromptPass();
     render();
     // Tutorial: arm on the lobby->game transition (single human only), then feed each
-    // frame. Works online or offline — gated on a lone human seat, not S.offline.
+    // frame. Gated on a lone human seat, not S.offline (a solo deal from an online
+    // lobby runs in a LocalRoom, but the gate shouldn't care where the game lives).
     if (S.tutorial && prev?.phase === "lobby" && S.view && S.view.phase !== "lobby"
         && S.view.seats && S.view.seats.filter((s) => s.kind === "human").length === 1) {
       window.Tutorial?.start(S.party);
@@ -413,7 +488,7 @@ function onFrame(e) {
     window.Tutorial?.onView?.(S.view);
     maybeAutoPlay(msg.view);
   }
-  else if (msg.t === "error") { toast(msg.message); }
+  else if (msg.t === "error") { S.sentFor = null; toast(msg.message); }
 }
 
 // Auto-play: when it's your turn in HLJ playing phase and only one card is legal,
@@ -422,6 +497,9 @@ let _autoPlayTimer = null;
 function maybeAutoPlay(v) {
   if (_autoPlayTimer) { clearTimeout(_autoPlayTimer); _autoPlayTimer = null; }
   if (!v || !v.yourTurn) return;
+  // Pass-and-play: never play for a seat whose owner hasn't taken the device yet —
+  // a move behind the hand-off screen would hand the view to the next person.
+  if (S.hotseat && (S.awaitingPass || v.you !== S.revealedSeat)) return;
   const legal = v.legalMoves || [];
   if (legal.length !== 1) return;
   const move = legal[0];
@@ -430,7 +508,7 @@ function maybeAutoPlay(v) {
   const delay = S.party === "high-low-jack" ? 1200 : 900;
   _autoPlayTimer = setTimeout(() => {
     _autoPlayTimer = null;
-    if (S.view === v) send({ t: "move", move });
+    if (S.view === v) sendOnce({ t: "move", move });
   }, delay);
 }
 
@@ -438,18 +516,73 @@ function maybeAutoPlay(v) {
 // human than the one currently looking, hide everything behind a hand-off
 // screen until they confirm they're ready. The view frame already holds the
 // next player's cards, but the interstitial renders none of them.
+// The gate keys off the seat the current frame shows (not a latched value): if
+// the view moves on while the screen is up, the screen re-targets that seat, so
+// it always names the person whose hand a reveal will actually show.
 function maybePromptPass() {
   const v = S.view;
   S.hotseat = S.offline && !!v && v.seats && v.seats.filter((s) => s.kind === "human").length >= 2;
-  if (!S.hotseat || S.awaitingPass) return;
-  if (!v || v.phase === "lobby" || v.phase === "gameOver") return;
-  if (v.you != null && v.yourTurn && v.you !== S.revealedSeat) {
-    S.passTo = v.you;
-    S.awaitingPass = true;
-    S.passReady = false;
-    // A short beat so the device can actually change hands before it unlocks.
-    setTimeout(() => { S.passReady = true; if (S.awaitingPass) render(); }, 1400);
+  if (!S.hotseat || v.phase === "lobby" || v.phase === "gameOver") {
+    // nothing private on screen: lobby / final scores
+    S.awaitingPass = false;
+    return;
   }
+  if (v.you == null) return;
+  if (S.awaitingPass ? v.you === S.passTo : v.you === S.revealedSeat) return;
+  S.passTo = v.you;
+  S.awaitingPass = true;
+  S.passReady = false;
+  // A short beat so the device can actually change hands before it unlocks.
+  clearTimeout(S.passTimer);
+  S.passTimer = setTimeout(() => { S.passTimer = null; S.passReady = true; if (S.awaitingPass) render(); }, 1400);
+}
+
+// Per-seat client caches (selection, hand order, "you drew this", received cards).
+// Cleared whenever the device starts showing a different seat's hand.
+function resetSeatUi(v) {
+  clearDrawn();
+  S.rummySel.clear();
+  S.rummyLayoff = null;
+  S.rummyMeldOpen = null;
+  S.discardOpen = false;
+  S.heartsPass.clear();
+  clearTimeout(S.heartsReceivedTimer);
+  S.heartsReceivedTimer = null;
+  S.heartsReceivedCards = [];
+  S.pjCard = null;
+  // Start the new seat's hand sorted, so nothing in it looks "just received".
+  const hand = v?.yourHand ?? [];
+  const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
+  S.heartsOrder = [...hand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id);
+  S.rummyOrder = [...hand].sort(rummyCmp(S.rummySort)).map((c) => c.id);
+}
+
+// Everything a finished or abandoned game leaves behind on the client
+// (selections, open sheets, pending popups and their timers).
+function resetGameUi() {
+  for (const k of ["hljHandTimer", "hljBidHoldTimer", "heartsHandTimer", "heartsReceivedTimer", "rummyDrawnTimer", "passTimer"]) {
+    clearTimeout(S[k]);
+    S[k] = null;
+  }
+  clearTimeout(_autoPlayTimer);
+  _autoPlayTimer = null;
+  resetSeatUi(null);
+  S.showLog = false;
+  S.logTab = "log";
+  S.logExpandedId = null;
+  S.lbySettingsOpen = false;
+  // Hand/round keys restart with each game, so last game's acks must not carry over.
+  S.rummyRoundShown = null;
+  S.rummyRoundAcked = null;
+  S.heartsHandAcked = null;
+  S.hljBidHold = null;
+  S.hljShowDealtHands = false;
+  S.hljLastTrickOpen = false;
+  S.heartsLastTrickOpen = false;
+  S.heartsCollecting = null;
+  S.pjMoves = [];
+  S.awaitingPass = false;
+  S.passReady = false;
 }
 
 function joinOnOpen() {
@@ -460,75 +593,148 @@ function joinOnOpen() {
 function connect() {
   S.intentionalClose = false;
   if (S.offline) return connectLocal();
+  clearTimeout(S.retryTimer);
+  S.retryTimer = null;
 
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const url = `${proto}//${location.host}/parties/${S.party}/${encodeURIComponent(S.room)}`;
   const ws = new WebSocket(url);
   S.ws = ws;
+  S.connectSlow = false;
   let opened = false;
 
-  // If we can't reach the server, fall back to local play vs bots.
-  const fallback = (why) => {
-    if (opened || S.intentionalClose || S.offline) return;
-    clearTimeout(fbTimer);
-    try { ws.close(); } catch {}
-    toast(why || "No connection — playing offline vs bots.");
+  // Only the current socket may act: events from one we've already replaced
+  // (a retry, Leave, the hand-off to local play) are ignored.
+  const live = () => S.ws === ws && !S.intentionalClose && !S.offline;
+  // The socket failed before opening, or dropped after.
+  const failed = () => {
+    clearTimeout(slowTimer);
+    if (!live()) return;
+    S.connected = false;
+    // A room we've reached is never silently swapped for an offline bot game:
+    // keep retrying with backoff (the Reconnecting screen offers "Play offline").
+    if (S.joinedOnline) return scheduleReconnect();
+    // First join and the server is unreachable: play offline vs bots.
+    toast("No connection — playing offline vs bots.");
     connectLocal();
   };
-  const fbTimer = setTimeout(() => fallback(), 3500);
+  // A slow first join offers "Play offline" rather than switching on its own (a
+  // friend's invite link on a slow network); a reconnect that hangs is retried.
+  const slowTimer = setTimeout(() => {
+    if (opened || !live()) return;
+    if (!S.joinedOnline) { S.connectSlow = true; return render(); }
+    try { ws.close(); } catch {}
+    failed();
+  }, S.joinedOnline ? 8000 : 3500);
 
-  ws.onopen = () => { opened = true; clearTimeout(fbTimer); joinOnOpen(); };
-  ws.onmessage = onFrame;
-  ws.onclose = () => {
-    // Don't clobber S.connected if we've already switched to a local socket.
-    if (!S.offline) S.connected = false;
-    if (S.intentionalClose || S.offline) return;
-    if (!opened) return fallback();
-    render();
-    setTimeout(() => { if (!S.connected && !S.intentionalClose) connect(); }, 1500);
+  ws.onopen = () => {
+    if (S.ws !== ws) { try { ws.close(); } catch {} return; }
+    opened = true;
+    clearTimeout(slowTimer);
+    S.joinedOnline = true;
+    S.connectSlow = false;
+    S.retryMs = 0;
+    joinOnOpen();
   };
-  ws.onerror = () => { if (!opened) fallback(); };
+  ws.onmessage = (e) => { if (S.ws === ws) onFrame(e); };
+  ws.onclose = failed;
+  ws.onerror = () => { if (!opened) failed(); };
   render();
 }
 
+// Reconnect with backoff (1.5 s, 3 s, 6 s … capped at 15 s) while showing "Reconnecting…".
+function scheduleReconnect() {
+  if (S.retryTimer) return;
+  S.retryMs = Math.min(15000, S.retryMs ? S.retryMs * 2 : 1500);
+  S.retryTimer = setTimeout(() => {
+    S.retryTimer = null;
+    if (!S.connected && !S.intentionalClose && !S.offline && S.party) connect();
+  }, S.retryMs);
+  render();
+}
+// The network came back / the app returned to the foreground: retry right away.
+function reconnectNow() {
+  if (!S.joinedOnline || S.offline || S.intentionalClose || !S.party) return;
+  if (S.ws && S.ws.readyState <= 1) return; // connecting or open
+  S.retryMs = 0;
+  connect();
+}
+window.addEventListener("online", reconnectNow);
+
+// The user chose to stop waiting for the server: abandon the room (so a reload
+// doesn't land back in it) and play this game vs bots on the device.
+function doPlayOffline() {
+  const ws = S.ws;
+  S.ws = null; // its late events are now ignored
+  try { ws?.close(); } catch {}
+  clearTimeout(S.retryTimer);
+  S.retryTimer = null;
+  S.joinedOnline = false;
+  S.connectSlow = false;
+  S.connected = false;
+  S.view = null;
+  S.hotseats = {};
+  resetGameUi();
+  history.replaceState(null, "", `/?game=${S.party}`);
+  connectLocal();
+}
+
 let localMod = null;
-// serverSeats: if provided, replicate this seat layout and auto-start (Pass & Play / bot-only handoff).
-// startConfig: { target?, marbles?, botDifficulty? } mirroring the server lobby settings.
-async function connectLocal(serverSeats = null, startConfig = null) {
+// handoff: move a lobby into a fresh LocalRoom — { seats, you, config, start }.
+// `seats` is the source table and `you` this device's seat in it. The LocalRoom
+// seats the joiner at 0, so the layout is rotated to put `you` there (relative
+// order, and so partnerships, are kept). The table is sized from `config` first,
+// every other local human (pass-and-play guests and S.hotseats reservations) is
+// re-seated, and it is dealt with the full lobby `config` when `start` is set.
+async function connectLocal(handoff = null) {
   S.offline = true;
+  const hotseats = S.hotseats;
+  S.hotseats = {};
   try {
-    if (!localMod) localMod = await import("/local.js?v=20260621f");
+    if (!localMod) localMod = await import("/local.js?v=20261004c");
   } catch (err) {
+    // No offline bundle (e.g. never cached): back to the start screen, still
+    // prefilled with this game and room, rather than a dead "Connecting…".
+    S.offline = false;
+    S.connected = false;
+    S.view = null;
+    S.joinedOnline = false;
+    S.pickGame = S.party;
+    S.party = null;
+    history.replaceState(null, "", "/");
+    renderStart();
     return toast("Couldn't load offline mode.");
   }
+  if (!S.offline || !S.party) return; // left while the bundle was loading
   const sock = localMod.createLocalSocket(S.party);
   S.ws = sock;
   sock.onopen = () => {
+    if (S.ws !== sock) return;
     try {
       joinOnOpen();
-      // Place any pass-and-play humans first; start() auto-fills remaining seats with bots.
-      for (const [seat, name] of Object.entries(S.hotseats)) {
-        send({ t: "addHuman", seat: +seat, name });
-      }
-      S.hotseats = {};
-      if (serverSeats) {
-        // Auto-start using the config captured from the server lobby.
-        const players = serverSeats.length;
-        if (S.party === "pegs-and-jokers") {
-          send({ t: "start", config: { players, marbles: startConfig?.marbles ?? 5 } });
-        } else {
-          const cfg = { players, target: startConfig?.target ?? GAMES[S.party]?.target ?? 21 };
-          if (startConfig?.botDifficulty) cfg.botDifficulty = startConfig.botDifficulty;
-          send({ t: "start", config: cfg });
+      if (handoff) {
+        const n = handoff.seats.length;
+        const you = handoff.you ?? 0;
+        const at = (i) => (i - you + n) % n;
+        const config = { ...handoff.config, players: n };
+        if (Array.isArray(config.botDifficulty)) {
+          const bd = config.botDifficulty;
+          config.botDifficulty = Array.from({ length: n }, (_, j) => bd[(j + you) % n] ?? 2);
         }
+        send({ t: "setConfig", config });
+        handoff.seats.forEach((s, i) => {
+          const name = s.kind === "human" ? s.name || `Player ${at(i) + 1}` : s.kind === "empty" ? hotseats[i] : null;
+          if (i !== you && name) send({ t: "addHuman", seat: at(i), name });
+        });
+        if (handoff.start) send({ t: "start", config });
       }
     } catch (err) {
       console.error("connectLocal onopen failed:", err);
       toast("Couldn't start game: " + (err?.message || err));
     }
   };
-  sock.onmessage = onFrame;
-  sock.onclose = () => { S.connected = false; };
+  sock.onmessage = (e) => { if (S.ws === sock) onFrame(e); };
+  sock.onclose = () => { if (S.ws === sock) S.connected = false; };
   render();
 }
 
@@ -646,10 +852,12 @@ function tableShell(v, parts) {
     const podY1 = n === 6 || n === 7 ? 36 : 28;
     const podY2 = n >= 8 ? 55 : n >= 6 ? 74 : n >= 5 ? 68 : 82;
     const podBounds = { x1: 12, x2: 88, y1: podY1, y2: podY2, wideY1: 22, wideY2: Math.max(podY2, 72), topY: 9 };
+    // Spectators see the table from seat 0's chair (as trick cards and bid
+    // tokens do): seat 0's pod takes the bottom slot, which has no self rail.
+    const anchor = you ?? 0;
     const infos = podItems.map(({ seat, html }) => {
-      const off = you == null
-        ? podItems.findIndex(p => p.seat === seat) + 1
-        : (seat - you + n) % n;
+      const off = (seat - anchor + n) % n;
+      if (off === 0) return { html, x: 50, y: null, side: "pos-bottom" };
       // Both orientations use the same compass perimeter so landscape mirrors
       // portrait player positioning.
       const { x, y, side } = wallPerimPos(off, n, podBounds);
@@ -657,6 +865,9 @@ function tableShell(v, parts) {
     });
     const slots = infos.length
       ? infos.map(({ html, x, y, side }) => {
+          if (side === "pos-bottom") {
+            return `<div class="pod-slot pos-bottom" style="position:absolute;bottom:-8%;left:50%;transform:translateX(-50%);z-index:2">${html}</div>`;
+          }
           // Portrait: side pods anchor flush to the felt edge (narrow felt).
           // Landscape: bring side pods in off the wall so they read like the
           // portrait compass instead of hugging the far edges.
@@ -760,13 +971,20 @@ function render() {
 function renderConnecting() {
   const gameName = S.party && GAMES[S.party] ? esc(GAMES[S.party].label) : "Bonhomme";
   const suit = S.party && GAMES[S.party] ? GAMES[S.party].suit : "\u2663";
-  const sub = S.connected ? "Joined \u2014 dealing you in." : "Connecting\u2026";
+  const reconnecting = S.joinedOnline && !S.offline && !S.connected;
+  const sub = S.connected ? "Joined \u2014 dealing you in."
+    : reconnecting ? "Connection lost \u2014 reconnecting\u2026"
+    : S.connectSlow ? "Still connecting\u2026" : "Connecting\u2026";
+  // Going offline is always the player's explicit choice once a room is involved.
+  const offerOffline = !S.offline && !S.connected && (reconnecting || S.connectSlow);
   app.__set = `<div class="felt-screen">
     <div class="connect-card">
       <div class="connect-suit">${suit}</div>
       <div class="connect-name">${gameName}</div>
       <div class="connect-msg">${sub}</div>
       <div class="connect-dots"><span></span><span></span><span></span></div>
+      ${offerOffline ? `<button class="btn" style="width:100%;margin-top:22px" data-action="play-offline">Play offline vs bots</button>` : ""}
+      <button class="btn ghost sm" style="width:100%;margin-top:${offerOffline ? 10 : 22}px" data-action="leave">Leave</button>
     </div>
   </div>`;
 }
@@ -913,7 +1131,7 @@ window.matchMedia("(orientation:landscape)").addEventListener("change", () => re
 // layout follows the device's real orientation rather than a stale snapshot.
 const rerenderForViewport = () => { try { render(); } catch {} };
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) { rerenderForViewport(); setTimeout(rerenderForViewport, 300); }
+  if (!document.hidden) { rerenderForViewport(); setTimeout(rerenderForViewport, 300); reconnectNow(); }
 });
 window.addEventListener("pageshow", rerenderForViewport);
 // Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
@@ -960,28 +1178,38 @@ function renderLobby(v) {
   const n = v.seats.length;
   const you = v.you;
 
+  // Rummy bot level for a seat (applied on "change", sent with the full lobby config).
+  const diffPicker = (i) => {
+    const diff = v.botDifficulty?.[i] ?? 2;
+    return `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}" value="${diff}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`;
+  };
+  // Empty seats: the host may reserve one for a pass-and-play guest — but only
+  // while no other online player is seated, since that deal runs on this device.
+  // Everyone else (spectators too) can sit in one; so can the host once friends
+  // are here (e.g. to pick a partner in a team game).
+  const remoteHumans = S.offline ? 0 : v.seats.filter((s, i) => s.kind === "human" && i !== you).length;
+  const emptyAction = isHost && (S.offline || remoteHumans === 0) ? "reserve-hotseat" : S.offline ? null : "sit";
+
   // Build a pod for each non-self seat (same positions as gameplay pods).
   const lbyPod = (s, i) => {
     const isEmpty = s.kind === "empty";
     const isBot = s.kind === "bot";
-    const reserved = isHost && S.hotseats[i];
+    const reserved = isHost && isEmpty && S.hotseats[i];
     const tc = isTeamGame ? (i % 2 === 0 ? "tA" : "tB") : "";
     const name = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open" : esc(s.name || "Player");
-    const initial = isEmpty ? "+" : isBot && !reserved ? "B" : name.charAt(0).toUpperCase();
-    const avCls = isEmpty ? "empty" : reserved ? "local" : isBot ? "bot" : "human";
-    const role = isEmpty ? "tap to add" : reserved ? "pass &amp; play" : isBot ? "bot" : i === v.hostSeat ? "host" : "player";
-    const seatClick = isEmpty && isHost ? ` data-action="reserve-hotseat" data-seat="${i}" style="cursor:pointer"` : "";
+    const initial = isEmpty && !reserved ? "+" : isBot ? "B" : name.charAt(0).toUpperCase();
+    const avCls = reserved ? "local" : isEmpty ? "empty" : isBot ? "bot" : "human";
+    const role = reserved ? "pass &amp; play"
+      : isEmpty ? (emptyAction === "sit" ? "tap to sit" : emptyAction ? "tap to add" : "open")
+      : isBot ? "bot" : i === v.hostSeat ? "host" : "player";
+    const seatClick = isEmpty && !reserved && emptyAction ? ` data-action="${emptyAction}" data-seat="${i}" style="cursor:pointer"` : "";
 
     let removeBtn = "";
     if (reserved) {
       removeBtn = `<button class="lby-pod-remove" data-action="clear-hotseat" data-seat="${i}">✕</button>`;
     } else if (isBot && isHost) {
-      const diff = isRummyLobby ? (v.botDifficulty?.[i] ?? 2) : 2;
-      const diffPicker = isRummyLobby
-        ? `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`
-        : "";
-      removeBtn = diffPicker + `<button class="lby-pod-remove" data-action="removebot" data-seat="${i}">✕</button>`;
-    } else if (S.offline && s.kind === "human") {
+      removeBtn = (isRummyLobby ? diffPicker(i) : "") + `<button class="lby-pod-remove" data-action="removebot" data-seat="${i}">✕</button>`;
+    } else if (S.offline && s.kind === "human" && i !== v.hostSeat) {
       removeBtn = `<button class="lby-pod-remove" data-action="clearseat" data-seat="${i}">✕</button>`;
     }
 
@@ -989,7 +1217,7 @@ function renderLobby(v) {
     if (isTeamGame || isRummyLobby || isHearts) {
       const isEmptyUnreserved = isEmpty && !reserved;
       const boxLabel = reserved ? name.toUpperCase().substring(0, 8)
-        : isEmpty ? "OPEN"
+        : isEmpty ? (emptyAction === "sit" ? "SIT" : "OPEN")
         : (isBot ? "BOT" : name.toUpperCase().substring(0, 8));
       const boxIcon = isEmptyUnreserved ? "+" : initial;
       return `<div class="lby-seat-box ${tc} ${isEmptyUnreserved ? "lby-seat-empty" : ""}"${seatClick}>
@@ -1071,8 +1299,9 @@ function renderLobby(v) {
     : "";
   const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
 
-  // Inline editable name in the selfbar
-  const nameInput = `<div class="lby-name-row"><input class="lby-name-input" id="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
+  // Inline editable name in the selfbar (tableShell renders it twice — appbar for
+  // landscape, selfbar for portrait — so it carries a class, never an id)
+  const nameInput = `<div class="lby-name-row"><input class="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
   const selfExtra = "";
 
   // Joker watermark + corner suits for the felt
@@ -1086,9 +1315,9 @@ function renderLobby(v) {
     ? `<button class="btn lby-share-btn" data-action="share-link">Invite Players</button>`
     : "";
   // Tutorial: single human only (no pass-and-play), sits between Invite and Deal.
-  // Works online or offline — in production a solo "vs bots" game is a normal server
-  // room, not S.offline, and in the lobby the other seats are still empty (bots fill
-  // them on deal), so we gate on a lone human seat rather than the offline flag.
+  // Works online or offline — a solo "vs bots" deal from an online lobby moves the
+  // table into a LocalRoom (see doStart), and in the lobby the other seats are still
+  // empty (bots fill them on deal), so we gate on a lone human seat, not S.offline.
   const singlePlayer = !hasHotseats && v.seats.filter((s) => s.kind === "human").length === 1;
   const tutorialBtn = (isHost && singlePlayer)
     ? `<button class="btn ghost lby-tutorial-btn${S.tutorial ? " active" : ""}" data-action="toggle-tutorial" aria-pressed="${S.tutorial ? "true" : "false"}" title="Play a guided practice hand">${S.tutorial ? "Tutorial ✓" : "Tutorial"}</button>`
@@ -1118,12 +1347,17 @@ function renderLobby(v) {
             </div>` : ""}
             ${(isRummyLobby || isHearts) ? `<div class="lby-set-row">
               <span class="lby-set-label">Play to</span>
-              <input class="lby-pts" id="f-target" type="number" min="1" value="${v.target ?? GAMES[S.party].target}" />
-            </div>
-            <div class="lby-set-row">
+              <input class="lby-pts" id="f-target" type="number" min="1" max="10000" value="${v.target ?? GAMES[S.party].target}" />
+            </div>` : ""}
+            ${isRummyLobby ? `<div class="lby-set-row">
               <span class="lby-set-label">Must discard</span>
               <button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard">${v.requireDiscard ? "On" : "Off"}</button>
-            </div>` : ""}
+            </div>
+            ${v.seats.map((s, i) => s.kind === "bot" || (s.kind === "empty" && !S.hotseats[i])
+              ? `<div class="lby-set-row">
+              <span class="lby-set-label">Seat ${i + 1} bot</span>
+              ${diffPicker(i)}
+            </div>` : "").join("")}` : ""}
             ${!S.offline ? `<div class="lby-set-row">
               <label class="lby-set-toggle">
                 <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} />
@@ -1189,18 +1423,22 @@ function scoreList(rows) {
     .join("")}</div>`;
 }
 
-function renderGameOver(v, title, scoresHTML) {
-  const isHost = v.you !== null && v.you === v.hostSeat;
-  app.__set = `${appbar(v)}
+// `lastHTML` (optional) is the deciding hand/round's breakdown, shown above the
+// totals; the log stays reachable so the whole final hand can be reviewed.
+function renderGameOver(v, title, scoresHTML, lastHTML = "") {
+  // Offline every seated human shares this device, so whoever holds it can redeal.
+  const isHost = v.you !== null && (v.you === v.hostSeat || S.offline);
+  app.__set = `${appbar(v, { log: true })}
     <div class="stage">
       <div class="panel cream" style="text-align:center">
         <div class="hero"><div class="logo">\u2660</div><h1>${esc(title)}</h1><p class="sub">Good game.</p></div>
       </div>
+      ${lastHTML}
       <div class="panel"><h2 style="margin-bottom:10px">Final scores</h2>${scoresHTML}</div>
       <div class="panel" style="text-align:center">${
         isHost ? `<button class="btn" data-action="newgame">Deal a new game</button>` : `<p class="sub">Waiting for the host to deal again…</p>`
       }</div>
-    </div>`;
+    </div>${logSheet()}`;
 }
 
 // Perimeter layout: map t∈[0,1] to a point on the felt rectangle.
@@ -1274,20 +1512,20 @@ function wallPerimPos(off, n, b) {
 // Build a spatially-positioned trick div: each card placed on a circle,
 // equidistant from center, evenly spaced by angle.
 // `plays`  – [{card, seat, name?}]
-// `you`    – viewer's seat index (null = spectator → top centre)
+// `you`    – viewer's seat index (null = spectator → laid out from seat 0)
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
 function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, collecting = false } = {}) {
   const lsMobile = window.matchMedia("(max-height:500px) and (orientation:landscape)").matches;
+  const anchor = you ?? 0;
   const circleStyle = (seat) => {
-    if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
-    const off = (seat - you + n) % n;
+    const off = (seat - anchor + n) % n;
     let x, y;
     if (lsMobile) {
       // The user's own played card drops to the very bottom of the felt, just
       // above their hand (fixed; animation:none keeps dropinC's centring
-      // transform from shifting it).
-      if (off === 0) return "position:fixed;bottom:76px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none";
+      // transform from shifting it). A spectator has no hand: seat 0 rings in.
+      if (off === 0 && you != null) return "position:fixed;bottom:76px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none";
       // Everyone else: an orderly oval ring (like portrait), widened for the
       // short, wide landscape felt. The centre sits low (cy 55.5) so the top
       // card tucks just under the raised top pod (.pod-slot.pos-top in the
@@ -1296,6 +1534,8 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
       // 8-player: drop the bottom side row (off 1 = bottom-left, off n-1 =
       // bottom-right) a bit lower so those cards sit nearer their players.
       if (n === 8 && (off === 1 || off === n - 1)) y += 6;
+      // Spectator: seat 0's pod sits at the bottom of this short felt; clear it.
+      if (off === 0) y -= 16;
       // Top-pod card (player directly across, even tables): nudge up so its gap
       // from the top pod matches the user's card-to-hand gap.
       if (n % 2 === 0 && off === n / 2) y -= 4;
@@ -1309,8 +1549,7 @@ function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, 
     return `top:${y}%;left:${x}%;transform:translate(-50%,-50%)`;
   };
   const cardRotation = (seat) => {
-    if (you == null) return 0;
-    const off = (seat - you + n) % n;
+    const off = (seat - anchor + n) % n;
     return Math.round(off / n * 360);
   };
   const halfH = mini ? 31 : 44;
@@ -1396,7 +1635,7 @@ function renderHLJ(v) {
   if (v.phase === "gameOver") {
     const w = v.winner;
     const you = v.you;
-    const isHost = you !== null && you === v.hostSeat;
+    const isHost = you !== null && (you === v.hostSeat || S.offline); // offline: shared device
     const winLabel = w == null ? "Game over" : `Team ${w === 0 ? "A" : "B"} wins!`;
     const winTeamCls = w != null ? `t${w === 0 ? "A" : "B"}` : "";
     const lh = v.lastHand;
@@ -1431,7 +1670,7 @@ function renderHLJ(v) {
       const scoreRows = [0, 1].map(t => {
         const letter = t === 0 ? "A" : "B";
         const delta = lh.deltaByTeam[t];
-        const total = v.scores[t];
+        const total = lh.finalScores?.[t] ?? v.scores[t];
         const sign = delta > 0 ? "+" : "";
         const isBidder = t === lh.bidderTeam;
         return `<div class="hlj-rr-scorerow${isBidder && !lh.made ? " setback" : ""}">
@@ -1467,13 +1706,17 @@ function renderHLJ(v) {
       ? `<button class="hlj-result-next-btn" data-action="newgame">New game</button>`
       : `<p class="sub" style="text-align:center;padding:10px 0">Waiting for the host to deal again…</p>`;
 
+    // The app bar (Log / Leave) sits inside the full-screen page, so nobody is
+    // stuck on the final scores waiting for a host who may never deal again.
     app.__set = `<div class="hlj-result-page">
+      <div style="padding-top:env(safe-area-inset-top)">${appbar(v, { log: true })}</div>
       <div class="hlj-result-felt">
         <div class="hlj-result-scroll">
           ${handSection}
           ${nextBtn}
         </div>
       </div>
+      ${logSheet()}
     </div>`;
     return;
   }
@@ -1492,6 +1735,12 @@ function renderHLJ(v) {
   // would throw mid-render and freeze the table.
   const SIGNAL_SRCS = { weak: "/low-signal.webp", medium: "/medium-signal.webp", strong: "/high-signal.webp" };
   const SIGNAL_LABELS = { weak: "Weak", medium: "Medium", strong: "Strong" };
+  // Signals are public for the whole hand (bots read every seat's), so each
+  // seat that has signalled shows its badge through bidding and play.
+  const signalImg = (i) => {
+    const lvl = v.signals?.[i];
+    return SIGNAL_SRCS[lvl] ? `<img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img">` : "";
+  };
 
   // pods (everyone but you), tagged with their team
   const pods = v.seats
@@ -1501,14 +1750,12 @@ function renderHLJ(v) {
         : { seat: i, html: podHTML(v, i, {
             active: i === v.toAct,
             dealer: i === v.dealerSeat,
-            // Once the bid is taken (playing phase), the winner's pod shows the
-            // bid chip for the rest of the hand — replacing the dealer "D" chip
+            // Once the bid is taken (playing phase and its trick gates), the winner's
+            // pod shows the bid chip for the rest of the hand — replacing the dealer "D" chip
             // when the dealer won. Skip during the brief bid-reveal freeze, when
             // the floating chips are shown instead.
-            highBid: v.phase === "playing" && !S.hljBidHold && v.highBid?.seat === i && i !== v.you ? v.highBid.amount : null,
-            signalIcon: v.phase === "bidding" && v.highBid?.seat === i && v.signals?.[i]
-              ? `<img src="${SIGNAL_SRCS[v.signals[i]]}" alt="${SIGNAL_LABELS[v.signals[i]]}" class="signal-img">`
-              : null,
+            highBid: (v.phase === "playing" || v.phase === "trickComplete") && !S.hljBidHold && v.highBid?.seat === i && i !== v.you ? v.highBid.amount : null,
+            signal: signalImg(i),
             team: teamLetter(i),
             partner: v.you != null && i % 2 === v.you % 2,
             backs: v.handCounts[i],
@@ -1533,8 +1780,10 @@ function renderHLJ(v) {
     const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
     const winName = v.trickWinner != null ? esc(seatName(v, v.trickWinner)) : null;
     const trickEl = trickHTML(trickPlays, you, v.seats.length, { mini: false, winSeat: v.trickWinner });
-    hljTrick = `<div class="trick-gate" data-action="advance-trick">${trickEl}`
-      + `<div class="trick-gate-hint">${winName ? `Won by ${winName} · ` : ""}Tap to continue</div></div>`;
+    // A spectator can't advance the gate: no tap target, no "Tap to continue".
+    const hint = [winName ? `Won by ${winName}` : "", you != null ? "Tap to continue" : ""].filter(Boolean).join(" · ");
+    hljTrick = `<div class="trick-gate"${you != null ? ` data-action="advance-trick"` : ` style="cursor:default"`}>${trickEl}`
+      + (hint ? `<div class="trick-gate-hint">${hint}</div>` : "") + `</div>`;
   } else if (v.phase === "playing" && v.currentTrick.length) {
     const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
     hljTrick = trickHTML(trickPlays, you, v.seats.length, { mini: false });
@@ -1613,14 +1862,15 @@ function renderHLJ(v) {
   // Bid token positions use the same circle formula as trick cards
   const bidPosStyle = (seat) => {
     const n = v.seats.length;
-    if (you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
-    const off = (seat - you + n) % n;
+    const off = (seat - (you ?? 0) + n) % n; // spectators: from seat 0's chair
     // User's own seat: raised so it clears the confidence chip row.
     // In mobile landscape, align it with the fixed bid chip bar (.hlj-felt-bid,
     // bottom:88px) so the token sits at the same height the picker chips did.
-    if (off === 0) return lsMobile
+    if (off === 0) return !lsMobile
+      ? "top:76%;left:50%;transform:translate(-50%,-50%)"
+      : you != null
       ? "position:fixed;bottom:88px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none"
-      : "top:76%;left:50%;transform:translate(-50%,-50%)";
+      : "top:62%;left:50%;transform:translate(-50%,-50%)"; // spectator: above seat 0's pod
     // Other seats: tighter bounds so chips appear inward from card backs
     const { x, y } = wallPerimPos(off, n, bidBounds);
     // Match the side-pod arc: higher side chips sit further toward center.
@@ -1648,11 +1898,12 @@ function renderHLJ(v) {
       const bh = S.hljBidHold;
       const holdPos = (seat) => {
         const n = bh.seats.length;
-        if (bh.you == null) return "top:20%;left:50%;transform:translate(-50%,-50%)";
-        const off = (seat - bh.you + n) % n;
-        if (off === 0) return lsMobile
+        const off = (seat - (bh.you ?? 0) + n) % n;
+        if (off === 0) return !lsMobile
+          ? "top:76%;left:50%;transform:translate(-50%,-50%)"
+          : bh.you != null
           ? "position:fixed;bottom:88px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none"
-          : "top:76%;left:50%;transform:translate(-50%,-50%)";
+          : "top:62%;left:50%;transform:translate(-50%,-50%)";
         const { x, y } = wallPerimPos(off, n, bidBounds);
         const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
         const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.15 : 0;
@@ -1696,17 +1947,25 @@ function renderHLJ(v) {
   const myTeamCls = you != null ? `t${you % 2 === 0 ? "A" : "B"}` : "";
   const signalLevels = ["weak", "medium", "strong"];
   const curSignal = v.you != null ? v.signals?.[v.you] : null;
-  const showSignalPicker = !!v.pendingSignal;
+  // The confidence-pick gate waits on one bidder (pendingSignalSeat): only they
+  // get the picker; everyone else (spectators too) sees who the table waits on.
+  const gateSeat = v.pendingSignal ? (v.pendingSignalSeat ?? null) : null;
+  const showSignalPicker = gateSeat != null && gateSeat === v.you;
+  const gateWait = gateSeat != null && !showSignalPicker
+    ? `<div class="hlj-felt-bid" style="pointer-events:none"><span style="font-family:Fraunces,serif;font-style:italic;font-size:13.5px;color:var(--ink-soft);white-space:nowrap">${esc(seatName(v, gateSeat))} is choosing a signal\u2026</span></div>`
+    : "";
 
   // Bid chips on the felt (hidden once player has bid).
   // Signal picker also on the felt, replacing the bid chips after player bids.
-  const feltBidPanel = v.phase === "bidding" && !handResultPending && v.you != null
+  const feltBidPanel = v.phase === "bidding" && !handResultPending && (v.you != null || gateWait)
     ? showSignalPicker
       ? `<div class="hlj-felt-bid">
           <div class="hlj-signal-felt">${signalLevels.map(lvl =>
             `<button class="hlj-signal-btn${curSignal === lvl ? " active" : ""}" data-action="signal" data-level="${lvl}" title="${SIGNAL_LABELS[lvl]}" tabindex="-1"><img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img"></button>`
           ).join("")}</div>
         </div>`
+      : gateWait
+      ? gateWait
       : !userHasActed
         ? `<div class="hlj-felt-bid${v.yourTurn ? "" : " waiting"}">
             <div class="hlj-chips">
@@ -1720,7 +1979,7 @@ function renderHLJ(v) {
                 const legal = n >= minBid;
                 return `<button class="hlj-chip ${myTeamCls}${!legal ? " blocked" : ""}" data-action="move-bid" data-amount="${n}" ${(!legal || !v.yourTurn) ? "disabled" : ""}>${n}</button>`;
               }).join("")}
-              <button class="hlj-pass-btn" data-action="move-pass" ${!v.yourTurn ? "disabled" : ""}>Pass</button>
+              <button class="hlj-pass-btn" data-action="move-pass" ${!v.yourTurn || !canPass ? "disabled" : ""}${v.yourTurn && !canPass ? ` title="Everyone passed \u2014 the dealer must bid"` : ""}>Pass</button>
             </div>
           </div>`
         : ""
@@ -1747,10 +2006,10 @@ function renderHLJ(v) {
 
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfTeam = you != null ? (you % 2 === 0 ? "A" : "B") : null;
+  // Your own signal (once given) sits beside your bid / dealer chip for the hand.
+  const selfSignal = you != null && signalImg(you) ? `<span class="pod-dealer-badge signal">${signalImg(you)}</span>` : "";
   const selfMeta = you != null
-    ? (v.phase === "bidding" && v.highBid?.seat === you && curSignal
-        ? `<span class="pod-dealer-badge signal"><img src="${SIGNAL_SRCS[curSignal]}" alt="${SIGNAL_LABELS[curSignal]}" class="signal-img"></span>`
-        : v.phase === "playing" && v.highBid?.seat === you
+    ? selfSignal + ((v.phase === "playing" || v.phase === "trickComplete") && v.highBid?.seat === you
         ? `<span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>`
         : isYouDealer ? `<span class="pod-dealer-badge">D</span>` : "")
     : `play to ${v.target}`;
@@ -1758,6 +2017,8 @@ function renderHLJ(v) {
     ? ""
     : v.yourTurn
     ? `<span class="turnflag">Your turn</span>`
+    : showSignalPicker && v.phase === "bidding"
+    ? `<span class="turnflag">Your signal</span>`
     : v.toAct != null
     ? `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`
     : "";
@@ -1775,6 +2036,7 @@ function renderHLJ(v) {
       S.hljHandTimer = setTimeout(() => {
         S.hljHandAcked = handKey;
         S.hljHandTimer = null;
+        S.hljShowDealtHands = false; // an open dealt-hands sheet closes with its page
         render();
       }, 30000);
     }
@@ -1821,10 +2083,14 @@ function renderHLJ(v) {
     </div>`;
 
     const made = lh.made;
+    // A hand that wins a game mid-series is followed at once by the next game's
+    // deal (scores back to 0): show that hand's own totals and who won the game.
+    const gameWon = lh.gameWinner != null;
+    const wonA = v.gamesWon?.[0] ?? 0, wonB = v.gamesWon?.[1] ?? 0;
     const scoreRows = [0, 1].map(t => {
       const letter = t === 0 ? "A" : "B";
       const delta = lh.deltaByTeam[t];
-      const total = v.scores[t];
+      const total = lh.finalScores?.[t] ?? v.scores[t];
       const sign = delta > 0 ? "+" : "";
       const isBidder = t === lh.bidderTeam;
       return `<div class="hlj-rr-scorerow${isBidder && !made ? " setback" : ""}">
@@ -1866,7 +2132,9 @@ function renderHLJ(v) {
       <div class="hlj-result-felt">
         <div class="hlj-result-scroll">
           <div class="hlj-result-headline">
-            <div class="hlj-result-handover">Hand over</div>
+            ${gameWon
+              ? `<div class="hlj-result-handover hlj-result-gameover-banner t${lh.gameWinner === 0 ? "A" : "B"}">Team ${lh.gameWinner === 0 ? "A" : "B"} wins game ${wonA + wonB}</div>`
+              : `<div class="hlj-result-handover">Hand over</div>`}
             <div class="hlj-result-bidline">${bidderName} bid <b>${lh.bid}</b> for Team ${bidderTeamLetter}</div>
             <div class="hlj-result-verdict ${made ? "made" : "set"}">${made ? "Made it" : "Set back"}</div>
           </div>
@@ -1876,11 +2144,11 @@ function renderHLJ(v) {
           </div>
           ${kittySection ? `<div class="hlj-result-card">${kittySection}</div>` : ""}
           <div class="hlj-result-card hlj-result-scores">
-            <div class="hlj-rr-seclabel">Score</div>
+            <div class="hlj-rr-seclabel">${gameWon ? `Final score \u00b7 series A ${wonA} \u2013 B ${wonB}` : "Score"}</div>
             ${scoreRows}
           </div>
           ${dealtPile}
-          <button class="hlj-result-next-btn" data-action="hlj-ack-hand">Next hand →</button>
+          <button class="hlj-result-next-btn" data-action="hlj-ack-hand">${gameWon ? "Next game" : "Next hand"} →</button>
         </div>
       </div>
     </div>`;
@@ -1902,11 +2170,17 @@ function renderHLJ(v) {
 // ---------- Rummy 500: client-side rule mirror ----------
 // These mirror rummy-module.ts so the UI can disable illegal actions outright
 // (the server still re-validates). Jokers are wild in both sets and runs.
+// A set is 3-4 cards of one rank, each natural a different suit (even with two decks).
 function rIsSet(cards) {
-  if (cards.length < 3) return false;
+  if (cards.length < 3 || cards.length > 4) return false;
   const nat = cards.filter((c) => !c.joker);
-  return nat.length > 0 && nat.every((c) => c.rank === nat[0].rank);
+  return nat.length > 0 && nat.every((c) => c.rank === nat[0].rank)
+    && new Set(nat.map((c) => c.suit)).size === nat.length;
 }
+// An Ace is low (A-2-3) or high (Q-K-A), never both, so one reading spans
+// slots A(1)..K(13) or 2..A(14) and a run holds at most 13 cards.
+const rMinSlot = (ace) => (ace === 1 ? 1 : 2);
+const rMaxSlot = (ace) => (ace === 1 ? 13 : 14);
 function rIsRun(cards) {
   if (cards.length < 3) return false;
   const nat = cards.filter((c) => !c.joker);
@@ -1922,8 +2196,7 @@ function rIsRun(cards) {
     const gaps = hi - lo + 1 - ranks.length;
     if (gaps < 0 || gaps > jokers) continue;
     const extra = jokers - gaps;
-    if (hi - lo + 1 + extra > 14) continue;
-    if ((lo - 1) + (14 - hi) < extra) continue;
+    if ((lo - rMinSlot(ace)) + (rMaxSlot(ace) - hi) < extra) continue;
     return true;
   }
   return false;
@@ -1931,6 +2204,119 @@ function rIsRun(cards) {
 const rValidMeld = (cards) => rIsSet(cards) || rIsRun(cards);
 const rCanLayoff = (meld, cards) =>
   meld.kind === "set" ? rIsSet([...meld.cards, ...cards]) : rIsRun([...meld.cards, ...cards]);
+// With "Must discard" on, no meld or lay-off may empty the hand (the engine's
+// requireDiscard check): a card has to be left to go out on.
+const rKeepsDiscard = (v, cards) => !v.requireDiscard || cards.length < v.yourHand.length;
+
+// The forced card (deep discard pickup). While it is pending, a meld or lay-off
+// that leaves it out is refused unless the card can still go down in one move
+// afterwards. A port of rummy-module's findSetContaining / findRunContaining /
+// trioWith / runBridge / forcedPlays / forcedPlayable, quirks included, so the
+// UI offers exactly the plays the engine accepts.
+function rSetWith(hand, c) {
+  if (c.joker) return null;
+  const seen = new Map([[c.suit, c]]);
+  for (const x of hand) if (!x.joker && x.rank === c.rank && !seen.has(x.suit)) seen.set(x.suit, x);
+  const g = [...seen.values()];
+  if (g.length >= 3) return g.slice(0, 4);
+  const jokers = hand.filter((x) => x.joker);
+  if (g.length >= 1 && g.length + jokers.length >= 3) return [...g, ...jokers.slice(0, 3 - g.length)];
+  return null;
+}
+function rRunWith(hand, c) {
+  if (c.joker) return null;
+  const inSuit = hand.filter((x) => x.suit === c.suit && !x.joker);
+  const jokers = hand.filter((x) => x.joker);
+  for (const ace of [1, 14]) {
+    const byRank = new Map();
+    for (const x of inSuit) { const r = x.rank === 14 ? ace : x.rank; if (!byRank.has(r)) byRank.set(r, x); }
+    const cr = c.rank === 14 ? ace : c.rank;
+    byRank.set(cr, c);
+    for (let lo = Math.max(1, cr - 2); lo <= cr; lo++) {
+      for (let hi = cr; hi <= Math.min(14, cr + 2); hi++) {
+        if (hi - lo + 1 < 3) continue;
+        let nat = 0;
+        for (let r = lo; r <= hi; r++) if (byRank.has(r)) nat++;
+        if (nat < 1 || hi - lo + 1 - nat > jokers.length) continue;
+        const jk = [...jokers];
+        const cards = [];
+        for (let r = lo; r <= hi; r++) cards.push(byRank.has(r) ? byRank.get(r) : jk.shift());
+        if (cards.includes(c)) return cards;
+      }
+    }
+  }
+  return null;
+}
+// Is there a three-card meld of `f` plus two of `others`?
+function rTrioWith(others, f) {
+  if (f.joker) {
+    const nats = others.filter((c) => !c.joker);
+    if (nats.length && others.some((c) => c.joker)) return true;
+    for (let i = 0; i < nats.length; i++)
+      for (let j = i + 1; j < nats.length; j++) if (rValidMeld([f, nats[i], nats[j]])) return true;
+    return false;
+  }
+  const pool = [f, ...others];
+  const set = rSetWith(pool, f)?.slice(0, 3);
+  if (set && rIsSet(set)) return true;
+  const run = rRunWith(pool, f);
+  return !!run && run.length === 3 && rIsRun(run);
+}
+// How many `pool` cards `f` needs to join the run `run` (0 = fits alone), or -1.
+function rRunBridge(run, f, pool) {
+  if (rIsRun([...run, f])) return 0;
+  const nat = run.filter((c) => !c.joker);
+  if (f.joker || !nat.length || nat[0].suit !== f.suit) return -1;
+  const runJokers = run.length - nat.length;
+  let best = -1;
+  for (const ace of [1, 14]) {
+    const eff = (c) => (c.rank === 14 ? ace : c.rank);
+    const ranks = new Set(nat.map(eff));
+    if (ranks.has(eff(f))) continue;
+    ranks.add(eff(f));
+    const lo = Math.min(...ranks), hi = Math.max(...ranks);
+    const holes = [];
+    for (let r = lo + 1; r < hi; r++) if (!ranks.has(r)) holes.push(r);
+    const need = holes.length - runJokers;
+    const bridge = [];
+    for (const r of holes) {
+      if (bridge.length >= need) break;
+      const c = pool.find((x) => !x.joker && x.suit === f.suit && eff(x) === r);
+      if (c) bridge.push(c);
+    }
+    for (const j of pool) if (j.joker && bridge.length < need) bridge.push(j);
+    if (bridge.length < need || !rIsRun([...run, f, ...bridge])) continue;
+    if (best < 0 || bridge.length < best) best = bridge.length;
+  }
+  return best;
+}
+// Can `f` (in `hand`) still go down in one move onto `melds` — keeping a card
+// back to discard when requireDiscard is on?
+function rForcedPlayable(hand, f, melds, requireDiscard) {
+  const others = hand.filter((c) => c.id !== f.id);
+  const fits = (n) => !requireDiscard || n < hand.length;
+  if (rTrioWith(others, f) && fits(3)) return true;
+  return melds.some((m) => {
+    if (m.kind === "set") return rIsSet([...m.cards, f]) && fits(1);
+    const n = rRunBridge(m.cards, f, others);
+    return n >= 0 && fits(n + 1);
+  });
+}
+// Would playing `cards` (a new meld, or a lay-off onto `meld`) strand the
+// pending forced card? Mirrors the engine's check in isLegal.
+function rStrandsForced(v, cards, meld = null) {
+  const fid = v.mustMeldCardId;
+  if (fid == null || cards.some((c) => c.id === fid)) return false;
+  const f = v.yourHand.find((c) => c.id === fid);
+  if (!f) return false;
+  const ids = new Set(cards.map((c) => c.id));
+  const rest = v.yourHand.filter((c) => !ids.has(c.id));
+  const melds = meld
+    ? v.melds.map((m) => (m.id === meld.id ? { ...m, cards: [...m.cards, ...cards] } : m))
+    : [...v.melds, { id: -1, kind: rIsSet(cards) ? "set" : "run", cards }];
+  return !rForcedPlayable(rest, f, melds, v.requireDiscard);
+}
+const R_STRANDS = "That would strand the green card \u2014 keep what it needs to go down this turn.";
 
 // Reconcile S.rummyOrder with the live hand: keep order, append new cards, drop gone ones.
 function rummyOrdered(hand) {
@@ -1939,14 +2325,33 @@ function rummyOrdered(hand) {
   for (const id of ids) if (!S.rummyOrder.includes(id)) S.rummyOrder.push(id);
   return S.rummyOrder.map((id) => hand.find((c) => c.id === id)).filter(Boolean);
 }
-function rummySort(hand, mode) {
-  const rank = (c) => (c.joker ? 100 : c.rank); // jokers sort to the end
+// Hand order for a sort mode; jokers go to the end either way.
+function rummyCmp(mode) {
+  const rank = (c) => (c.joker ? 100 : c.rank);
   const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
-  const by = mode === "suit"
-    ? (a, b) => (a.joker - b.joker) || (suitOrder[a.suit] - suitOrder[b.suit]) || (rank(a) - rank(b))
+  return mode === "suit"
+    ? (a, b) => ((a.joker ? 1 : 0) - (b.joker ? 1 : 0)) || (suitOrder[a.suit] - suitOrder[b.suit]) || (rank(a) - rank(b))
     : (a, b) => (rank(a) - rank(b)) || (suitOrder[a.suit] - suitOrder[b.suit]);
-  S.rummyOrder = [...hand].sort(by).map((c) => c.id);
+}
+function rummySort(hand, mode) {
+  S.rummyOrder = [...hand].sort(rummyCmp(mode)).map((c) => c.id);
   render();
+}
+
+// "You drew this" preview (armed in onFrame on your own stock draw).
+function showDrawn(card) {
+  clearTimeout(S.rummyDrawnTimer);
+  S.rummyDrawnCard = card;
+  S.rummyDrawnTimer = setTimeout(() => {
+    S.rummyDrawnCard = null;
+    S.rummyDrawnTimer = null;
+    render();
+  }, 3000);
+}
+function clearDrawn() {
+  clearTimeout(S.rummyDrawnTimer);
+  S.rummyDrawnTimer = null;
+  S.rummyDrawnCard = null;
 }
 
 // ---------- Rummy 500 ----------
@@ -1991,30 +2396,48 @@ function resolveJokers(meld) {
   return cards.map(() => null);
 }
 
-// Can card `c` join the current selection and still potentially form a valid meld/layoff?
-function rCompatible(sel, c, layMeld) {
+// Can card `c` join the current selection and still potentially form a valid
+// meld/layoff? `pool` is the rest of the hand (unselected cards other than c):
+// its cards may still fill a run's gaps, so the answer doesn't depend on the
+// order the cards were tapped (3\u2663 then 5\u2663 is fine while 4\u2663 is in hand).
+// With no lay-off target chosen, a lay-off onto any of `melds` (the table)
+// counts too, so 5\u2665 + 9\u2665 for a 6-7-8\u2665 run aren't dimmed.
+function rCompatible(sel, c, layMeld, pool = [], melds = []) {
   if (c.joker) return true;
   if (!sel.length) return true;
-  if (layMeld) return rCanLayoff(layMeld, [...sel, c]);
-  const naturals = sel.filter((s) => !s.joker);
-  if (!naturals.length) return true; // only jokers selected so far
-  const jokerCount = sel.filter((s) => s.joker).length;
-  // Set: same rank, no duplicate suit
-  const setRank = naturals[0].rank;
-  if (naturals.every((s) => s.rank === setRank) && c.rank === setRank && !sel.some((s) => s.suit === c.suit))
-    return true;
-  // Run: same suit, rank fits in range with available jokers as gap-fill.
-  // Try both ace interpretations (low=1, high=14) to match rIsRun.
-  const runSuit = naturals[0].suit;
-  if (naturals.every((s) => s.suit === runSuit) && c.suit === runSuit) {
-    const hasAce = naturals.some((s) => s.rank === 14) || c.rank === 14;
-    for (const aceRank of hasAce ? [1, 14] : [14]) {
-      const allRanks = [...naturals.map((s) => s.rank === 14 ? aceRank : s.rank), c.rank === 14 ? aceRank : c.rank].sort((a, b) => a - b);
-      if (new Set(allRanks).size !== allRanks.length) continue;
-      const lo = allRanks[0], hi = allRanks[allRanks.length - 1];
-      const gaps = hi - lo + 1 - allRanks.length;
-      if (gaps >= 0 && gaps <= jokerCount) return true;
+  const cards = [...sel, c];
+  // Adding cards never repairs a set, so a set lay-off must hold as it is.
+  const fits = (m) => (m.kind === "set" ? rCanLayoff(m, cards) : rRunFillable([...m.cards, ...cards], pool));
+  if (layMeld) return fits(layMeld);
+  const naturals = cards.filter((s) => !s.joker);
+  // Set: same rank, distinct suits (jokers carry no suit of their own), at most 4.
+  if (cards.length <= 4 && naturals.every((s) => s.rank === c.rank)
+      && new Set(naturals.map((s) => s.suit)).size === naturals.length) return true;
+  return rRunFillable(cards, pool) || melds.some(fits);
+}
+
+// Could `cards` become (part of) one run once gaps are filled from `pool`?
+// Gaps take the jokers already in `cards` first; any left over must still fit
+// at the ends. Mirrors rIsRun's ace-low / ace-high handling.
+function rRunFillable(cards, pool) {
+  const naturals = cards.filter((s) => !s.joker);
+  const jokers = cards.length - naturals.length;
+  if (!naturals.length) return true;
+  const suit = naturals[0].suit;
+  if (!naturals.every((s) => s.suit === suit)) return false;
+  const poolJokers = pool.filter((p) => p.joker).length;
+  for (const ace of [1, 14]) {
+    const ranks = naturals.map((s) => (s.rank === 14 ? ace : s.rank)).sort((a, b) => a - b);
+    if (new Set(ranks).size !== ranks.length) continue;
+    const lo = ranks[0], hi = ranks[ranks.length - 1];
+    const gaps = hi - lo + 1 - ranks.length;
+    if (jokers >= gaps) {
+      if ((lo - rMinSlot(ace)) + (rMaxSlot(ace) - hi) >= jokers - gaps) return true;
+      continue;
     }
+    // Gap ranks the pool holds in this suit (an ace is never inside a run).
+    const fill = new Set(pool.filter((p) => !p.joker && p.suit === suit && p.rank > lo && p.rank < hi && !ranks.includes(p.rank)).map((p) => p.rank)).size;
+    if (gaps - jokers <= fill + poolJokers) return true;
   }
   return false;
 }
@@ -2067,8 +2490,14 @@ function rummyLedgerRows(v, ctx) {
     const ribbon = myMelds.length
       ? `<div class="ledger-ribbon">${myMelds.map((m) => ctx.meldTile(m)).join("")}</div>`
       : `<div class="ledger-empty">no melds yet</div>`;
-    return `<div class="ledger-row${active ? " active" : ""}${you ? " you" : ""}">
+    // Same "away" chip and host Replace button the table pods carry.
+    const presence = seatPresence(v, i);
+    const presenceEl = presence.away
+      ? `<div class="ledger-away" style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:none">${presence.badge}${presence.replaceBtn}</div>`
+      : "";
+    return `<div class="ledger-row${active ? " active" : ""}${you ? " you" : ""}${presence.away ? " disconnected" : ""}">
       <div class="ledger-id">${nameplate}${badge}</div>
+      ${presenceEl}
       ${ribbon}
     </div>`;
   });
@@ -2091,32 +2520,31 @@ function renderRummy(v) {
   // prune stale selections (cards no longer in hand)
   const handIds = new Set(v.yourHand.map((c) => c.id));
   for (const id of [...S.rummySel]) if (!handIds.has(id)) S.rummySel.delete(id);
+  // The "you drew this" preview belongs to your turn and to the card in hand.
+  if (S.rummyDrawnCard && (!v.yourTurn || !handIds.has(S.rummyDrawnCard.id))) clearDrawn();
 
+  if (v.phase === "handComplete" || v.phase === "gameOver") {
+    // Card and meld ids are reused by the next deal: nothing chosen this round
+    // may carry into it.
+    S.rummySel.clear();
+    S.rummyLayoff = null;
+    S.rummyMeldOpen = null;
+    S.discardOpen = false;
+  }
   if (v.phase === "handComplete") {
+    S.rummyRoundShown = rummyRoundKey(v);
     return void (app.__set = rummyHandCompleteScreen(v));
   }
 
-  // Detect newly drawn card (stock draw)
-  const currentHandIds = new Set(v.yourHand.map((c) => c.id));
-  if (v.yourTurn && v.turnPhase === "play" && S.rummyPrevHandIds.size > 0 && S.rummyDrawnCard === null) {
-    const newCards = v.yourHand.filter((c) => !S.rummyPrevHandIds.has(c.id));
-    if (newCards.length === 1) {
-      S.rummyDrawnCard = newCards[0];
-      clearTimeout(S.rummyDrawnTimer);
-      S.rummyDrawnTimer = setTimeout(() => {
-        if (S.rummyDrawnCard) S.rummyPrevHandIds = new Set([...S.rummyPrevHandIds, S.rummyDrawnCard.id]);
-        S.rummyDrawnCard = null;
-        S.rummyDrawnTimer = null;
-        render();
-      }, 3000);
-    }
-  }
-  // Update prev hand ids (but not while preview is showing, to avoid clearing it)
-  if (S.rummyDrawnCard === null) S.rummyPrevHandIds = currentHandIds;
-
   if (v.phase === "gameOver") {
     const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
-    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
+    // The deciding round goes straight to game over, so its breakdown lives here.
+    const lr = v.lastRound;
+    const lastHTML = lr
+      ? `<div class="panel"><h2 style="margin-bottom:10px">Last round \u2014 ${lr.outSeat != null ? `${esc(seatName(v, lr.outSeat))} went out` : "stock exhausted"}</h2>
+          <div style="display:flex;flex-direction:column;gap:12px">${rummyRoundPlayers(v, lr)}</div></div>`
+      : "";
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows), lastHTML);
   }
 
   const lm = v.yourTurn ? v.legalMoves : [];
@@ -2126,6 +2554,9 @@ function renderRummy(v) {
   const canTakePile = bottom && lm.some((m) => m.type === "drawDiscard" && m.cardId === bottom.id) && v.discard.length > 1;
   const top = v.discard.length ? v.discard[v.discard.length - 1] : null;
   const inPlay = v.yourTurn && v.turnPhase === "play";
+  // A lay-off target only lives for the play phase it was picked in, and only
+  // while that meld is still on the table.
+  if (S.rummyLayoff !== null && (!inPlay || !v.melds.some((m) => m.id === S.rummyLayoff))) S.rummyLayoff = null;
 
   const pods = v.seats
     .map((s, i) =>
@@ -2168,13 +2599,15 @@ function renderRummy(v) {
   // Compute selected cards early so melds can highlight valid layoff targets
   const orderedForMelds = rummyOrdered(v.yourHand);
   const selCardsForMelds = orderedForMelds.filter((c) => S.rummySel.has(c.id));
+  // The chosen lay-off target, or (none chosen) a meld the selection could be
+  // laid off on — the same highlight on the felt and in the phone ledger.
+  const meldCls = (m) => S.rummyLayoff === m.id ? "target"
+    : inPlay && selCardsForMelds.length >= 1 && S.rummyLayoff === null
+      && rCanLayoff(m, selCardsForMelds) && rKeepsDiscard(v, selCardsForMelds)
+      && !rStrandsForced(v, selCardsForMelds, m) ? "layoff-hint" : "";
 
   const meldsInner = v.melds.length
     ? `<div class="melds">${v.melds.map((m) => {
-          const active = S.rummyLayoff === m.id;
-          // Highlight melds that can accept the current hand selection as a layoff
-          const validLayoff = inPlay && selCardsForMelds.length >= 1
-            && S.rummyLayoff === null && rCanLayoff(m, selCardsForMelds);
           const jokerRes = resolveJokers(m);
           const meldAttrs = `data-action="open-meld" data-meldid="${m.id}"`;
           let inner;
@@ -2206,8 +2639,7 @@ function renderRummy(v) {
             }).join("");
             inner = `<div class="run-dense tappable">${allCards}</div>`;
           }
-          const meldClass = active ? "target" : validLayoff ? "layoff-hint" : "";
-          return `<div class="meld tappable ${meldClass}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
+          return `<div class="meld tappable ${meldCls(m)}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
         }).join("")}</div>`
     : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
   // Wrap in a scrollable felt container. Clicking the wrapper (but not an individual
@@ -2225,10 +2657,11 @@ function renderRummy(v) {
 
   // Determine which unselected cards are compatible with the current selection
   const compatibleIds = inPlay && selCards.length
-    ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld)).map((c) => c.id))
+    ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld, ordered.filter((p) => p !== c && !S.rummySel.has(p.id)), v.melds)).map((c) => c.id))
     : null; // null = no filtering
 
-  // Drawn card preview (shown above fan after drawing from stock)
+  // Drawn card preview (shown above fan after drawing from stock; cleared above
+  // once the turn ends or the card leaves the hand)
   const drawnPreview = S.rummyDrawnCard
     ? `<div class="rummy-drawn-preview" data-action="dismiss-drawn">
         ${cardHTML(S.rummyDrawnCard, {})}
@@ -2238,7 +2671,7 @@ function renderRummy(v) {
 
   const selRow = selCards.length
     ? `<div class="selrow">${selCards.map((c) => cardHTML(c, {
-        action: "toggle-card", id: c.id, sel: true,
+        action: "toggle-card", id: c.id, sel: true, style: "touch-action:none", // drag-to-play (see fanHand)
         must: c.id === v.mustMeldCardId,
       })).join("")}</div>`
     : "";
@@ -2272,8 +2705,13 @@ function renderRummy(v) {
         : `<div class="fan-inner" ${handSizeStyle}>${fan}</div>`)
     : "";
   const hand = drawnPreview + selRow + fanWrap;
-  const canMeld = selCards.length >= 3 && rValidMeld(selCards);
-  const canLay = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards);
+  const keepsDiscard = rKeepsDiscard(v, selCards);
+  const meldFits = selCards.length >= 3 && rValidMeld(selCards) && keepsDiscard;
+  const layFits = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards) && keepsDiscard;
+  // A pending forced card refuses any play that would leave it no way down.
+  const canMeld = meldFits && !rStrandsForced(v, selCards);
+  const canLay = layFits && !rStrandsForced(v, selCards, layMeld);
+  const strands = !canMeld && !canLay && (meldFits || layFits);
   const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;
 
   // sort controls (available whenever you hold cards) \u2014 single alternating button
@@ -2303,7 +2741,10 @@ function renderRummy(v) {
       acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
     }
     acts.push(sortBar);
-    if (v.mustMeldCardId != null) acts.push(`<span class="hint">The green card must be melded or laid off before you discard.</span>`);
+    // Rule reasons stay visible in landscape (.key), where other hints are hidden.
+    if (strands) acts.push(`<span class="hint key">${R_STRANDS}</span>`);
+    else if (v.mustMeldCardId != null) acts.push(`<span class="hint key">The green card must be melded or laid off before you discard.</span>`);
+    else if (!keepsDiscard) acts.push(`<span class="hint key">Must discard is on \u2014 keep a card back to go out on.</span>`);
     else if (canMeld) acts.push(`<span class="hint">Tap \u201cPlay meld\u201d to put these ${n} cards down.</span>`);
     else if (canLay) acts.push(`<span class="hint">Tap \u201cLay off\u201d to add these cards to the highlighted meld.</span>`);
     else if (n >= 3) acts.push(`<span class="hint">These cards don\u2019t form a valid meld.</span>`);
@@ -2313,9 +2754,9 @@ function renderRummy(v) {
   }
 
   const myScore = v.you != null ? v.scores[v.you] : null;
-  const selfMeta = myScore != null
+  const selfMeta = (myScore != null
     ? `${myScore} of ${v.target}`
-    : `play to ${v.target}`;
+    : `play to ${v.target}`) + (v.tiebreak ? " \u00b7 tiebreak round" : "");
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
     : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
@@ -2327,8 +2768,13 @@ function renderRummy(v) {
   // Watermarks (felt overlay + corner suits) are disabled for Rummy 500.
   const rummyFeltOverlay = "";
   const rummyCornerSuits = "";
+  // Ledger tiles sit in a scrolling ribbon that would clip an outline drawn
+  // outside them, so a highlighted tile draws it inside.
   const ledgerCtx = {
-    meldTile: (m) => `<div class="meld tappable" data-action="open-meld" data-meldid="${m.id}">${rummyMeldInner(m)}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`,
+    meldTile: (m) => {
+      const cls = meldCls(m);
+      return `<div class="meld tappable ${cls}"${cls ? ` style="outline-offset:-2px"` : ""} data-action="open-meld" data-meldid="${m.id}">${rummyMeldInner(m)}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
+    },
   };
   const useLedger = window.matchMedia("(max-width:1023px)").matches;
   const isLandscape = window.matchMedia("(orientation:landscape)").matches;
@@ -2350,42 +2796,77 @@ function renderRummy(v) {
   app.__set = tableShell(v, rummyParts) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
 }
 
-// Round-end summary popup: no longer used for handComplete (replaced by rummyHandCompleteScreen).
-// Kept as empty stub for gameOver case (which is handled by renderGameOver separately).
-function rummyRoundModal(v) {
-  return "";
+// A round's identity: the id of its round-end log row (ids only grow within a
+// game), so two rounds that happen to score alike are still told apart.
+const rummyRoundEnd = (e) => /^(goes out\b|Stock exhausted)/.test(e.msg || "");
+function rummyRoundKey(v) {
+  const log = v.log ?? [];
+  for (let k = log.length - 1; k >= 0; k--) if (rummyRoundEnd(log[k])) return log[k].id;
+  return null;
 }
 
-// Full-screen hand-complete overlay shown when phase === "handComplete".
-function rummyHandCompleteScreen(v) {
-  const lr = v.lastRound;
-  if (!lr) return "";
+// Any seated player's "Next hand" deals on for the whole table. Whoever was
+// still reading the summary gets it back over the new deal until they close it.
+function rummyRoundModal(v) {
+  const key = rummyRoundKey(v);
+  if (!v.lastRound || key == null || S.rummyRoundShown !== key || S.rummyRoundAcked === key) return "";
+  return rummyRoundSummary(v, "Last round \u2014 ", `<button class="btn" data-action="ack-round">Close</button>`);
+}
 
-  const heading = lr.outSeat != null
-    ? `${esc(seatName(v, lr.outSeat))} went out`
-    : "Stock exhausted";
+// Seat that placed each card melded this round (card id -> seat). A melded card
+// scores for whoever put it down (lay-offs score for the layer, not the meld's
+// owner), so the round summary lists cards by placer. Uses the engine's per-card
+// `by` when present, else this round's "melded" / "laid off" log rows; a card
+// neither covers (log trimmed) falls back to its meld's owner.
+function rummyPlacers(v, lr) {
+  const by = new Map();
+  for (const m of lr.lastMelds ?? []) for (const c of m.cards) if (c.by != null) by.set(c.id, c.by);
+  // This round's rows lie between the previous round-end row and this one's
+  // (card ids repeat every round, so older rows must not count).
+  const log = v.log ?? [];
+  let end = log.length - 1;
+  while (end >= 0 && !rummyRoundEnd(log[end])) end--;
+  let start = end - 1;
+  while (start >= 0 && !rummyRoundEnd(log[start])) start--;
+  for (let k = start + 1; k < end; k++) {
+    const e = log[k];
+    if (e.msg !== "melded" && e.msg !== "laid off") continue;
+    for (const c of e.cards ?? []) if (!by.has(c.id)) by.set(c.id, e.seat);
+  }
+  return by;
+}
 
-  const playerSections = v.seats.map((_, i) => {
+// Per-player round breakdown: melded points (cards they placed, grouped by meld)
+// minus the cards caught in hand. Shared by the round summary and game over.
+function rummyRoundPlayers(v, lr) {
+  const placers = rummyPlacers(v, lr);
+  return v.seats.map((_, i) => {
     const name = esc(seatName(v, i));
     const net = lr.delta[i] ?? 0;
     const netStr = net >= 0 ? `+${net}` : `${net}`;
     const total = v.scores[i];
     const wentOut = i === lr.outSeat;
 
+    // How the delta is made up (the engine's own split).
+    const breakdown = lr.meldedPts && lr.heldPts
+      ? `<div class="rhc-breakdown" style="font-size:12px;color:var(--ink-soft);margin:-4px 0 6px">melded +${lr.meldedPts[i]} \u2212 held ${lr.heldPts[i]}</div>`
+      : "";
+
+    // Cards this player placed (green border), one group per meld they added to
+    const meldsEl = (lr.lastMelds ?? []).map((m) => {
+      const jokerRes = resolveJokers(m);
+      const mine = m.cards
+        .map((c, ci) => ({ c, as: jokerRes[ci] }))
+        .filter(({ c }) => (placers.get(c.id) ?? m.owner) === i);
+      return mine.length
+        ? `<div class="rhc-meld">${mine.map(({ c, as }) => cardHTML(c, { mini: true, jokerAs: as ?? undefined })).join("")}</div>`
+        : "";
+    }).join("");
+
     // Held cards (red border)
     const heldCards = lr.heldCards?.[i] ?? [];
     const heldEl = heldCards.length
       ? `<div class="rhc-cards rhc-held">${heldCards.map((c) => cardHTML(c, { mini: true })).join("")}</div>`
-      : "";
-
-    // This player's melds (green border), grouped
-    const playerMelds = (lr.lastMelds ?? []).filter((m) => m.owner === i);
-    const meldsEl = playerMelds.length
-      ? playerMelds.map((m) => {
-          const jokerRes = resolveJokers(m);
-          const meldCards = m.cards.map((c, ci) => cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined })).join("");
-          return `<div class="rhc-meld">${meldCards}</div>`;
-        }).join("")
       : "";
 
     return `<div class="rhc-player${wentOut ? " rhc-went-out" : ""}">
@@ -2394,21 +2875,39 @@ function rummyHandCompleteScreen(v) {
         <span class="rhc-delta ${net >= 0 ? "pos" : "neg"}">${netStr}</span>
         <span class="rhc-total">/ ${total}</span>
       </div>
+      ${breakdown}
+      ${meldsEl ? `<div class="rhc-melds" style="margin-bottom:6px">${meldsEl}</div>` : ""}
       ${heldEl}
-      ${meldsEl ? `<div class="rhc-melds">${meldsEl}</div>` : ""}
     </div>`;
   }).join("");
+}
 
-  const canAdvance = v.you != null;
-  const nextBtn = canAdvance
+// Full-screen hand-complete overlay shown when phase === "handComplete".
+function rummyHandCompleteScreen(v) {
+  if (!v.lastRound) return "";
+  const nextBtn = v.you != null
     ? `<button class="btn" data-action="advance-round">Next hand →</button>`
-    : "";
+    : `<span class="hint">Waiting for a player to deal the next hand…</span>`;
+  return rummyRoundSummary(v, "", nextBtn) + logSheet();
+}
 
-  return `<div class="rhc-wrap">
-    <div class="rhc-modal">
-      <div class="rhc-head">${heading}</div>
-      <div class="rhc-body">${playerSections}</div>
-      <div class="rhc-foot">${nextBtn}</div>
+// The round summary page. It carries the app bar (Log / Leave), so no one —
+// a spectator included — is stuck on it until a seated player moves on.
+function rummyRoundSummary(v, prefix, footHTML) {
+  const lr = v.lastRound;
+  const heading = lr.outSeat != null
+    ? `${esc(seatName(v, lr.outSeat))} went out`
+    : "Stock exhausted";
+  // Past the target with the lead shared: the game plays on (engine tie rule).
+  const tie = v.tiebreak
+    ? `<div class="rhc-tie">Tied for the lead at ${Math.max(...v.scores)} \u2014 another round decides</div>`
+    : "";
+  return `<div class="rhc-wrap" style="flex-direction:column;justify-content:flex-start;gap:6px">
+    <div style="align-self:stretch;padding-top:env(safe-area-inset-top)">${appbar(v, { log: true })}</div>
+    <div class="rhc-modal" style="margin:auto 0;max-height:calc(100% - 60px)">
+      <div class="rhc-head">${prefix}${heading}</div>${tie}
+      <div class="rhc-body">${rummyRoundPlayers(v, lr)}</div>
+      <div class="rhc-foot">${footHTML}</div>
     </div>
   </div>`;
 }
@@ -2481,8 +2980,17 @@ function discardModal(v) {
 // ---------- actions ----------
 // ---------- Hearts (Black Lady) ----------
 // Pass direction from the seat offset the server reports (0 = a "hold" hand).
+// Across is the seat straight opposite; at 5 players offsets 2 and 3 are two
+// seats to the left and two to the right.
 const passDir = (offset, players) =>
-  offset === 0 ? "hold" : offset === 1 ? "left" : offset === players - 1 ? "right" : "across";
+  offset === 0 ? "hold" : offset === 1 ? "left" : offset === players - 1 ? "right"
+  : offset * 2 === players ? "across"
+  : offset * 2 < players ? `${PASS_COUNT[offset] ?? offset} to the left` : `${PASS_COUNT[players - offset] ?? players - offset} to the right`;
+const PASS_COUNT = ["", "one", "two", "three"];
+
+// The hand a lastHand belongs to: handNo has already moved past it and only
+// grows within a game, so two hands that score alike (a repeat moon) differ.
+const heartsHandKey = (v) => v.handNo;
 
 function renderHearts(v) {
   // Prune stale pass selections (cards that left the hand after the exchange).
@@ -2491,8 +2999,16 @@ function renderHearts(v) {
 
   if (v.phase === "gameOver") {
     const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
+    // The game-ending hand never gets its own result screen, so show what it
+    // scored (and a moon shot) above the totals.
+    const lh = v.lastHand;
+    const lastHTML = lh
+      ? `<div class="panel"><h2 style="margin-bottom:4px">Last hand</h2>${
+          lh.shooter != null ? `<p class="sub">${esc(seatName(v, lh.shooter))} shot the moon!</p>` : ""
+        }${scoreList(v.seats.map((s, i) => ({ name: seatName(v, i), score: `${lh.delta[i] > 0 ? "+" : ""}${lh.delta[i]}`, you: i === v.you })))}</div>`
+      : "";
     // Lowest score wins, so the title still points at v.winner (server picks the min).
-    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows));
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows), lastHTML);
   }
 
   const passing = v.phase === "passing";
@@ -2537,8 +3053,10 @@ function renderHearts(v) {
       const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
       const winName = v.trickWinner != null ? esc(seatName(v, v.trickWinner)) : null;
       const trickEl = trickHTML(trickPlays, v.you, v.seats.length, { mini: false, winSeat: v.trickWinner });
-      heartsTrick = `<div class="trick-gate" data-action="advance-trick">${trickEl}`
-        + `<div class="trick-gate-hint">${winName ? `Won by ${winName} &middot; ` : ""}Tap to continue</div></div>`;
+      // A spectator can't advance the gate: no tap target, no "Tap to continue".
+      const hint = [winName ? `Won by ${winName}` : "", v.you != null ? "Tap to continue" : ""].filter(Boolean).join(" &middot; ");
+      heartsTrick = `<div class="trick-gate"${v.you != null ? ` data-action="advance-trick"` : ` style="cursor:default"`}>${trickEl}`
+        + (hint ? `<div class="trick-gate-hint">${hint}</div>` : "") + `</div>`;
       center = crests;
     } else {
       const showLast = v.currentTrick.length === 0 && v.lastTrick;
@@ -2586,28 +3104,13 @@ function renderHearts(v) {
     }
   }
 
-  // Reconcile hearts sort order with live hand; auto-sort on new deal or after pass exchange.
+  // Reconcile hearts sort order with live hand: a new deal, the pass exchange or
+  // a reload brings several unseen cards at once, so the whole hand is sorted
+  // afresh (the cards a pass brought in are flagged in onFrame).
   { const ids = v.yourHand.map((c) => c.id);
     const knownIds = new Set(S.heartsOrder);
     const newCards = ids.filter((id) => !knownIds.has(id));
-    if (newCards.length > 1 && !passing) {
-      // Pass exchange just resolved — show received cards above hand for 5s before merging.
-      const prevIds = new Set(S.heartsOrder);
-      const received = ids.filter((id) => !prevIds.has(id));
-      if (received.length > 0 && S.heartsReceivedCards.length === 0) {
-        S.heartsReceivedCards = received;
-        if (S.heartsReceivedTimer) clearTimeout(S.heartsReceivedTimer);
-        S.heartsReceivedTimer = setTimeout(() => {
-          S.heartsReceivedCards = [];
-          S.heartsReceivedTimer = null;
-          render();
-        }, 5000);
-      }
-      // Sort the full hand (received cards will be shown separately in selrow during timer).
-      const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
-      S.heartsOrder = [...v.yourHand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id);
-    } else if (newCards.length > 1 && passing) {
-      // New deal — sort the whole hand.
+    if (newCards.length > 1) {
       const suitOrder = { S: 0, H: 1, C: 2, D: 3 };
       S.heartsOrder = [...v.yourHand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id);
     } else {
@@ -2623,9 +3126,14 @@ function renderHearts(v) {
   const heartsHand = S.heartsOrder.map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
 
   // Hand: in passing, selected cards lift into a selrow above the fan (Rummy-style).
-  // After pass exchange, received cards show in selrow for 5s before merging.
+  // After pass exchange, received cards show in selrow for 5s before merging —
+  // still playable, since the leader may have been passed the lowest club.
   let hand;
   const receivedSet = new Set(S.heartsReceivedCards);
+  const playOpts = (c) => {
+    const can = plays.has(c.id);
+    return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
+  };
   if (passing && !v.youPassed) {
     const selCards = heartsHand.filter((c) => S.heartsPass.has(c.id));
     const fanCards = heartsHand.filter((c) => !S.heartsPass.has(c.id));
@@ -2637,19 +3145,14 @@ function renderHearts(v) {
     const fanHtml = fan ? `<div class="fan-scroll"><div class="fan-inner">${fan}</div></div>` : "";
     hand = selRow + fanHtml;
   } else if (!passing && receivedSet.size > 0) {
-    // Show received cards in selrow for 5s (dim, non-interactive).
     const recCards = heartsHand.filter((c) => receivedSet.has(c.id));
     const restCards = heartsHand.filter((c) => !receivedSet.has(c.id));
     const selRow = recCards.length
-      ? `<div class="selrow">${recCards.map((c) => cardHTML(c, { id: c.id, dim: false, sel: true })).join("")}</div>`
+      ? `<div class="selrow">${recCards.map((c) => cardHTML(c, { ...playOpts(c), sel: true })).join("")}</div>`
       : "";
-    hand = selRow + `<div class="fan-scroll"><div class="fan-inner">${fanHand(restCards, (c) => ({ id: c.id, dim: true }), { scrollable: true })}</div></div>`;
+    hand = selRow + `<div class="fan-scroll"><div class="fan-inner">${fanHand(restCards, playOpts, { scrollable: true })}</div></div>`;
   } else {
-    hand = `<div class="fan-scroll"><div class="fan-inner">${fanHand(heartsHand, (c) => {
-      if (passing) return { id: c.id, dim: true };
-      const can = plays.has(c.id);
-      return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
-    }, { scrollable: true })}</div></div>`;
+    hand = `<div class="fan-scroll"><div class="fan-inner">${fanHand(heartsHand, (c) => (passing ? { id: c.id, dim: true } : playOpts(c)), { scrollable: true })}</div></div>`;
   }
 
   // Actions.
@@ -2660,13 +3163,26 @@ function renderHearts(v) {
     acts.push(`<span class="hint">${n === 3 ? "Tap a selected card to swap it out." : v.yourTurn ? `Select ${3 - n} more card${3 - n === 1 ? "" : "s"} to pass.` : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
   } else if (passing) {
     acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
+  } else if (v.you != null) {
+    // A seated player always gets a cue (an empty row reads "Watching the table…").
+    acts.push(`<span class="hint">${
+      v.yourTurn ? "Tap a highlighted card to play it."
+      : v.phase === "trickComplete" ? "Tap the trick to continue."
+      : v.toAct != null ? `Waiting for ${esc(seatName(v, v.toAct))}\u2026` : ""
+    }</span>`);
   }
 
   const you = v.you;
-  const selfMeta = you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`;
+  const selfMeta = (you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`)
+    + (v.tiebreak ? " \u00b7 tiebreak hand" : "");
+  // Nobody is to act during the trick gate (toAct is null): name the trick's winner.
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
-    : `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`;
+    : v.toAct != null
+    ? `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`
+    : v.phase === "trickComplete" && v.trickWinner != null
+    ? `<span class="waitflag">Trick to ${esc(seatName(v, v.trickWinner))}</span>`
+    : "";
 
   const ledSuit = (v.currentTrick?.length && !passing)
     ? v.currentTrick[0].card?.suit
@@ -2682,7 +3198,7 @@ function renderHearts(v) {
   const heartsHandModal = (() => {
     const lh = v.lastHand;
     if (!lh || v.phase === "gameOver") return "";
-    const handKey = JSON.stringify(lh);
+    const handKey = heartsHandKey(v);
     if (S.heartsHandAcked === handKey) return "";
     if (S.heartsHandTimer == null) {
       S.heartsHandTimer = setTimeout(() => {
@@ -2693,9 +3209,11 @@ function renderHearts(v) {
     }
     const { delta, shooter } = lh;
     const moonSeat = shooter;
-    const headline = moonSeat != null
+    const headline = (moonSeat != null
       ? `<div class="hlj-result-verdict made">${esc(seatName(v, moonSeat))} shot the moon!</div>`
-      : "";
+      : "")
+      // Target reached but the low score is shared: the engine plays on.
+      + (v.tiebreak ? `<div class="hlj-result-bidline">Tied for low at ${Math.min(...v.scores)} \u2014 playing another hand</div>` : "");
     const scoreRows = v.seats.map((_, i) => {
       const d = delta[i];
       const total = v.scores[i];
@@ -2914,6 +3432,8 @@ function doConnect() {
   localStorage.setItem("cg_name", name);
   if (!room) room = Math.random().toString(36).slice(2, 7);
   S.room = room;
+  S.joinedOnline = false;
+  S.retryMs = 0;
   history.replaceState(null, "", `/?game=${game}&room=${encodeURIComponent(room)}`);
   connect();
 }
@@ -2933,6 +3453,12 @@ function doLeave() {
   S.intentionalClose = true;
   if (!S.offline) send({ t: "leave" });
   try { S.ws?.close(); } catch {}
+  S.ws = null;
+  clearTimeout(S.retryTimer);
+  S.retryTimer = null;
+  S.retryMs = 0;
+  S.joinedOnline = false;
+  S.connectSlow = false;
   S.view = null;
   S.connected = false;
   S.party = null;
@@ -2940,32 +3466,74 @@ function doLeave() {
   S.tutorial = false;
   S.hotseat = false;
   S.hotseats = {};
-  S.awaitingPass = false;
   S.revealedSeat = null;
+  resetGameUi();
   history.replaceState(null, "", "/");
   renderStart();
 }
 
+// The FULL lobby config, read from the authoritative view (never the DOM), with
+// `over` on top. Every setConfig and start goes through here, so changing one
+// option can't silently reset the others.
+function lobbyConfig(v, over = {}) {
+  const players = over.players ?? v.players;
+  if (S.party === "pegs-and-jokers") return { players, marbles: v.marbles, ...over };
+  const c = { players, target: v.target ?? GAMES[S.party].target };
+  if (S.party === "high-low-jack") c.bestOf = Math.max(1, (v.winsNeeded ?? 1) * 2 - 1);
+  if (S.party === "rummy500") {
+    c.requireDiscard = !!v.requireDiscard;
+    c.botDifficulty = Array.from({ length: players }, (_, i) => v.botDifficulty?.[i] ?? 2);
+  }
+  return { ...c, ...over };
+}
+
 function doStart() {
-  S.revealedSeat = 0;
-  S.awaitingPass = false;
   const v = S.view;
+  if (!v) return;
+  const config = lobbyConfig(v);
   const hasHotseats = Object.keys(S.hotseats).length > 0;
-  // If the only human is the host (no remote humans) OR the host has added
-  // pass-and-play seats, drop the server and run locally.
-  const nonHostHumans = v.seats.filter((s, i) => s.kind === "human" && i !== v.you).length;
-  if (nonHostHumans === 0 || hasHotseats) {
+  const remoteHumans = S.offline ? 0 : v.seats.filter((s, i) => s.kind === "human" && i !== v.you).length;
+  // Pass & play runs on this device, so it can't take online players along.
+  if (hasHotseats && remoteHumans > 0) {
+    return toast("Pass & Play can't include online players — clear the reserved seats first.");
+  }
+  resetGameUi();
+  if (S.offline) {
+    // Already local: seat the new pass-and-play guests in this room (it keeps
+    // the last game's guests and is already sized to the table), then deal.
+    S.revealedSeat = v.you;
+    for (const [seat, name] of Object.entries(S.hotseats)) send({ t: "addHuman", seat: +seat, name });
+    S.hotseats = {};
+    return send({ t: "start", config });
+  }
+  if (remoteHumans === 0) {
+    // Solo vs bots or pass & play from an online lobby: the deal runs in a
+    // LocalRoom on this device. Give the seat back and point the URL away from
+    // the room first, so neither the server nor a reload is left holding it.
+    send({ t: "leave" });
     S.intentionalClose = true;
     try { S.ws?.close(); } catch {}
+    S.ws = null;
+    S.joinedOnline = false;
     S.connected = false;
     S.view = null;
-    const target = S.party === "high-low-jack" ? 21 : (parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party]?.target);
-    connectLocal(v.seats, { target, marbles: v.marbles, botDifficulty: v.botDifficulty });
-    return;
+    S.revealedSeat = 0; // the hand-off seats this device at 0
+    history.replaceState(null, "", `/?game=${S.party}`);
+    return connectLocal({ seats: v.seats, you: v.you, config, start: true });
   }
-  if (S.party === "pegs-and-jokers") return send({ t: "start", config: { players: v.players, marbles: v.marbles } });
-  const target = S.party === "high-low-jack" ? 21 : (parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target);
-  send({ t: "start", config: { players: v.players, target, botDifficulty: v.botDifficulty } });
+  send({ t: "start", config });
+}
+
+// Lobby rename: update this device's name and the seat everyone sees (a repeat
+// join for our pid renames the seat, on the server and in a LocalRoom alike).
+function renameFrom(inp) {
+  const newName = inp ? inp.value.trim().slice(0, 24) : "";
+  if (!newName) return;
+  S.name = newName;
+  localStorage.setItem("cg_name", newName);
+  inp.blur();
+  send({ t: "join", pid: S.pid, name: newName });
+  render();
 }
 
 function toggleSel(id) {
@@ -2973,25 +3541,30 @@ function toggleSel(id) {
   else S.rummySel.add(id);
   render();
 }
+// Meld / lay off / discard keep the selection until the server answers: the
+// next view drops the played cards from it, and a rejected move leaves it on
+// screen, intact, beside the error. A lay-off target is used up either way.
 function doMeld() {
   const cards = [...S.rummySel];
   if (cards.length < 3) return toast("Select at least 3 cards to meld.");
-  send({ t: "move", move: { type: "meld", seat: S.view.you, cards } });
-  S.rummySel.clear();
+  sendOnce({ t: "move", move: { type: "meld", seat: S.view.you, cards } });
+  S.rummyLayoff = null;
+  render();
 }
 function doLayoff() {
   if (S.rummyLayoff === null) return toast("Tap a meld and choose “Lay off here”.");
   const cards = [...S.rummySel];
   if (!cards.length) return toast("Select cards to lay off.");
-  send({ t: "move", move: { type: "layoff", seat: S.view.you, meldId: S.rummyLayoff, cards } });
-  S.rummySel.clear();
+  sendOnce({ t: "move", move: { type: "layoff", seat: S.view.you, meldId: S.rummyLayoff, cards } });
   S.rummyLayoff = null;
+  render();
 }
 function doDiscard() {
   if (S.rummySel.size !== 1) return toast("Select exactly one card to discard.");
   const cardId = [...S.rummySel][0];
-  send({ t: "move", move: { type: "discard", seat: S.view.you, cardId } });
-  S.rummySel.clear();
+  sendOnce({ t: "move", move: { type: "discard", seat: S.view.you, cardId } });
+  S.rummyLayoff = null;
+  render();
 }
 
 // ---------- delegated events ----------
@@ -3008,7 +3581,13 @@ app.addEventListener("click", (e) => {
     case "close-discard": S.discardOpen = false; return render();
     case "sort-toggle": { const m = S.rummySort === "suit" ? "rank" : "suit"; S.rummySort = m; return rummySort(v.yourHand, m); }
     case "sort-hearts": { const suitOrder = { S: 0, H: 1, C: 2, D: 3 }; S.heartsOrder = [...v.yourHand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id); return render(); }
-    case "pick-game": S.pickGame = t.dataset.game; return renderStart();
+    case "pick-game": {
+      // keep what's been typed: the re-render redraws the fields from S
+      S.room = document.getElementById("f-room")?.value ?? S.room;
+      S.name = document.getElementById("f-name")?.value ?? S.name;
+      S.pickGame = t.dataset.game;
+      return renderStart();
+    }
     case "set-theme": {
       S.theme = t.dataset.t;
       localStorage.setItem("cg_theme", S.theme);
@@ -3031,15 +3610,10 @@ app.addEventListener("click", (e) => {
     case "connect": return doConnect();
     case "share-link": return shareLink();
     case "leave": return doLeave();
+    case "play-offline": return doPlayOffline();
     case "sit": return send({ t: "sit", seat: +t.dataset.seat });
     case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
-    case "set-bot-difficulty": {
-      const seat = +t.dataset.seat;
-      const diff = +t.value;
-      const cur = v.botDifficulty ? [...v.botDifficulty] : Array(v.players).fill(2);
-      cur[seat] = diff;
-      return send({ t: "setConfig", config: { players: v.players, target: v.target, botDifficulty: cur } });
-    }
+    case "set-bot-difficulty": return; // applied on "change" (see below); a click just opens the picker
     case "removebot": return send({ t: "removeBot", seat: +t.dataset.seat });
     case "addhuman": {
       const seat = +t.dataset.seat;
@@ -3059,55 +3633,59 @@ app.addEventListener("click", (e) => {
       delete S.hotseats[+t.dataset.seat];
       return render();
     }
-    case "lby-rename": {
-      const inp = document.getElementById("lby-name-input");
-      const newName = inp ? inp.value.trim() : "";
-      if (newName) { S.name = newName; localStorage.setItem("cg_name", newName); render(); }
-      return;
-    }
+    case "lby-rename": return renameFrom(t.closest(".lby-name-row")?.querySelector("input"));
     case "open-lby-settings": S.lbySettingsOpen = true; return render();
     case "close-lby-settings": S.lbySettingsOpen = false; return render();
-    case "lby-set-bestof": {
-      const n = +t.dataset.n;
-      return send({ t: "setConfig", config: { players: v.players, target: v.target, bestOf: n } });
-    }
+    case "lby-set-bestof": return send({ t: "setConfig", config: lobbyConfig(v, { bestOf: +t.dataset.n }) });
     case "toggle-bot-replacement": return send({ t: "setBotReplacement", enabled: t.checked });
     case "toggle-tutorial": S.tutorial = !S.tutorial; return render();
     case "replace-seat": return send({ t: "replaceSeat", seat: +t.dataset.seat });
     case "toggle-last-trick": if (S.party === "hearts") S.heartsLastTrickOpen = !S.heartsLastTrickOpen; else S.hljLastTrickOpen = !S.hljLastTrickOpen; return render();
-    case "advance-trick": return send({ t: "advance" });
-    case "reveal-hand": S.revealedSeat = S.passTo; S.awaitingPass = false; return render();
-    case "setcount": {
-      const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-      const config = { players: +t.dataset.count, target };
-      if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
-      if (v.requireDiscard != null) config.requireDiscard = v.requireDiscard;
-      return send({ t: "setConfig", config });
+    case "advance-trick": return sendOnce({ t: "advance" });
+    case "reveal-hand": {
+      // Reveal only the seat the frame on screen belongs to; if it moved on,
+      // re-target the hand-off screen to that seat instead.
+      if (!v || v.you !== S.passTo) { maybePromptPass(); return render(); }
+      S.revealedSeat = S.passTo;
+      S.awaitingPass = false;
+      render();
+      return maybeAutoPlay(v);
     }
-    case "rummy-toggle-discard": {
-      const target = parseInt(document.getElementById("f-target")?.value, 10) || GAMES[S.party].target;
-      const config = { players: v.players, target, requireDiscard: !v.requireDiscard };
-      if (v.botDifficulty) config.botDifficulty = v.botDifficulty;
-      return send({ t: "setConfig", config });
-    }
+    case "setcount": return send({ t: "setConfig", config: lobbyConfig(v, { players: +t.dataset.count }) });
+    case "rummy-toggle-discard": return send({ t: "setConfig", config: lobbyConfig(v, { requireDiscard: !v.requireDiscard }) });
     case "start": return doStart();
-    case "newgame": S.revealedSeat = null; S.awaitingPass = false; return send({ t: "newGame" });
+    case "newgame": {
+      S.revealedSeat = null;
+      S.awaitingPass = false;
+      resetGameUi();
+      // Offline the game can end on a pass-and-play guest's seat, but the next
+      // lobby is the host's: rebuild it from the host's seat (guests kept, bots
+      // back to open seats, same settings) rather than one nobody can deal.
+      if (S.offline && v && v.hostSeat != null && v.you !== v.hostSeat) {
+        const seats = v.seats.map((s) => (s.kind === "bot" ? { kind: "empty", name: null } : s));
+        try { S.ws?.close(); } catch {}
+        S.connected = false;
+        S.view = null;
+        return connectLocal({ seats, you: v.hostSeat, config: lobbyConfig(v), start: false });
+      }
+      return send({ t: "newGame" });
+    }
     case "move-bid": {
       const amt = +t.dataset.amount;
       // Open confidence window if a teammate still has a turn; bots wait server-side.
-      return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
+      return sendOnce({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
     }
     case "hlj-bid-confirm": {
       const amt = +(document.getElementById("hlj-bid-slider")?.value ?? 2);
-      return send({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
+      return sendOnce({ t: "move", move: { type: "bid", seat: v.you, amount: amt } });
     }
-    case "move-pass": return send({ t: "move", move: { type: "pass", seat: v.you } });
+    case "move-pass": return sendOnce({ t: "move", move: { type: "pass", seat: v.you } });
 
     case "signal":
       return send({ t: "aux", payload: t.dataset.level });
     case "play-card": {
       const c = v.yourHand.find((x) => cardKey(x) === t.dataset.key);
-      if (c) send({ t: "move", move: { type: "play", seat: v.you, card: c } });
+      if (c) sendOnce({ t: "move", move: { type: "play", seat: v.you, card: c } });
       return;
     }
     case "draw-stock": return send({ t: "move", move: { type: "drawStock", seat: v.you } });
@@ -3126,36 +3704,34 @@ app.addEventListener("click", (e) => {
       return render();
     }
     case "hearts-ack-hand": {
-      const lh = S.view && S.view.lastHand;
-      if (lh) S.heartsHandAcked = JSON.stringify(lh);
+      if (S.view?.lastHand) S.heartsHandAcked = heartsHandKey(S.view);
       if (S.heartsHandTimer) { clearTimeout(S.heartsHandTimer); S.heartsHandTimer = null; }
       return render();
     }
     case "hlj-show-dealt-hands": S.hljShowDealtHands = true; return render();
     case "hlj-close-dealt-hands": S.hljShowDealtHands = false; return render();
-    case "ack-round": {
-      const lr = S.view && S.view.lastRound;
-      if (lr) S.rummyRoundAcked = JSON.stringify(S.view.scores);
-      if (S.rummyRoundTimer) { clearTimeout(S.rummyRoundTimer); S.rummyRoundTimer = null; }
-      S.rummyRoundVisible = false;
+    case "ack-round":
+      if (v) S.rummyRoundAcked = rummyRoundKey(v);
       return render();
-    }
     case "advance-round":
-      return send({ t: "advance" });
+      if (v) S.rummyRoundAcked = rummyRoundKey(v);
+      return sendOnce({ t: "advance" });
     case "dismiss-drawn":
-      if (S.rummyDrawnCard) S.rummyPrevHandIds = new Set([...S.rummyPrevHandIds, S.rummyDrawnCard.id]);
-      S.rummyDrawnCard = null;
-      clearTimeout(S.rummyDrawnTimer);
-      S.rummyDrawnTimer = null;
+      clearDrawn();
       return render();
     case "open-meld": {
       const meldId = +t.dataset.meldid;
       const selNow = [...S.rummySel].map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
       const meldTarget = v.melds.find((m) => m.id === meldId);
-      // If cards already selected and this meld accepts them, lay off immediately
-      if (selNow.length >= 1 && S.rummyLayoff === null && meldTarget && rCanLayoff(meldTarget, selNow)) {
-        S.rummyLayoff = meldId;
-        return doLayoff();
+      // In your play phase, cards already selected that this meld accepts are laid
+      // off at once; otherwise (planning off-turn, or before drawing) it just opens.
+      if (v.yourTurn && v.turnPhase === "play" && selNow.length >= 1 && S.rummyLayoff === null && meldTarget
+          && rCanLayoff(meldTarget, selNow) && rKeepsDiscard(v, selNow)) {
+        if (rStrandsForced(v, selNow, meldTarget)) toast(R_STRANDS);
+        else {
+          S.rummyLayoff = meldId;
+          return doLayoff();
+        }
       }
       S.rummyMeldOpen = meldId;
       return render();
@@ -3183,9 +3759,9 @@ app.addEventListener("click", (e) => {
       return;
     }
     case "clear-pass": S.heartsPass.clear(); return render();
-    case "play-hearts": return send({ t: "move", move: { type: "play", seat: v.you, card: +t.dataset.cardid } });
-    case "pj-setplayers": return send({ t: "setConfig", config: { players: +t.dataset.count, marbles: v.marbles } });
-    case "pj-setmarbles": return send({ t: "setConfig", config: { players: v.players, marbles: +t.dataset.m } });
+    case "play-hearts": return sendOnce({ t: "move", move: { type: "play", seat: v.you, card: +t.dataset.cardid } });
+    case "pj-setplayers": return send({ t: "setConfig", config: lobbyConfig(v, { players: +t.dataset.count }) });
+    case "pj-setmarbles": return send({ t: "setConfig", config: lobbyConfig(v, { marbles: +t.dataset.m }) });
     case "pj-pick-card": S.pjCard = S.pjCard === +t.dataset.cardid ? null : +t.dataset.cardid; return render();
     case "pj-move": {
       const m = S.pjMoves[+t.dataset.mi];
@@ -3199,6 +3775,8 @@ app.addEventListener("click", (e) => {
 // ---------- drag to reorder your hand (Rummy) ----------
 // We track the drop target during the drag, then reorder S.rummyOrder once on
 // drop — re-rendering mid-drag would cancel the native drag in some browsers.
+// With a mouse this native drag also replaces the pointer drag-to-play below,
+// so a drop on the discard pile or a meld plays the card the same way.
 function handCard(el) {
   const c = el && el.closest(".hand [data-cardid]");
   return c ? +c.dataset.cardid : null;
@@ -3226,12 +3804,22 @@ app.addEventListener("dragover", (e) => {
 function endDrag(e) {
   if (S.dragId == null) return;
   if (e) e.preventDefault();
-  const ids = S.rummyOrder.filter((x) => x !== S.dragId);
-  const idx = S.dropBeforeId == null ? ids.length : ids.indexOf(S.dropBeforeId);
-  ids.splice(idx < 0 ? ids.length : idx, 0, S.dragId);
-  S.rummyOrder = ids;
+  const id = S.dragId, before = S.dropBeforeId;
   S.dragId = null;
   S.dropBeforeId = null;
+  const at = e?.type === "drop" && e.target.closest ? e.target : null;
+  const zone = at && S.party === "rummy500" ? rummyDropZoneAt(e.clientX, e.clientY) : null;
+  if (zone) {
+    DPT.game = "rummy";
+    DPT.cid = id;
+    dptExecute(zone);
+  } else if (at && at.closest(".hand")) {
+    // Reorder only on a drop inside the hand; released anywhere else, nothing moves.
+    const ids = S.rummyOrder.filter((x) => x !== id);
+    const idx = before == null ? ids.length : ids.indexOf(before);
+    ids.splice(idx < 0 ? ids.length : idx, 0, id);
+    S.rummyOrder = ids;
+  }
   render();
 }
 app.addEventListener("drop", endDrag);
@@ -3331,6 +3919,14 @@ document.addEventListener("pointermove", (e) => {
   DPT.ghost   = null;
 }, { passive: true });
 
+// The Rummy drop zone (discard pile or a meld) under a point. On phones the
+// hand's transparent scroll box overlaps the bottom of the felt, so look
+// beneath it — but never through a card.
+function rummyDropZoneAt(x, y) {
+  const hit = document.elementsFromPoint(x, y).find((el) => el.closest(".card, .discardstack, [data-meldid]"));
+  return hit && hit.closest(".discardstack, [data-meldid]") ? hit : null;
+}
+
 function dptEnd(e) {
   // Also cancel any pending Hearts direction-detection
   if (DPT._hPending && e.pointerId === DPT._hPending.ptId) DPT._hPending = null;
@@ -3338,7 +3934,8 @@ function dptEnd(e) {
   DPT.ptId = null;
   dptHighlight(false);
   if (DPT.ghost) DPT.ghost.style.display = "none"; // hide so elementFromPoint sees beneath it
-  const target = DPT.started ? document.elementFromPoint(e.clientX, e.clientY) : null;
+  const target = !DPT.started ? null
+    : (DPT.game === "rummy" && rummyDropZoneAt(e.clientX, e.clientY)) || document.elementFromPoint(e.clientX, e.clientY);
   if (DPT.ghost) { DPT.ghost.remove(); DPT.ghost = null; }
   if (DPT.started) {
     DPT.suppress = true;
@@ -3370,11 +3967,11 @@ function dptExecute(target) {
     // Drop anywhere on the center felt plays the card.
     if (target.closest(".felt-frame")) {
       const c = v.yourHand.find((x) => cardKey(x) === DPT.ckey);
-      if (c) send({ t: "move", move: { type: "play", seat: v.you, card: c } });
+      if (c) sendOnce({ t: "move", move: { type: "play", seat: v.you, card: c } });
     }
   } else if (DPT.game === "hearts") {
     if (target.closest(".felt-frame")) {
-      send({ t: "move", move: { type: "play", seat: v.you, card: DPT.cid } });
+      sendOnce({ t: "move", move: { type: "play", seat: v.you, card: DPT.cid } });
     }
   } else if (DPT.game === "rummy") {
     if (!v.yourTurn || v.turnPhase !== "play") return;
@@ -3384,8 +3981,9 @@ function dptExecute(target) {
       const meldId = +meldEl.dataset.meldid;
       const meld   = v.melds.find((m) => m.id === meldId);
       const card   = v.yourHand.find((c) => c.id === DPT.cid);
-      if (meld && card && rCanLayoff(meld, [card])) {
-        send({ t: "move", move: { type: "layoff", seat: v.you, meldId, cards: [DPT.cid] } });
+      if (meld && card && rCanLayoff(meld, [card]) && rKeepsDiscard(v, [card])) {
+        if (rStrandsForced(v, [card], meld)) toast(R_STRANDS);
+        else sendOnce({ t: "move", move: { type: "layoff", seat: v.you, meldId, cards: [DPT.cid] } });
       } else {
         toast("That card can’t be laid off there.");
       }
@@ -3393,25 +3991,33 @@ function dptExecute(target) {
     }
     // Drop on the discard pile → discard.
     if (target.closest(".discardstack")) {
-      send({ t: "move", move: { type: "discard", seat: v.you, cardId: DPT.cid } });
+      S.rummyLayoff = null;
+      sendOnce({ t: "move", move: { type: "discard", seat: v.you, cardId: DPT.cid } });
     }
   }
 }
 
-// keep the host's "play to" value in the shared lobby config (so re-renders don't lose it)
+// Lobby settings that are form fields: keep them in the shared lobby config (so
+// re-renders don't lose them), always sent as the full config.
 app.addEventListener("change", (e) => {
-  if (e.target.id === "f-target" && S.view && S.view.phase === "lobby") {
-    const target = parseInt(e.target.value, 10);
-    if (target > 0) {
-      const cfg = { players: S.view.players, target };
-      if (S.view.botDifficulty) cfg.botDifficulty = S.view.botDifficulty;
-      send({ t: "setConfig", config: cfg });
-    }
+  const v = S.view;
+  if (!v || v.phase !== "lobby") return;
+  // the host's "play to" value
+  if (e.target.id === "f-target") {
+    const target = Number(e.target.value);
+    if (Number.isInteger(target) && target >= 1 && target <= 10000) send({ t: "setConfig", config: lobbyConfig(v, { target }) });
+    else { e.target.value = v.target ?? ""; toast("Play to: pick a whole number from 1 to 10000."); }
+  }
+  // Rummy bot level for a seat ("change" is what a native picker fires on iOS)
+  if (e.target.matches?.(".difficulty-pick")) {
+    const botDifficulty = lobbyConfig(v).botDifficulty;
+    botDifficulty[+e.target.dataset.seat] = +e.target.value;
+    send({ t: "setConfig", config: lobbyConfig(v, { botDifficulty }) });
   }
 });
 
 app.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && e.target.id === "lby-name-input") dispatch("lby-rename");
+  if (e.key === "Enter" && e.target.classList?.contains("lby-name-input")) renameFrom(e.target);
 });
 
 // ---------- init ----------
@@ -3427,9 +4033,12 @@ function init() {
   const q = new URLSearchParams(location.search);
   const game = q.get("game");
   const room = q.get("room");
-  if (game && GAMES[game]) { S.party = game; S.pickGame = game; }
+  if (game && GAMES[game]) S.pickGame = game;
   if (room) S.room = room;
-  if (S.party && S.room && S.name) connect();
-  else { S.party = S.party || null; renderStart(); }
+  // Only a full link (game + room, and a name to join with) goes straight to the
+  // table; otherwise the start screen, prefilled — with no party set, so a later
+  // re-render can't strand it on "Connecting…" (e.g. /?game=x after a solo deal).
+  if (S.pickGame && S.room && S.name) { S.party = S.pickGame; connect(); }
+  else renderStart();
 }
 init();

@@ -1,5 +1,5 @@
 // HLJ pacing / trick-gate regression guard.
-// Run from the repo root:  node test/hlj_pacing.test.mjs
+// Run from the repo root:  node test/hlj_pacing.test.mjs   (part of `npm test`)
 //
 // Verifies the SERVER contract the client refactor depends on:
 //   - bots play strictly one card at a time (no batching)
@@ -9,22 +9,30 @@
 //     gameOver is always a trickComplete gate
 //   - the game completes (no stall)
 //
-// It does NOT exercise the browser client; it asserts the local.js engine+driver.
+// It does NOT exercise the browser client; it drives the offline bundle
+// (engine + LocalRoom driver). The bundle is rebuilt from src/client-local.ts
+// exactly as `npm run build` builds public/local.js, but into a temp file, so it
+// always tests the current source (CI separately fails a stale public/local.js).
+// Set HLJ_BUNDLE=public/local.js to test the committed bundle instead.
 
-import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { build } from "esbuild";
 
-// local.js ships as ESM but the repo has no package.json "type":"module",
-// so copy it to a .mjs in tmp and import that.
-const tmp = join(tmpdir(), `hlj_local_${Date.now()}.mjs`);
-writeFileSync(tmp, readFileSync("public/local.js", "utf8"));
+let bundle = process.env.HLJ_BUNDLE ? resolve(process.env.HLJ_BUNDLE) : null;
+const tmpDir = bundle ? null : mkdtempSync(join(tmpdir(), "hlj-pacing-"));
+if (!bundle) {
+  bundle = join(tmpDir, "local.mjs");
+  await build({ entryPoints: ["src/client-local.ts"], bundle: true, format: "esm", outfile: bundle, logLevel: "warning" });
+}
 
 // Compress every timer so a full bot game runs instantly while preserving order.
 const realSetTimeout = globalThis.setTimeout.bind(globalThis);
 globalThis.setTimeout = (fn) => { Promise.resolve().then(fn); return 0; };
 
-const { createLocalSocket } = await import("file://" + tmp);
+const { createLocalSocket } = await import(pathToFileURL(bundle).href);
 
 const sock = createLocalSocket("high-low-jack");
 const views = [];
@@ -49,7 +57,7 @@ for (let stable = 0; stable < 5; ) {
   if (views.length === last) stable++; else { stable = 0; last = views.length; }
 }
 
-rmSync(tmp, { force: true });
+if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
 
 const seq = views.map((v) => ({ ph: v.phase, n: (v.currentTrick || []).length, w: v.trickWinner }));
 let gates = 0, badGate = 0, badJump = 0, multi = 0;
