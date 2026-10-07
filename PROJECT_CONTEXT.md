@@ -91,18 +91,25 @@ Both are pure (no runtime imports beyond types/helpers), deterministic via a see
 
 ## 6. UI — "Warm cozy parlor" (the chosen aesthetic)
 
-Walnut wood frame around warm-green baize under a soft lamp glow, brass accents, cream cards with depth, Fraunces (display serif) + Hanken Grotesk (body). Mobile-first. Honors `/mnt/skills/public/frontend-design/SKILL.md`.
+Walnut wood frame around green baize, brass/gold accents, cream cards with depth. Brand: the **BONHOMME!** wordmark (Bevan, purple with a gold stroke) and the purple jester hat (`joker-hat.png`, cropped to its artwork in CSS via `--hat-size`/`--hat-pos`). Type: Bevan (brand + card faces), Fraunces (headings, numbers), Hanken Grotesk (UI). Mobile-first. All colors, radii and fonts are tokens at the top of `styles.css` (§1); the stylesheet is organised in numbered sections listed in its header comment.
 
-Layout is a **real table**: opponents are "pods" around the top rail (avatar with initials, name, mini card-backs, live card count, dealer chip, turn glow); your fanned hand is on a wooden rail at the bottom; the center shows the trick (HLJ) or stock+discard+melds (Rummy).
+Layout is a **real table**: opponents are "pods" around the felt (a stack of team-colored card backs — or an avatar in Hearts — over a name plate; the plate turns gold on their turn; dealer / bid / signal chips sit on the stack's inner corner); your fanned hand rides over the bottom of the felt; the center shows the trick (HLJ/Hearts), stock + discard + melds (Rummy) or the board (P&J).
+
+### Two table layouts (CSS-driven, mirrored in JS by `isRails()`)
+- **Stacked** (portrait): top bar (Leave · game/room · HLJ scores · Log) → felt (flex: 1) → dock (hand, player bar, actions + hint). The hand overlaps the felt by `--hand-overlap`; everything on the felt lives in `.felt-stage`, which stops `--stage-bottom` above the felt's bottom edge so nothing sits under the hand.
+- **Rails** (any landscape: phones, iPad, desktop): `.table` becomes a CSS grid and the top bar / dock wrappers are `display: contents`, so each control lands in a named grid area — left rail: Leave, settings, you, Team A score; right rail: Log, Invite, actions, Team B score. The felt spans the full height; the hand peeks over its bottom edge (`--hand-sink`, 0 on tall screens).
+- JS layout math (pod insets, trick oval, bid-token positions, hand card width in `handMetrics()`/`fanHand()`) branches on `isRails()`; keep it in step with the CSS breakpoints. The app re-renders on resize/orientation change.
+
+Selected cards (Rummy meld/lay-off/discard, Hearts pass) lift **in place** via the CSS `translate` property (composes with each card's inline fan rotation) — there is no separate "selected row", so the dock height never jumps. Newly drawn/received cards get a temporary `.fresh` highlight. Leaving mid-game asks for confirmation.
 
 ### Rendering uses in-place DOM morphing (don't regress this)
 `app.js` renders whole screens as HTML strings, but instead of `innerHTML =` it routes through a tiny **morph** engine: `app.__set = html` (a defined setter) → `patch(html)` → `morphList(app, template.content)` walks and patches nodes in place. This was added deliberately to **kill flashing** (the whole DOM was being recreated on every server update, replaying entrance animations) and to let CSS transitions actually tween (card positions glide; turn glow fades between pods). When editing render code, keep assigning through `app.__set` so morphing is preserved. Animation timings were also slowed (card transform ~0.34s, trick entrance ~0.5s, deal stagger ~0.55s) and bot pacing raised to 1400ms.
 
 ### Team clarity (HLJ)
-Each opponent pod shows a colored **A/B team chip** and a matching avatar ring (Team A = amber `--teamA`, Team B = teal `--teamB`); your own rail shows a team badge + your partner's name; team scores in the center are color-coded with yours marked "· you"; player names under the trick are tinted by team.
+Team A = red (`--teamA`), Team B = blue (`--teamB`): opponent card backs and name-plate dots are team-colored, your avatar shows your team letter, and the A/B score pills (top bar / rail corners) outline your team.
 
 ### `preview.html`
-A standalone, directly-openable file (real `styles.css` inlined; real `app.js` render functions embedded with `init()` stripped and networking stubbed) with a bottom toolbar to flip between Start / Lobby / HLJ bid / HLJ play / HLJ last trick / Rummy / Game over, plus the in-app "Log" button. It's a visual sanity tool for the owner — it is **not** part of the deployed app, and it must be regenerated whenever `app.js`/`styles.css` or the mock view shapes change (it embeds copies).
+A standalone, directly-openable file (real `styles.css` inlined; real `app.js` render functions embedded with `init()` stripped and networking stubbed) with a bottom toolbar to flip between Start / Lobby / HLJ bid / HLJ play / HLJ last trick / Rummy / Game over, plus the in-app "Log" button. It's a visual sanity tool for the owner — it is **not** part of the deployed app, and it must be regenerated whenever `app.js`/`styles.css` or the mock view shapes change (it embeds copies). **It predates the current design** (it embeds the old two-game client) and needs regenerating before it's useful again.
 
 ---
 
