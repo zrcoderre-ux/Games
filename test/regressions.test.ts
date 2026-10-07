@@ -51,7 +51,7 @@ test("setConfig merges over the current config and rejects bad options untouched
   r.send({ t: "setConfig", config: JSON.parse('{"__proto__": {"target": 1}}') }); // as it arrives off the wire: ignored
   assert.deepEqual(r.errors(), [
     "Rummy 500 doesn't support 9 players",
-    "Target must be a whole number from 1 to 10000",
+    "Target must be a whole number from 1 to 1000",
     "Must discard to go out must be on or off",
   ]);
   const v = r.view();
@@ -67,7 +67,7 @@ test("start merges its config over the stored one and commits nothing if the dea
   r.send({ t: "join", name: "Host" });
   r.send({ t: "setConfig", config: { target: 250, requireDiscard: true } });
   r.send({ t: "start", config: { target: -5 } });
-  assert.equal(r.errors().at(-1), "Target must be a whole number from 1 to 10000");
+  assert.equal(r.errors().at(-1), "Target must be a whole number from 1 to 1000");
   assert.equal(r.view().phase, "lobby");
   assert.equal(r.view().target, 250, "the failed start left the config alone");
   assert.ok(r.view().seats.every((s: any) => s.kind !== "bot"), "no bots were seated");
@@ -86,14 +86,14 @@ test("start merges its config over the stored one and commits nothing if the dea
 test("start without a config deals the stored config", () => {
   const r = localRoom(hljModule, { players: 6, target: 21 });
   r.send({ t: "join", name: "Host" });
-  r.send({ t: "setConfig", config: { target: 31 } });
+  r.send({ t: "setConfig", config: { target: 11 } });
   r.send({ t: "setConfig", config: { bestOf: 3 } });
   r.send({ t: "setConfig", config: { players: 4 } });
   r.send({ t: "start" });
   assert.deepEqual(r.errors(), []);
   const v = r.view();
   assert.equal(v.players, 4);
-  assert.equal(v.target, 31);
+  assert.equal(v.target, 11);
   assert.equal(v.winsNeeded, 2);
   r.room.close();
 });
@@ -104,7 +104,13 @@ test("each module validates its own options", () => {
   assert.throws(() => hljModule.createGame({ players: 4, target: 21, bestOf: 2 }, 1), /Best of must be/);
   assert.throws(() => hljModule.createGame({ players: 5 as never, target: 21 }, 1), /Unsupported player count/);
   assert.equal(hljModule.createGame({ players: 4, target: 21, bestOf: 5 }, 1).winsNeeded, 3);
-  assert.throws(() => hearts.createGame({ players: 4, target: 10001 }, 1), /Target must be a whole number/);
+  // "play to" is capped per game, around double its usual target
+  assert.throws(() => hljModule.createGame({ players: 4, target: 22 }, 1), /from 1 to 21/);
+  assert.equal(hljModule.createGame({ players: 4, target: 21 }, 1).target, 21);
+  assert.throws(() => hearts.createGame({ players: 4, target: 201 }, 1), /from 1 to 200/);
+  assert.equal(hearts.createGame({ players: 4, target: 200 }, 1).target, 200);
+  assert.throws(() => rummy.createGame({ players: 4, target: 1001 }, 1), /from 1 to 1000/);
+  assert.equal(rummy.createGame({ players: 4, target: 1000 }, 1).target, 1000);
   assert.throws(() => hearts.createGame({ players: 6, target: 100 }, 1), /Unsupported player count/);
   assert.throws(() => rummy.createGame({ players: 4, target: 2.5 }, 1), /Target must be a whole number/);
   assert.deepEqual(rummy.createGame({ players: 3, target: 500, botDifficulty: [3, "x" as never, 7] }, 1).botDifficulty, [3, 2, 2]);

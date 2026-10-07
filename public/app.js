@@ -10,6 +10,7 @@ const GAMES = {
     label: "Rummy 500",
     players: [2, 3, 4, 5, 6, 7, 8],
     target: 500,
+    maxTarget: 1000, // highest "play to" (the server enforces the same cap)
     suit: "\u2665",
     blurb: "Draw, build runs & sets, race to 500.",
     range: "2\u20138 players",
@@ -18,6 +19,7 @@ const GAMES = {
     label: "High Low Jack",
     players: [4, 6, 8],
     target: 21,
+    maxTarget: 21,
     suit: "\u2660",
     blurb: "Bid, take trump tricks, chase the Jack.",
     range: "4 / 6 / 8 players",
@@ -26,6 +28,7 @@ const GAMES = {
     label: "Hearts",
     players: [3, 4, 5],
     target: 100,
+    maxTarget: 200,
     suit: "\u2665",
     blurb: "Dodge hearts & the Black Lady; lowest score wins.",
     range: "3 / 4 / 5 players",
@@ -1269,8 +1272,8 @@ function renderLobby(v) {
               <div class="seg">${[1, 3].map((nn) => `<button class="${nn === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${nn}">${nn === 1 ? "1 game" : `Best of ${nn}`}</button>`).join("")}</div>
             </div>` : ""}
             ${(isRummyLobby || S.party === "hearts") ? `<div class="set-row">
-              <span>Play to<small>${S.party === "hearts" ? "Lowest score wins when someone reaches it" : "First to reach it wins"}</small></span>
-              <input class="lby-pts" id="f-target" type="number" inputmode="numeric" min="1" max="10000" value="${v.target ?? GAMES[S.party].target}" aria-label="Target score" />
+              <span>Play to<small>${S.party === "hearts" ? "Lowest score wins when someone reaches it" : "First to reach it wins"} · up to ${GAMES[S.party].maxTarget}</small></span>
+              <input class="lby-pts" id="f-target" type="number" inputmode="numeric" min="1" max="${GAMES[S.party].maxTarget}" value="${v.target ?? GAMES[S.party].target}" aria-label="Target score" />
             </div>` : ""}
             ${isRummyLobby ? `<div class="set-row">
               <span>Must discard to go out<small>Your last card has to be a discard</small></span>
@@ -3799,8 +3802,9 @@ app.addEventListener("change", (e) => {
   // the host's "play to" value
   if (e.target.id === "f-target") {
     const target = Number(e.target.value);
-    if (Number.isInteger(target) && target >= 1 && target <= 10000) send({ t: "setConfig", config: lobbyConfig(v, { target }) });
-    else { e.target.value = v.target ?? ""; toast("Play to: pick a whole number from 1 to 10000."); }
+    const max = GAMES[S.party].maxTarget;
+    if (Number.isInteger(target) && target >= 1 && target <= max) send({ t: "setConfig", config: lobbyConfig(v, { target }) });
+    else { e.target.value = v.target ?? ""; toast(`Play to: pick a whole number from 1 to ${max}.`); }
   }
   // Rummy bot level for a seat ("change" is what a native picker fires on iOS)
   if (e.target.matches?.(".difficulty-pick")) {

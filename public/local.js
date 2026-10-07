@@ -2054,10 +2054,11 @@ function botPersonality(state, seat) {
   const h = ((state.botSeed ?? state.seed) >>> 0 ^ Math.imul(seat + 1, 2654435769)) >>> 0;
   return PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
 }
+var MAX_TARGET = 21;
 function gameOptions(config) {
   const target = config.target === void 0 ? 21 : config.target;
-  if (!Number.isInteger(target) || target < 1 || target > 1e4) {
-    throw new Error("Target must be a whole number from 1 to 10000");
+  if (!Number.isInteger(target) || target < 1 || target > MAX_TARGET) {
+    throw new Error(`Target must be a whole number from 1 to ${MAX_TARGET}`);
   }
   const bestOf = config.bestOf ?? 1;
   if (!Number.isInteger(bestOf) || bestOf < 1 || bestOf > 9 || bestOf % 2 === 0) {
@@ -2413,11 +2414,12 @@ var botLevels = (players, raw) => Array.from({ length: players }, (_, i) => {
   const d = Array.isArray(raw) ? raw[i] : void 0;
   return Number.isInteger(d) && d >= 0 && d <= 3 ? d : 2;
 });
+var MAX_TARGET2 = 1e3;
 function createGame2(config, seed) {
   const players = config.players;
   if (!Number.isInteger(players) || players < 2 || players > 8) throw new Error(`Unsupported player count: ${players}`);
   const target = config.target === void 0 ? 500 : config.target;
-  if (!Number.isInteger(target) || target < 1 || target > 1e4) throw new Error("Target must be a whole number from 1 to 10000");
+  if (!Number.isInteger(target) || target < 1 || target > MAX_TARGET2) throw new Error(`Target must be a whole number from 1 to ${MAX_TARGET2}`);
   const requireDiscard = config.requireDiscard ?? false;
   if (typeof requireDiscard !== "boolean") throw new Error("Must discard to go out must be on or off");
   const base = {
@@ -3785,10 +3787,11 @@ function dealHand(prev) {
   if (passOffset === 0) return { ...base, phase: "playing", leader: lowestClubSeat(hands) };
   return base;
 }
+var MAX_TARGET3 = 200;
 function createGame3(config, seed) {
   if (![3, 4, 5].includes(config.players)) throw new Error(`Unsupported player count: ${config.players}`);
   const target = config.target === void 0 ? 100 : config.target;
-  if (!Number.isInteger(target) || target < 1 || target > 1e4) throw new Error("Target must be a whole number from 1 to 10000");
+  if (!Number.isInteger(target) || target < 1 || target > MAX_TARGET3) throw new Error(`Target must be a whole number from 1 to ${MAX_TARGET3}`);
   const base = {
     players: config.players,
     target,
