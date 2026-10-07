@@ -52,14 +52,21 @@ src/
   rummy-module.ts       Rummy 500 as a pure Game module + move log
   hearts-module.ts      Hearts as a pure Game module + move log
   pj-module.ts          Pegs & Jokers as a pure Game module (board + cards) + move log
-  engine.ts             HLJ pure rules engine (UNCHANGED/STABLE — avoid editing)
-  ai.ts                 HLJ bot + handConfidence
+  engine.ts             HLJ pure rules engine
+  ai.ts, ai-sim.ts      HLJ bot (Monte Carlo bidding + card play) + handConfidence
   protocol.ts           HLJ redact() + PlayerView (+ legacy advanceBots/stepBot, superseded)
-  signals.test          HLJ tests (node:test; NOTE the missing .ts extension — see §8)
-  lead-and-signals.test HLJ tests
-  rummy.smoke.ts        Rummy full-game fuzz/smoke (runs many complete games)
+  local-room.ts         the room run in-browser (offline / pass-and-play), bundled via
+  client-local.ts         `npm run build` into public/local.js (generated — never hand-edit)
+  rummy.smoke.ts        Rummy full-game fuzz/smoke (2–8p, requireDiscard on/off, mixed bot levels)
   hearts.smoke.ts       Hearts full-game smoke (3/4/5p; scoring + conservation invariants)
   pj.smoke.ts           Pegs & Jokers full-game smoke (4p/6p; invariants every move)
+  ai.battle.ts          HLJ paired-seed bot battle harness (A vs B, or --roundrobin)
+  rummy.battle.ts       Rummy paired-seed bot battle harness (baseline moves illegal under the new rules are substituted and counted; --strict)
+  hearts.battle.ts      Hearts paired-seed bot battle harness (--mode solo|duo, --workers, --timing)
+test/
+  signals.test.ts, lead-and-signals.test.ts   HLJ node:test suites
+  regressions.test.ts   fixed-bug regressions (LocalRoom config merge, HLJ signal gate, Rummy/Hearts rules, reseed)
+  hlj_pacing.test.mjs   HLJ trick-gate pacing contract through the offline bundle
 public/                 static client served by the Worker
   index.html            shell: fonts (Fraunces + Hanken Grotesk), #toast, #app, module script
   styles.css            full cozy-parlor theme + table/log/team styles
@@ -82,10 +89,10 @@ preview.html            standalone visual preview (NOT shipped) — see §6
 
 ## 5. The two game modules
 
-Both are pure (no runtime imports beyond types/helpers), deterministic via a seeded PRNG threaded through state, and reusable on the client for future single-player.
+Both are pure (no runtime imports beyond types/helpers), deterministic via a seeded PRNG threaded through state (live rooms also fold fresh CSPRNG entropy into each deal via the optional `reseed`), and reused on the client for offline play.
 
-- **HLJ (`hlj-module.ts`)** is a thin adapter over `engine.ts`/`ai.ts`/`protocol.ts`. Its state type is `HljState = GameState & { log: LogEntry[]; logSeq: number }` (exported; used by the Worker subclass). Config `{ players: 4|6|8, target }`. Teams are `seat % 2` (Team A = even seats, Team B = odd), so partners always sit **across** the table — the "teammates don't sit adjacent" convention holds by construction.
-- **Rummy (`rummy-module.ts`)** is fully self-contained Rummy 500: 2–8 players, one deck for 2–4 / two decks for 5–8, every card has a unique `id`. No wild/joker cards (the one remaining scope gap). `RummyState` carries `log`/`logSeq`. A turn = draw → any melds/lay-offs → discard; a card drawn from the discard (`mustMeldCardId`) must be used before discarding.
+- **HLJ (`hlj-module.ts`)** is a thin adapter over `engine.ts`/`ai.ts`/`protocol.ts`. Its state type is `HljState = GameState & { log: LogEntry[]; logSeq: number; botSeed?: number }` (exported; used by the Worker subclass). Config `{ players: 4|6|8, target, bestOf? }`. Teams are `seat % 2` (Team A = even seats, Team B = odd), so partners always sit **across** the table — the "teammates don't sit adjacent" convention holds by construction.
+- **Rummy (`rummy-module.ts`)** is fully self-contained Rummy 500: 2–8 players, one deck for 2–4 / two decks for 5–8, every card has a unique `id`; each deck carries 2 wild jokers. `RummyState` carries `log`/`logSeq`. A turn = draw → any melds/lay-offs → discard; a card drawn from the discard (`mustMeldCardId`) must be used before discarding.
 
 ---
 
@@ -93,14 +100,14 @@ Both are pure (no runtime imports beyond types/helpers), deterministic via a see
 
 Walnut wood frame around green baize, brass/gold accents, cream cards with depth. Brand: the **BONHOMME!** wordmark (Bevan, purple with a gold stroke) and the purple jester hat (`joker-hat.png`, cropped to its artwork in CSS via `--hat-size`/`--hat-pos`). Type: Bevan (brand + card faces), Fraunces (headings, numbers), Hanken Grotesk (UI). Mobile-first. All colors, radii and fonts are tokens at the top of `styles.css` (§1); the stylesheet is organised in numbered sections listed in its header comment.
 
-Layout is a **real table**: opponents are "pods" around the felt (a stack of team-colored card backs — or an avatar in Hearts — over a name plate; the plate turns gold on their turn; dealer / bid / signal chips sit on the stack's inner corner); your fanned hand rides over the bottom of the felt; the center shows the trick (HLJ/Hearts), stock + discard + melds (Rummy) or the board (P&J).
+Layout is a **real table**: opponents are "pods" around the felt (a stack of team-colored card backs — or an avatar in Hearts — over a name plate; the plate turns gold on their turn; dealer / bid chips sit on the stack's inner corner, an HLJ confidence signal on its outer corner; a dropped player's plate shows an "away" chip and the host gets a Replace button); your fanned hand rides over the bottom of the felt; the center shows the trick (HLJ/Hearts), stock + discard + melds (Rummy) or the board (P&J).
 
 ### Two table layouts (CSS-driven, mirrored in JS by `isRails()`)
 - **Stacked** (portrait): top bar (Leave · game/room · HLJ scores · Log) → felt (flex: 1) → dock (hand, player bar, actions + hint). The hand overlaps the felt by `--hand-overlap`; everything on the felt lives in `.felt-stage`, which stops `--stage-bottom` above the felt's bottom edge so nothing sits under the hand.
 - **Rails** (any landscape: phones, iPad, desktop): `.table` becomes a CSS grid and the top bar / dock wrappers are `display: contents`, so each control lands in a named grid area — left rail: Leave, settings, you, Team A score; right rail: Log, Invite, actions, Team B score. The felt spans the full height; the hand peeks over its bottom edge (`--hand-sink`, 0 on tall screens).
 - JS layout math (pod insets, trick oval, bid-token positions, hand card width in `handMetrics()`/`fanHand()`) branches on `isRails()`; keep it in step with the CSS breakpoints. The app re-renders on resize/orientation change.
 
-Selected cards (Rummy meld/lay-off/discard, Hearts pass) lift **in place** via the CSS `translate` property (composes with each card's inline fan rotation) — there is no separate "selected row", so the dock height never jumps. Newly drawn/received cards get a temporary `.fresh` highlight. Leaving mid-game asks for confirmation.
+Selected cards (Rummy meld/lay-off/discard, Hearts pass) lift **in place** via the CSS `translate` property (composes with each card's inline fan rotation) — there is no separate "selected row", so the dock height never jumps. Newly drawn/received cards get a temporary `.fresh` highlight. Leaving mid-game asks for confirmation. Hints are hidden on short / landscape screens except rule reasons (`.hint.key`: a forced Rummy card, Must discard). Spectators see the table from seat 0's chair (seat 0's pod takes the bottom slot). Results pages (hand/round/game over) keep Leave and the move log reachable.
 
 ### Rendering uses in-place DOM morphing (don't regress this)
 `app.js` renders whole screens as HTML strings, but instead of `innerHTML =` it routes through a tiny **morph** engine: `app.__set = html` (a defined setter) → `patch(html)` → `morphList(app, template.content)` walks and patches nodes in place. This was added deliberately to **kill flashing** (the whole DOM was being recreated on every server update, replaying entrance animations) and to let CSS transitions actually tween (card positions glide; turn glow fades between pods). When editing render code, keep assigning through `app.__set` so morphing is preserved. Animation timings were also slowed (card transform ~0.34s, trick entrance ~0.5s, deal stagger ~0.55s) and bot pacing raised to 1400ms.
@@ -118,7 +125,7 @@ A standalone, directly-openable file (real `styles.css` inlined; real `app.js` r
 The headline of the most recent work: a rock-solid, server-authoritative move log (an earlier client-side reconstruction from view-diffs was replaced).
 
 - Shared type in `game.ts`: `LogEntry = { id: number; seat: number|null; msg: string; cards?: LogCard[]; suit?: string; tail?: string }`. `seat` is the actor (client resolves the name; `null` = table/system event). No names are stored, so renames don't corrupt history.
-- Each module **appends entries inside its `applyMove`**, computed by diffing the before/after state. Because every `engine.ts` transition is a `{ ...state }` spread, the `log`/`logSeq` fields ride through trick resolution, hand scoring, and new deals untouched — `engine.ts` was NOT modified. HLJ wraps `engineApplyMove` and re-attaches the log; Rummy renamed its internal transition to `applyMoveCore` and exposes `applyMoveWithLog`. Both cap stored entries at `LOG_CAP = 120`.
+- Each module **appends entries inside its `applyMove`**, computed by diffing the before/after state. Because every `engine.ts` transition is a `{ ...state }` spread, the `log`/`logSeq` fields ride through trick resolution, hand scoring, and new deals untouched — `engine.ts` was NOT modified. HLJ wraps `engineApplyMove` and re-attaches the log; Rummy renamed its internal transition to `applyMoveCore` and exposes `applyMoveWithLog`. HLJ caps stored entries at `LOG_CAP = 600`, the other modules at 120.
 - `redact` ships `log` in the view (`PlayerView.log` for HLJ, `RummyView.log` for Rummy). Because the log lives in game state, it **persists across hibernation** and is identical for every client, including reconnects. Bot and human moves are logged identically (both flow through `applyMove`).
 - HLJ captures: deals, bids/passes, bid winner, trump (called or set by the lead), every play, each trick winner, and the full hand breakdown (made/set, High/Low/Jack/Joker/Game by team, running score, next dealer or game winner). Rummy captures: draws (stock vs. a named card taken from the discard, "+N more" when scooping a run), melds/lay-offs with actual cards, discards, "goes out (+N this round)", "wins the game!".
 - Client: `view.log` drives a slide-up "Log" sheet (newest first); `logEntryHTML()` renders `name + msg + suit + cards + tail`. The HLJ **last-trick** panel reads the already-authoritative `view.lastTrick` (`{ winner, cards }`).
@@ -131,8 +138,8 @@ The container has Node 22, `tsc`, `wrangler`, `tsx`, and `jsdom`; npm and GitHub
 
 1. **Type-check:** copy `src/` + `wrangler.jsonc` into a project with deps (`partyserver`, `typescript`, `@cloudflare/workers-types`, `wrangler`) and run `npx tsc --noEmit`. Must be clean.
 2. **Dry-run deploy:** `npx wrangler deploy --dry-run` — must register both Durable Objects (`HighLowJack` / `Rummy500`).
-3. **HLJ tests:** the test files are named `signals.test` and `lead-and-signals.test` (no `.ts` extension), so copy them to `*.test.ts` and run `npx tsx --test`. 15/16 pass. The one failure ("signals cannot be set outside the bidding phase") is a **pre-existing stale test** that asserts a `selectTrump` phase the current engine doesn't have (phases are `bidding`/`playing`/`gameOver`); it is unrelated to recent work — don't chase it unless asked.
-4. **Rummy smoke:** `npx tsx src/rummy.smoke.ts` (run in place so its relative import resolves) — drives 100+ complete games across 2–8 players, asserting deck conservation and that every AI move is legal.
+3. **Tests:** `npm test` (Node 22 runs `.ts` directly) runs the node:test suites in `test/`, the HLJ pacing test against a fresh bundle of `src/client-local.ts`, and the Rummy/Hearts/Pegs & Jokers smoke tests (many complete bot games, asserting card conservation and that every AI move is legal). `npm run typecheck` covers the Worker code; Node-only scripts are excluded in `tsconfig.json`. CI runs the bundle staleness check, the type-check and `npm test`.
+4. **Bot strength:** `node src/ai.battle.ts --a ./src/hlj-module.ts --b <baseline>/hlj-module.ts --players 4,6,8 --seeds 500`, `node src/rummy.battle.ts --a ./src/rummy-module.ts --b <baseline>/rummy-module.ts --players 4 --seeds 300` and `node src/hearts.battle.ts --a ./src/hearts-module.ts --b <baseline>/hearts-module.ts --players 4 --seeds 200` play paired seeds (each deal from both sides) and print win rates (Hearts also points per hand) with 95% CIs; `node src/hearts.battle.ts --timing --players 4 --seeds 50` measures Hearts bot latency.
 5. **Headless render of the client:** install `jsdom`, stub globals, strip the trailing `init();` from `app.js`, and drive `render()` against mock views. Gotchas: in Node 22 `navigator` is a read-only global (set `window`/`document`/`location`/`history`/`WebSocket`/`crypto`/`localStorage` individually, skip `navigator`); `WebSocket` and `localStorage` need trivial stubs. This catches runtime errors in render code without a browser. (Don't try Puppeteer — the Chromium download host is outside the network allowlist.)
 
 ---
@@ -147,10 +154,8 @@ The container has Node 22, `tsc`, `wrangler`, `tsx`, and `jsdom`; npm and GitHub
 
 ## 10. Known gaps / sensible next steps (deferred)
 
-- Rummy wild/joker cards (the documented scope gap).
 - Auto-open or flash the Log sheet when a hand/round is scored, so the breakdown is hard to miss.
 - Per-card seat attribution in the HLJ last-trick panel — needs a small `engine.ts` change to store each trick's `plays` (seat+card); currently `tricksWon` keeps only the winner seat + cards, so the panel shows cards + "won by X" without per-card names. (The full move log already gives per-seat attribution.)
-- Rummy UI only offers taking the **top** discard; the engine supports taking a card plus everything above it ("deep" draw).
 - Prune now-unused exports in `protocol.ts` (`advanceBots`, `stepBot`, the legacy `ClientMessage`) — superseded by the generic server, but `redact`/`PlayerView` are still used by `hlj-module.ts`.
 - Bots only advance when an alarm is scheduled; with no humans connected nothing drives them (acceptable).
 

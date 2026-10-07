@@ -1,4 +1,4 @@
-name: Check local.js bundle is up to date
+name: Check bundle, types and tests
 
 on:
   push:
@@ -11,9 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 22+: the tests and smoke scripts run .ts directly (type stripping).
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -30,3 +31,9 @@ jobs:
             echo "Run 'npm run build' locally and commit the result."
             exit 1
           fi
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test

@@ -14,12 +14,18 @@
 import {
   createGame as engineCreateGame,
   applyMove as engineApplyMove,
+  reseed as engineReseed,
   legalMoves,
   setSignal,
+  signalGateSeat,
+  isHandSignal,
+  emptyProfile,
+  trickWinner,
+  SUPPORTED_PLAYERS,
   type GameState,
   type Move,
   type PlayerCount,
-  type HandSignal,
+  type PlayerProfile,
 } from "./engine.ts";
 import { redact, type PlayerView } from "./protocol.ts";
 import { aiMove, handConfidence, PERSONALITIES, type Personality } from "./ai.ts";
@@ -27,8 +33,10 @@ import type { Game, LogEntry } from "./game.ts";
 
 export type HLJConfig = { players: PlayerCount; target: number; bestOf?: number };
 
-// The engine's state plus an authoritative, append-only move log.
-export type HljState = GameState & { log: LogEntry[]; logSeq: number };
+// The engine's state plus an authoritative, append-only move log, and the
+// per-game seed the bots' personalities are drawn from (state.seed moves on
+// every deal).
+export type HljState = GameState & { log: LogEntry[]; logSeq: number; botSeed?: number };
 
 const moveEq = (a: Move, b: Move): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -67,10 +75,10 @@ function hljEntries(prev: HljState, next: GameState, move: Move): Omit<LogEntry,
     out.push({ seat: null, msg: "trump is", suit: next.trump });
   }
 
-  // 4) a trick was just resolved
-  if (next.tricksWon.length > prev.tricksWon.length) {
-    const t = next.tricksWon[next.tricksWon.length - 1];
-    out.push({ seat: t.seat, msg: "takes the trick" });
+  // 4) a trick was just resolved (read from the gate: the 6th trick's advance
+  // scores the hand and deals the next, which empties tricksWon again)
+  if (move.type === "advance" && prev.phase === "trickComplete" && prev.trickWinner != null) {
+    out.push({ seat: prev.trickWinner, msg: "takes the trick" });
   }
 
   // 5) a hand was just scored
@@ -83,27 +91,28 @@ function hljEntries(prev: HljState, next: GameState, move: Move): Omit<LogEntry,
     if (d.bonhomme !== null) honors.push(`Joker\u2192${teamLetter(d.bonhomme)}`);
     if (d.game !== null) honors.push(`Game\u2192${teamLetter(d.game)}`);
     out.push({ seat: null, msg: honors.join("    ") });
-    out.push({ seat: null, msg: `Score \u2014 A ${next.scores[0]}, B ${next.scores[1]}` });
+    // The hand's own totals: a game won mid-series has already reset next.scores.
+    const scores = r.finalScores ?? next.scores;
+    out.push({ seat: null, msg: `Score \u2014 A ${scores[0]}, B ${scores[1]}` });
+    const [wonA, wonB] = next.gamesWon;
     if (next.phase === "gameOver" && next.winner !== null) {
-      out.push({ seat: null, msg: `${teamName(next.winner)} wins the game!` });
-    } else if (next.dealerSeat !== prev.dealerSeat) {
-      out.push({ seat: next.dealerSeat, msg: "deals the next hand" });
+      const what = next.winsNeeded > 1 ? `series ${Math.max(wonA, wonB)}\u2013${Math.min(wonA, wonB)}` : "game";
+      out.push({ seat: null, msg: `${teamName(next.winner)} wins the ${what}!` });
+    } else {
+      if (r.gameWinner != null) {
+        out.push({ seat: null, msg: `${teamName(r.gameWinner)} wins game ${wonA + wonB} \u2014 series A ${wonA}, B ${wonB}` });
+      }
+      if (next.dealerSeat !== prev.dealerSeat) out.push({ seat: next.dealerSeat, msg: "deals the next hand" });
     }
     // Retroactive dealt-hand entries so the log preserves every player's
     // starting hand for look-back. Appended after scoring so they appear
     // at the bottom of each hand's block (log is shown newest-first in UI).
-    const HLJ_SUIT_ORDER: Record<string, number> = { S: 0, H: 1, D: 2, C: 3 };
-    const sortHand = (hand: import("./engine.ts").Card[]) =>
-      [...hand].sort((a, b) =>
-        (("joker" in a ? 1 : 0) - ("joker" in b ? 1 : 0)) ||
-        ((HLJ_SUIT_ORDER[("suit" in a ? a.suit : "")] ?? 4) - (HLJ_SUIT_ORDER[("suit" in b ? b.suit : "")] ?? 4)) ||
-        (("rank" in a ? a.rank : 0) - ("rank" in b ? b.rank : 0))
-      );
+    // scoreHand already sorted them (the deal order would reveal the shuffle).
     if (r.kitty.length) {
-      out.push({ seat: null, msg: "kitty", cards: sortHand(r.kitty) });
+      out.push({ seat: null, msg: "kitty", cards: r.kitty });
     }
     for (let seat = 0; seat < r.dealtHands.length; seat++) {
-      out.push({ seat, msg: "was dealt", cards: sortHand(r.dealtHands[seat]) });
+      out.push({ seat, msg: "was dealt", cards: r.dealtHands[seat] });
     }
   }
 
@@ -111,9 +120,12 @@ function hljEntries(prev: HljState, next: GameState, move: Move): Omit<LogEntry,
 }
 
 // Assign each bot a personality derived from the game seed + seat so bots vary
-// naturally across games without needing UI controls.
-// Weights: 40% aggressive, 40% balanced, 20% conservative — competitive but not
-// uniformly hard (simulation shows aggressive wins ~68%, balanced ~53%, conservative ~28%).
+// naturally across games without needing UI controls. It stays fixed for the
+// whole game (botSeed; games saved before it existed fall back to the hand seed).
+// Weights: 40% aggressive, 40% balanced, 20% conservative. The personalities now
+// differ mainly in how light a hand they bid and are close in strength (paired
+// round-robin, `node src/ai.battle.ts --roundrobin`: aggressive ~53%, balanced
+// ~50%, conservative ~48%), so the mix adds variety without a weak link.
 const PERSONALITY_TABLE: Personality[] = [
   PERSONALITIES.aggressive,
   PERSONALITIES.balanced,
@@ -121,9 +133,39 @@ const PERSONALITY_TABLE: Personality[] = [
   PERSONALITIES.balanced,
   PERSONALITIES.conservative,
 ];
-function botPersonality(state: GameState, seat: number): Personality {
-  const h = ((state.seed >>> 0) ^ Math.imul(seat + 1, 0x9e3779b9)) >>> 0;
+function botPersonality(state: HljState, seat: number): Personality {
+  const h = (((state.botSeed ?? state.seed) >>> 0) ^ Math.imul(seat + 1, 0x9e3779b9)) >>> 0;
   return PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
+}
+
+// Validate the lobby options (throws with a message the lobby can show): the
+// target is a whole number of points, bestOf (optional) an odd number of games.
+function gameOptions(config: HLJConfig): { target: number; winsNeeded: number } {
+  const target = config.target === undefined ? 21 : config.target;
+  if (!Number.isInteger(target) || target < 1 || target > 10000) {
+    throw new Error("Target must be a whole number from 1 to 10000");
+  }
+  const bestOf = config.bestOf ?? 1;
+  if (!Number.isInteger(bestOf) || bestOf < 1 || bestOf > 9 || bestOf % 2 === 0) {
+    throw new Error("Best of must be 1, 3, 5, 7 or 9 games");
+  }
+  return { target, winsNeeded: (bestOf + 1) / 2 };
+}
+
+// A saved profile with any fields an older deploy didn't record filled in.
+function migrateProfile(p: Partial<PlayerProfile> | undefined): PlayerProfile {
+  const base = emptyProfile();
+  if (!p || typeof p !== "object") return base;
+  const rec: Partial<PlayerProfile["signalRecord"]> = p.signalRecord ?? {};
+  return {
+    ...base,
+    ...p,
+    signalRecord: {
+      weak: { ...base.signalRecord.weak, ...rec.weak },
+      medium: { ...base.signalRecord.medium, ...rec.medium },
+      strong: { ...base.signalRecord.strong, ...rec.strong },
+    },
+  };
 }
 
 export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
@@ -136,9 +178,34 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   botStepMs: (s) => Math.round(1600 * 4 / s.players),
 
   createGame: (config, seed) => {
-    const winsNeeded = config.bestOf ? Math.ceil(config.bestOf / 2) : 1;
-    const g = engineCreateGame(config.players, seed, config.target, winsNeeded);
-    return attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]);
+    const { target, winsNeeded } = gameOptions(config);
+    const g = engineCreateGame(config.players, seed, target, winsNeeded);
+    return { ...attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]), botSeed: seed };
+  },
+
+  // Fresh entropy for the shuffle (the log and botSeed ride through the spread).
+  reseed: (s, entropy) => engineReseed(s, entropy) as HljState,
+
+  // Saved games from older deploys: fill in fields added since (log, profiles,
+  // series counters...) and drop any signal that isn't a real level.
+  migrate: (raw) => {
+    const s = raw as HljState;
+    if (!s || typeof s !== "object" || !SUPPORTED_PLAYERS.includes(s.players)) throw new Error("Not a High Low Jack game");
+    const log = Array.isArray(s.log) ? s.log : [];
+    return {
+      ...s,
+      gamesWon: s.gamesWon ?? [0, 0],
+      winsNeeded: s.winsNeeded ?? 1,
+      bidHistory: s.bidHistory ?? [],
+      signals: Array.from({ length: s.players }, (_, i) => (isHandSignal(s.signals?.[i]) ? s.signals[i] : null)),
+      profiles: Array.from({ length: s.players }, (_, i) => migrateProfile(s.profiles?.[i])),
+      lastHand: s.lastHand ?? null,
+      dealtHands: s.dealtHands ?? null,
+      trickWinner: s.phase === "trickComplete" && s.trickWinner == null ? trickWinner(s.currentTrick, s.trump!) : (s.trickWinner ?? null),
+      log,
+      logSeq: Number.isInteger(s.logSeq) ? s.logSeq : log.reduce((m, e) => Math.max(m, e.id), 0),
+      botSeed: s.botSeed ?? s.seed,
+    };
   },
 
   // Pitch's turn order: bidder during bidding, otherwise the player to act.
@@ -149,8 +216,14 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   // Every completed trick lingers so players can read it; the final trick lingers
   // longer so the game never snaps to the win screen. A stack tap (advance) skips ahead.
   pacing: (s) => {
-    // Confidence-pick gate: bidder must pick before bots advance. 30s server safety net.
-    if (s.pendingSignal) return { kind: "wait", ms: 30000, move: { type: "advance", seat: s.bidTurn } };
+    // Confidence-pick gate: only the bidder's pick (aux) or tap clears it. The
+    // 30 s auto-advance is the safety net, and the driver applies it at once if
+    // that seat stops being a connected human.
+    if (s.pendingSignal) {
+      const seat = signalGateSeat(s);
+      const move: Move = { type: "advance", seat: seat ?? s.bidTurn };
+      return seat === null ? { kind: "auto", ms: 30000, move } : { kind: "auto", ms: 30000, move, advanceSeat: seat };
+    }
     if (s.phase !== "trickComplete") return null;
     const lastTrick = s.trickIndex >= 5;
     return { kind: "auto", ms: lastTrick ? 2600 : 1500, move: { type: "advance", seat: s.trickWinner ?? 0 } };
@@ -164,7 +237,7 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   applyMove: (s, move) => {
     // Clear pendingSignal gate via advance move (30s server safety-net path).
     if (move.type === "advance" && s.pendingSignal) {
-      return { ...s, pendingSignal: false };
+      return { ...s, pendingSignal: false, pendingSignalSeat: null };
     }
     const next = engineApplyMove(s, move);
     return attach(next, s.log, s.logSeq, hljEntries(s, next, move));
@@ -189,7 +262,7 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
         if (s2 === dealer) break;
       }
     }
-    return teammateLeft ? { ...s, pendingSignal: true } : null;
+    return teammateLeft ? { ...s, pendingSignal: true, pendingSignalSeat: move.seat } : null;
   },
 
   isOver: (s) => s.phase === "gameOver",
@@ -197,8 +270,11 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   redact: (s, seat, meta) => redact(s, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats }),
 
   lobbyView: (config, seat, meta) => {
-    const winsNeeded = config.bestOf ? Math.ceil(config.bestOf / 2) : 1;
-    const g = engineCreateGame(config.players, 1, config.target, winsNeeded);
+    // Stored configs are validated before they're accepted; one saved by an
+    // older deploy falls back to the defaults rather than fail to render.
+    let opts = { target: 21, winsNeeded: 1 };
+    try { opts = gameOptions(config); } catch { /* keep the defaults */ }
+    const g = engineCreateGame(config.players, 1, opts.target, opts.winsNeeded);
     const blanked = { ...g, hands: g.hands.map(() => []), kitty: [], phase: "bidding" as const };
     return redact(blanked, seat, { seats: meta.seats, hostSeat: meta.hostSeat, botReplacement: meta.botReplacement, disconnectedSeats: meta.disconnectedSeats, phase: "lobby" });
   },
@@ -206,10 +282,16 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
   aiMove: (s, seat) => aiMove(s, seat, undefined, botPersonality(s, seat)),
 
   // Hand signals: a non-turn side action that must preserve the log untouched.
+  // The payload is raw client input (and keys the bots' signal records), so only
+  // a real level is accepted; while the confidence gate is open only the bidder
+  // it waits on may signal, and that pick clears it.
   aux: {
     apply: (s, seat, payload) => {
-      const next = setSignal(s, seat, payload as HandSignal);
-      return { ...(next as HljState), log: s.log, logSeq: s.logSeq, pendingSignal: false };
+      if (!isHandSignal(payload)) throw new Error("Invalid signal");
+      const gate = signalGateSeat(s);
+      if (gate !== null && seat !== gate) throw new Error("Waiting for the bidder to signal");
+      const next = setSignal(s, seat, payload);
+      return { ...(next as HljState), log: s.log, logSeq: s.logSeq, pendingSignal: false, pendingSignalSeat: null };
     },
     botAux: (s, seat) => {
       if (s.phase !== "bidding" || s.signals[seat] != null) return null;
@@ -235,7 +317,9 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
       hand: next.lastHand,      // bidderSeat, bid, made, deltaByTeam, detail, dealtHands, kitty, lastTrick
       bidHistory: prev.bidHistory, // prev still holds the finished hand's auction; next's is reset
       log: next.log,
-      scores: next.scores,
+      scores: next.lastHand.finalScores ?? next.scores, // before a won game resets them
+      gameWinner: next.lastHand.gameWinner ?? null,     // team that won a game with this hand
+      gamesWon: next.gamesWon,
       gameOver: next.phase === "gameOver",
     };
   },

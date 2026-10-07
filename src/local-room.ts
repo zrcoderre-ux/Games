@@ -37,6 +37,11 @@ function pickBotName(taken: Set<string>): string {
   return `Bot ${i}`;
 }
 
+// Deal seeds and shuffle entropy come from the platform CSPRNG.
+const randomSeed = (): number => crypto.getRandomValues(new Uint32Array(1))[0];
+const freshEntropy = (): number[] => Array.from(crypto.getRandomValues(new Uint32Array(4)));
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 export class LocalRoom<State, Move extends { seat: number }, Config, View> {
   private state: State | null = null;
   private seats: SeatInfo[];
@@ -44,12 +49,16 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
   private viewSeat: number | null = null; // the seat whose view we currently emit
   private name = "You";
   private botTimer: ReturnType<typeof setTimeout> | null = null;
+  // Plain fields rather than constructor parameter properties, so Node's
+  // type stripping can load this file directly (the tests do).
+  private game: Game<State, Move, Config, View>;
+  private config: Config;
+  private emit: (msg: ServerMessage<View>) => void;
 
-  constructor(
-    private game: Game<State, Move, Config, View>,
-    private config: Config,
-    private emit: (msg: ServerMessage<View>) => void,
-  ) {
+  constructor(game: Game<State, Move, Config, View>, config: Config, emit: (msg: ServerMessage<View>) => void) {
+    this.game = game;
+    this.config = config;
+    this.emit = emit;
     this.seats = emptySeats(game.seatCount(config));
   }
 
@@ -152,48 +161,71 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     this.broadcast();
   }
 
-  private setConfig(config: Config): void {
-    if (this.state) throw new Error("Can't resize the table once the game has started");
+  // The client's fields merged over the current config, accepted only if the
+  // table size is supported and the module can deal it (a dry-run createGame
+  // throws with the module's own message). Mutates nothing.
+  private mergedConfig(patch: unknown): Config {
+    const next: Record<string, unknown> = { ...(this.config as object) };
+    if (patch && typeof patch === "object" && !Array.isArray(patch)) {
+      for (const [k, v] of Object.entries(patch)) if (!UNSAFE_KEYS.has(k)) next[k] = v;
+    }
+    const config = next as Config;
     const n = this.game.seatCount(config);
     if (!this.game.meta.supportedPlayerCounts.includes(n)) {
       throw new Error(`${this.game.meta.name} doesn't support ${n} players`);
     }
+    this.game.createGame(config, 1);
+    return config;
+  }
+
+  // Seats for an n-seat table without losing anyone, like the server: seats
+  // below n keep their occupant, and each human beyond the new size moves to
+  // the first empty seat (or displaces a bot). Throws if they can't all fit.
+  // `moved` maps each moved human's old seat to the new one.
+  private resizedSeats(n: number): { seats: SeatInfo[]; moved: Map<number, number> } {
     const seats = emptySeats(n);
     for (let s = 0; s < Math.min(n, this.seats.length); s++) seats[s] = this.seats[s];
-    if (this.hostSeat !== null && this.hostSeat >= n) {
-      const h = seats.findIndex((x) => x.kind === "human");
-      this.hostSeat = h === -1 ? null : h;
+    const moved = new Map<number, number>();
+    for (let s = n; s < this.seats.length; s++) {
+      if (this.seats[s].kind !== "human") continue;
+      let free = seats.findIndex((x) => x.kind === "empty");
+      if (free === -1) free = seats.findIndex((x) => x.kind === "bot");
+      if (free === -1) throw new Error(`Not enough seats for everyone at ${n} players`);
+      seats[free] = this.seats[s];
+      moved.set(s, free);
     }
-    if (this.viewSeat !== null && this.viewSeat >= n) {
-      const v = seats.findIndex((x) => x.kind === "human");
-      this.viewSeat = v === -1 ? null : v;
-    }
-    this.config = config;
+    return { seats, moved };
+  }
+
+  // Commit a resize; the host and the viewed seat follow their human.
+  private commitSeats(seats: SeatInfo[], moved: Map<number, number>): void {
+    const where = (s: number | null): number | null => (s === null || s < seats.length ? s : (moved.get(s) ?? null));
+    this.hostSeat = where(this.hostSeat);
+    this.viewSeat = where(this.viewSeat);
     this.seats = seats;
+  }
+
+  private setConfig(patch: Partial<Config>): void {
+    if (this.state) throw new Error("Can't resize the table once the game has started");
+    const config = this.mergedConfig(patch);
+    const { seats, moved } = this.resizedSeats(this.game.seatCount(config));
+    this.config = config;
+    this.commitSeats(seats, moved);
     this.broadcast();
   }
 
-  private start(config: Config): void {
+  private start(patch?: Partial<Config>): void {
     if (this.state) throw new Error("Game already in progress");
+    const config = this.mergedConfig(patch);
     const n = this.game.seatCount(config);
-    const seats = emptySeats(n);
-    const taken = new Set<string>();
+    const { seats, moved } = this.resizedSeats(n);
+    const taken = new Set<string>(seats.map((s) => s.name).filter((x): x is string => !!x));
     for (let s = 0; s < n; s++) {
-      const e = this.seats[s];
-      if (e && (e.kind === "human" || e.kind === "bot") && e.name) taken.add(e.name);
+      if (seats[s].kind !== "empty") continue;
+      const name = pickBotName(taken);
+      taken.add(name);
+      seats[s] = { kind: "bot", name };
     }
-    for (let s = 0; s < n; s++) {
-      const e = this.seats[s];
-      if (e && (e.kind === "human" || e.kind === "bot")) {
-        seats[s] = e;
-      } else {
-        const name = pickBotName(taken);
-        taken.add(name);
-        seats[s] = { kind: "bot", name };
-      }
-    }
-    this.config = config;
-    this.seats = seats;
     // dealerSeat: negative values are relative to seatN (e.g. -2 → n-2, the right-wall
     // teammate for any even player count). seed is used as-is when provided.
     const rawDealer = (config as any).dealerSeat;
@@ -201,20 +233,34 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
       ? ((rawDealer < 0 ? n + rawDealer : rawDealer) % n)  // n already declared above
       : (config as any).seed !== undefined
         ? (config as any).seed
-        : (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
-    this.state = this.game.createGame(config, seed);
+        : randomSeed();
+    let state = this.game.createGame(config, seed);
     // ensureAce: re-deal (preserving dealer) until seat 0 holds at least one ace.
     if ((config as any).ensureAce) {
       let s = seed;
       for (let i = 0; i < 200; i++) {
-        const hands = (this.state as any).hands as Array<Array<Record<string, unknown>>>;
+        const hands = (state as any).hands as Array<Array<Record<string, unknown>>>;
         if (hands?.[0]?.some(c => !("joker" in c) && c["rank"] === 14)) break;
         s += n;
-        this.state = this.game.createGame(config, s);
+        state = this.game.createGame(config, s);
       }
     }
+    // Dealt without error: only now commit the table.
+    this.config = config;
+    this.commitSeats(seats, moved);
+    this.state = this.reseeded(state);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
+  }
+
+  // Fresh shuffle entropy for the module, when it takes any.
+  private reseeded(state: State): State {
+    return this.game.reseed ? this.game.reseed(state, freshEntropy()) : state;
+  }
+
+  // Every transition (human, bot, or pacing advance) goes through here.
+  private transition(state: State, move: Move): State {
+    return this.game.applyMove(this.reseeded(state), move);
   }
 
   private move(move: Move): void {
@@ -225,7 +271,7 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     if (move.seat !== seat) throw new Error("Seat mismatch");
     if (!this.game.isLegal(this.state, move)) throw new Error("Illegal move");
     const prev = this.state;
-    const afterMove = this.game.applyMove(this.state, move);
+    const afterMove = this.transition(this.state, move);
     this.state = this.game.openHumanGate?.(afterMove, move) ?? afterMove;
     this.logHandIfComplete(prev, this.state);
     this.syncViewSeat();
@@ -298,12 +344,14 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
 
   // A human stack-tap during a pacing gate (e.g. Pitch's trickComplete): apply the
   // gate's advance move immediately instead of waiting for the auto-advance timer.
+  // A stale tap, or one on a gate owned by another seat (advanceSeat), is ignored.
   private advance(): void {
-    if (!this.state) throw new Error("No game in progress");
+    if (!this.state || this.game.isOver(this.state)) return;
     const pace = this.game.pacing ? this.game.pacing(this.state) : null;
-    if (!pace || !pace.move) throw new Error("Nothing to advance");
+    if (!pace || !pace.move) return;
+    if (pace.advanceSeat != null && pace.advanceSeat !== this.viewSeat) return;
     const prev = this.state;
-    this.state = this.game.applyMove(this.state, pace.move);
+    this.state = this.transition(this.state, pace.move);
     this.logHandIfComplete(prev, this.state);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
@@ -315,7 +363,7 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     const s = this.state;
     if (!s || this.game.isOver(s)) return;
     if (this.game.seatToAct(s) !== null) return; // no longer in a gate
-    this.state = this.game.applyMove(s, move);
+    this.state = this.transition(s, move);
     this.logHandIfComplete(s, this.state);
     this.syncViewSeat();
     this.broadcast();
@@ -359,7 +407,7 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
       if (a != null) ns = this.game.aux.apply(ns, seat, a);
     }
     const prevNs = ns;
-    ns = this.game.applyMove(ns, this.game.aiMove(ns, seat));
+    ns = this.transition(ns, this.game.aiMove(ns, seat));
     this.state = ns;
     this.logHandIfComplete(prevNs, ns);
     this.syncViewSeat(); // a bot may have handed the turn to a human

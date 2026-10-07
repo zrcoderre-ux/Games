@@ -448,6 +448,8 @@ button,input,select{font-family:inherit;color:inherit}
 .connect-dots span{width:8px;height:8px;border-radius:50%;background:var(--gold);opacity:.35;animation:dotpulse 1.4s ease-in-out infinite}
 .connect-dots span:nth-child(2){animation-delay:.2s}
 .connect-dots span:nth-child(3){animation-delay:.4s}
+.connect-acts{display:flex;flex-direction:column;gap:10px}
+.connect-acts .btn{width:100%}
 .passlogo{
   width:72px;height:100px;margin:0 auto 18px;border-radius:10px;position:relative;
   background:radial-gradient(120% 90% at 50% 30%,#c93a30,#a8281f 70%,#8c2018);
@@ -648,6 +650,7 @@ button,input,select{font-family:inherit;color:inherit}
 }
 .pod-away{flex:none;font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:#b43a2e;border-radius:4px;padding:2px 4px}
 .pod.disconnected .ministack,.pod.disconnected .pod-av{opacity:.5}
+.pod.disconnected .pod-plate{max-width:140px}
 /* whose turn */
 .pod.active .pod-plate{
   border-color:var(--gold);
@@ -696,6 +699,11 @@ button,input,select{font-family:inherit;color:inherit}
 .pod-slot.pos-right .pod-dealer-badge{left:auto;right:calc(50% + var(--mb-w) * 1.1 - 12px)}
 .pod-slot.pos-top .pod-dealer-badge{left:calc(50% + var(--mb-w) * 1.1 + 5px);top:calc(var(--mb-w) * .72 - 15px)}
 .pod:has(.pod-av-id) .pod-dealer-badge{left:calc(50% + 12px);top:-10px}
+/* the confidence signal takes the stack's other corner, clear of the D / bid chip */
+.pod-dealer-badge.pod-signal{width:28px;height:28px;left:auto;right:calc(50% + var(--mb-w) * 1.1 - 12px)}
+.pod-slot.pos-right .pod-dealer-badge.pod-signal{right:auto;left:calc(50% + var(--mb-w) * 1.1 - 12px)}
+.pod-slot.pos-top .pod-dealer-badge.pod-signal{left:auto;right:calc(50% + var(--mb-w) * 1.1 + 5px)}
+.pod:has(.pod-av-id) .pod-dealer-badge.pod-signal{left:auto;right:calc(50% + 12px)}
 /* bid chip (team colours) */
 .pod-dealer-badge.bid{
   font-size:13px;color:#d0e4ff;border:none;
@@ -756,6 +764,7 @@ button,input,select{font-family:inherit;color:inherit}
 .trick-fan-collect .card.win{animation-delay:var(--win-anim-delay,0ms)}
 /* trick held on the table — tap to continue */
 .trick-gate{position:absolute;inset:0;z-index:9;cursor:pointer;user-select:none}
+.trick-gate.view-only{cursor:default}
 .trick-gate-hint,.felt-pill{
   position:absolute;left:50%;bottom:3%;transform:translateX(-50%);white-space:nowrap;pointer-events:none;
   display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 13px;border-radius:999px;
@@ -847,6 +856,7 @@ button,input,select{font-family:inherit;color:inherit}
 
 @media (max-height:640px) and (orientation:portrait){
   .hint{display:none}
+  .hint.key{display:block;font-size:12px}
   .selfbar{min-height:48px;padding:4px 6px}
   .selfbar .avatar{width:34px;height:34px;font-size:13px}
   .actions .btn{min-height:42px}
@@ -973,6 +983,8 @@ button,input,select{font-family:inherit;color:inherit}
   transition:opacity .2s;
 }
 .hlj-felt-bid.waiting{opacity:.55;pointer-events:none}
+.hlj-felt-bid.gate-wait{pointer-events:none;padding:8px 16px}
+.gate-wait-msg{font-family:var(--font-serif);font-style:italic;font-size:13.5px;color:var(--ink-2);white-space:nowrap}
 .hlj-chips,.hlj-signal-felt{display:flex;gap:9px;justify-content:center;align-items:center}
 .hlj-chip,.hlj-pass-btn{
   appearance:none;border:0;cursor:pointer;display:grid;place-items:center;
@@ -1080,6 +1092,13 @@ button.hlj-chip.steal{font:900 9.5px/1 var(--font-ui);letter-spacing:.04em;text-
 .ledger-ribbon .card.mini{--w:var(--ledger-card,34px)}
 .ledger-empty{flex:1;min-width:0;font-size:12px;font-style:italic;color:var(--ink-4);padding-left:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ledger-score{flex:none;margin-left:auto;font:700 12px/1 var(--font-serif);color:var(--ink-3);padding-left:4px}
+.ledger-away{flex:none;display:flex;flex-direction:column;align-items:center;gap:3px}
+.ledger-away .btn.sm{min-height:28px;padding:0 9px;font-size:11.5px}
+.ledger-row.disconnected .ledger-av{opacity:.55}
+.ledger-ribbon .meld.target,.ledger-ribbon .meld.layoff-hint{outline-offset:-2px}
+/* the piles' box spans the ledger rows beneath it: only the piles take taps */
+.felt-stage.has-ledger .center{pointer-events:none}
+.felt-stage.has-ledger .center .stockwrap,.felt-stage.has-ledger .center .discardstack{pointer-events:auto}
 
 @media (orientation:portrait){
   .felt-stage.has-ledger{display:flex;flex-direction:column}
@@ -1121,10 +1140,17 @@ button.hlj-chip.steal{font:900 9.5px/1 var(--font-ui);letter-spacing:.04em;text-
   animation:rise .4s cubic-bezier(.2,.8,.2,1) both;
 }
 .rhc-head{
-  padding:20px 18px 14px;text-align:center;border-bottom:1px solid var(--line-soft);
+  position:relative;padding:20px 56px 14px;text-align:center;border-bottom:1px solid var(--line-soft);
   font-family:var(--font-serif);font-size:24px;font-weight:700;color:var(--ink);
 }
 .rhc-head small{display:block;margin-bottom:6px;font:800 11px/1 var(--font-ui);letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+.rhc-head .iconbtn{position:absolute;top:12px}
+.rhc-leave{left:12px}
+.rhc-log{right:12px}
+.rhc-tie{padding:9px 16px;text-align:center;font-size:13.5px;color:var(--ink-2);background:rgba(212,184,90,.08);border-bottom:1px solid var(--line-soft)}
+.rhc-breakdown{margin:-3px 0 8px;font-size:12px;color:var(--ink-3)}
+.rhc-players{display:flex;flex-direction:column;gap:10px}
+.rhc-foot .result-wait{margin:2px 0}
 .rhc-body{flex:1;min-height:0;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .rhc-foot{padding:12px 14px max(14px,var(--safe-b));border-top:1px solid var(--line-soft)}
 .rhc-foot .btn{width:100%}
@@ -1138,7 +1164,8 @@ button.hlj-chip.steal{font:900 9.5px/1 var(--font-ui);letter-spacing:.04em;text-
 .rhc-total{font-size:12.5px;color:var(--ink-3)}
 .rhc-held{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
 .rhc-held .card{box-shadow:0 0 0 2px #c03030,0 2px 6px rgba(0,0,0,.5)}
-.rhc-melds{display:flex;flex-wrap:wrap;gap:8px}
+.rhc-melds{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.rhc-player > :last-child{margin-bottom:0}
 .rhc-meld{display:flex;flex-wrap:wrap;gap:2px;padding:4px;border-radius:7px;box-shadow:0 0 0 2px #3a9e5a;background:rgba(0,0,0,.2)}
 .rr-badge{font:800 10px/1 var(--font-ui);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:999px;color:var(--gold-ink);background:var(--gold)}
 
@@ -1315,6 +1342,8 @@ button.seat-av:hover{transform:scale(1.06);background:rgba(255,255,255,.08)}
 .result-actions{padding-top:12px;background:linear-gradient(180deg,rgba(9,22,15,0),rgba(9,22,15,.92) 30%)}
 .result-actions .btn,.hlj-result-next-btn{width:100%;min-height:52px;font-size:16px}
 .result-wait{text-align:center;font-family:var(--font-serif);font-style:italic;color:var(--ink-2);margin:6px 0}
+.result-tools{position:absolute;z-index:5;top:max(12px,calc(var(--safe-t) + 8px));right:max(12px,calc(var(--safe-r) + 8px))}
+.result-note{margin:-2px 0 10px;font-size:14px;font-weight:600;color:var(--gold-hi)}
 .hlj-rr-section{margin-bottom:0}
 .hlj-rr-twocol{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .hlj-rr-col{min-width:0;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.03)}
@@ -1553,6 +1582,8 @@ button.seat-av:hover{transform:scale(1.06);background:rgba(255,255,255,.08)}
   .selfbar .avatar{width:34px;height:34px;font-size:13px}
   .selfbar-name-block{flex:none;width:100%;align-items:center}
   .selfbar .name{font-size:12px;max-width:100%}
+  .selfbar.spectating{padding:9px 2px}
+  .selfbar.spectating .name{font-size:10.5px}
   .me-pts{justify-content:center;flex-wrap:wrap;font-size:11px;text-align:center}
   .turnflag,.waitflag{height:auto;min-height:24px;padding:4px 7px;font-size:10.5px;white-space:normal;text-align:center;line-height:1.15;justify-content:center;max-width:100%}
   .waitflag::before{display:none}
@@ -1568,6 +1599,9 @@ button.seat-av:hover{transform:scale(1.06);background:rgba(255,255,255,.08)}
   }
   .actions .btn svg{width:15px;height:15px}
   .actions .hint{display:none}
+  /* ...except a rule's reason (forced card, Must discard), unless a Meld / Lay off button already says it */
+  .actions .hint.key{display:block;font-size:10.5px;line-height:1.3;text-align:center;color:var(--ink-2)}
+  .actions:has([data-action="meld-selected"],[data-action="layoff-selected"]) .hint.key{display:none}
   .btn-extra{display:none}
   /* lobby: your seat sits at the bottom of the felt */
   .table.is-lobby .selfbar{

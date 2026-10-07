@@ -60,9 +60,23 @@ export interface Game<State, Move extends SeatedMove, Config, View> {
   // state is dealt.
   seatCount(config: Config): number;
 
-  // Deal a fresh game. Throws on an invalid config. `seed` is the ONLY source
-  // of randomness, threaded through State for deterministic replay/testing.
+  // Deal a fresh game. Throws on an invalid config (the module validates its
+  // own options; the server dry-runs this before accepting a lobby config).
+  // `seed` is the ONLY source of randomness, threaded through State for
+  // deterministic replay/testing.
   createGame(config: Config, seed: number): State;
+
+  // OPTIONAL: fold fresh entropy (4 uint32 words from crypto.getRandomValues)
+  // into the state so the next shuffle can't be predicted from the seed alone.
+  // The room calls it right after createGame and immediately before every
+  // applyMove (human, bot, or pacing advance). Without it the module stays
+  // purely seed-deterministic, which tests and harnesses rely on.
+  reseed?(state: State, entropy: number[]): State;
+
+  // OPTIONAL: bring a persisted state from an older deploy up to the current
+  // shape (fill defaults etc.). The room runs it on load; if it throws, the
+  // room resets to a fresh lobby rather than staying broken.
+  migrate?(state: any): State;
 
   // The ONLY authority on turn order. null = nobody to act (game over, etc.).
   // A turn may span several moves (Rummy draw -> meld -> discard); this reports
@@ -100,7 +114,10 @@ export interface Game<State, Move extends SeatedMove, Config, View> {
   // e.g. Pitch's trickComplete gate. The room driver owns a single timer keyed off
   // this. `move` is the transition to apply; `kind` "auto" always auto-advances,
   // "wait" auto-advances only when no human is present (a human may advance sooner).
-  pacing?(state: State): { kind: "auto" | "wait"; ms: number; move: Move } | null;
+  // `advanceSeat`, when set, is the only seat whose "advance" is honored (e.g. the
+  // bidder choosing a signal); if that seat stops being a connected human, the
+  // driver applies `move` at once instead of waiting on it.
+  pacing?(state: State): { kind: "auto" | "wait"; ms: number; move: Move; advanceSeat?: number } | null;
 
   // OPTIONAL: called by the driver after a HUMAN move to check whether a
   // player-driven gate (e.g. confidence pick) should be opened. Returns the new
@@ -129,10 +146,10 @@ export type ClientMessage<Config, Move> =
   | { t: "leave" } // give up your seat (becomes a bot if a game is running)
   | { t: "addBot"; seat: number } // host fills an empty lobby seat with an AI
   | { t: "removeBot"; seat: number } // host clears a bot from a lobby seat
-  | { t: "setConfig"; config: Config } // host resizes the lobby table / options before dealing
-  | { t: "start"; config: Config } // host fills empty seats with bots and deals
+  | { t: "setConfig"; config: Partial<Config> } // host resizes the lobby table / options (merged over the current config)
+  | { t: "start"; config?: Partial<Config> } // host fills empty seats with bots and deals (config merged likewise)
   | { t: "move"; move: Move } // a game action (opaque to the server)
-  | { t: "advance" } // skip a pacing gate (e.g. tap a completed trick to continue)
+  | { t: "advance" } // skip a pacing gate (e.g. tap a completed trick); a stale or unowned tap is ignored
   | { t: "aux"; payload: unknown } // a non-turn side action (opaque to the server)
   | { t: "newGame" } // after game over, reset to the lobby
   | { t: "setBotReplacement"; enabled: boolean } // host toggles auto bot-replacement
