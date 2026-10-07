@@ -13,7 +13,7 @@
      touched or cached.
 */
 
-const CACHE = "bonhomme-v5";
+const CACHE = "bonhomme-v6";
 
 const PRECACHE = [
   "/",
@@ -23,7 +23,7 @@ const PRECACHE = [
   "/tutorial.js",
   "/manifest.json",
   "/favicon.svg",
-  "/joker-hat.png",
+  "/joker-hat.webp",
   "/joker-card.webp",
   "/bonhomme-card.webp",
   "/joker-silhouette.png",
