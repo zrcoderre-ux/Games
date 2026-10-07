@@ -10,6 +10,7 @@ const GAMES = {
     label: "Rummy 500",
     players: [2, 3, 4, 5, 6, 7, 8],
     target: 500,
+    maxTarget: 1000, // highest "play to" (the server enforces the same cap)
     suit: "\u2665",
     blurb: "Draw, build runs & sets, race to 500.",
     range: "2\u20138 players",
@@ -18,6 +19,7 @@ const GAMES = {
     label: "High Low Jack",
     players: [4, 6, 8],
     target: 21,
+    maxTarget: 21,
     suit: "\u2660",
     blurb: "Bid, take trump tricks, chase the Jack.",
     range: "4 / 6 / 8 players",
@@ -26,6 +28,7 @@ const GAMES = {
     label: "Hearts",
     players: [3, 4, 5],
     target: 100,
+    maxTarget: 200,
     suit: "\u2665",
     blurb: "Dodge hearts & the Black Lady; lowest score wins.",
     range: "3 / 4 / 5 players",
@@ -38,6 +41,20 @@ const GAMES = {
     blurb: "Race your marbles home; jokers bump, sevens split.",
     range: "4 or 6 players \u00b7 partners",
   },
+};
+
+// Inline icons (stroke = currentColor) for the top bar, rails, sheets and seats.
+const svg = (d, w = 2.1) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  back: svg(`<path d="M15 18l-6-6 6-6"/>`, 2.4),
+  log: svg(`<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/>`),
+  share: svg(`<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>`),
+  gear: svg(`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`, 1.8),
+  close: svg(`<path d="M6 6l12 12M18 6L6 18"/>`, 2.4),
+  download: svg(`<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>`),
+  check: svg(`<path d="M5 12.5l4.5 4.5L19 7.5"/>`, 2.6),
+  plus: svg(`<path d="M12 5v14M5 12h14"/>`, 2.4),
 };
 
 const app = document.getElementById("app");
@@ -82,7 +99,7 @@ const S = {
   heartsCollecting: null,     // { plays, winSeat, ts } while scatter→fan anim is playing
   heartsHandAcked: null, // hand key (heartsHandKey) of the lastHand already dismissed
   heartsHandTimer: null, // auto-dismiss setTimeout handle
-  heartsReceivedCards: [], // card ids just received via pass, shown in selrow for 5s
+  heartsReceivedCards: [], // card ids just received via pass, highlighted in the hand for 5s
   heartsReceivedTimer: null, // clears heartsReceivedCards after 5s
   hljSignalTimer: null,    // unused, kept for wire-compat
   rummyOrder: [], // display order of your hand (card ids) for sort + drag/drop
@@ -100,6 +117,7 @@ const S = {
   pjCard: null, // selected card id (Pegs & Jokers)
   pjMoves: [], // candidate moves currently shown as buttons (Pegs & Jokers)
   lbySettingsOpen: false,
+  confirmLeave: false, // "leave this game?" dialog open
   showLog: false,
   logTab: "log", // "log" | "melds"
   logExpandedId: null, // id of log entry whose extraCards are expanded
@@ -126,15 +144,9 @@ function morphNode(a, b) {
     if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue;
     return;
   }
-  // .hs-wm-wrap/.hs-wm get their "style" set imperatively by positionHatWatermark,
-  // never in the rendered template — preserve it across morphs so re-rendering
-  // for unrelated state changes (e.g. picking a game) doesn't strip it for a
-  // frame and cause a visible jump before the next rAF reapplies it.
-  const keepStyle = a.classList && (a.classList.contains("hs-wm-wrap") || a.classList.contains("hs-wm"));
   const prevValue = a.getAttribute("value"); // rendered value before this morph
   for (let i = a.attributes.length - 1; i >= 0; i--) {
     const n = a.attributes[i].name;
-    if (keepStyle && n === "style") continue;
     if (!b.hasAttribute(n)) a.removeAttribute(n);
   }
   for (const at of b.attributes) {
@@ -169,24 +181,11 @@ function patch(html) {
 Object.defineProperty(app, "__set", { configurable: true, set(html) { patch(html); } });
 
 // ---------- theme ----------
-const THEMES = [
-  { id: "midnight", label: "Midnight" },
-  { id: "velvet",   label: "Velvet"   },
-  { id: "baize",    label: "Baize"    },
-  { id: "parchment",label: "Parchment"},
-];
 function applyTheme(id) {
+  // One parlor look; the attribute is kept so old saved prefs are harmless.
   document.documentElement.setAttribute("data-theme", id);
   const meta = document.querySelector('meta[name="theme-color"]');
-  const colors = { midnight: "#060910", velvet: "#0d0610", baize: "#060c08", parchment: "#1e1408" };
-  if (meta) meta.content = colors[id] || colors.midnight;
-}
-function themePickerHTML() {
-  const swatches = THEMES.map(t =>
-    `<button class="theme-swatch${S.theme === t.id ? " active" : ""}" data-action="set-theme" data-t="${t.id}" title="${t.label}"></button>`
-  ).join("");
-  const cur = THEMES.find(t => t.id === S.theme);
-  return `<div class="theme-picker">${swatches}<span class="theme-label">${cur ? cur.label : ""}</span></div>`;
+  if (meta) meta.content = "#0b2016";
 }
 
 // ---------- utilities ----------
@@ -209,6 +208,7 @@ function cardHTML(c, o = {}) {
   if (o.sel) cls.push("sel");
   if (o.must) cls.push("must");
   if (o.dim) cls.push("dim");
+  if (o.fresh) cls.push("fresh");
   const a = [];
   if (o.action) a.push(`data-action="${o.action}"`);
   if (o.key) a.push(`data-key="${o.key}"`);
@@ -269,80 +269,101 @@ function seatPresence(v, i) {
   const isHost = v.you === v.hostSeat && v.you !== null;
   return {
     away,
-    badge: away ? `<span class="chip" style="background:var(--danger,#c0392b);color:#fff;font-size:10px">away</span>` : "",
+    badge: away ? `<span class="pod-away">away</span>` : "",
     replaceBtn: away && isHost && !S.offline
       ? `<button class="btn sm danger" data-action="replace-seat" data-seat="${i}">Replace</button>`
       : "",
   };
 }
 
-// opponent pod
+// opponent pod: a stack of card backs (or an avatar) over a name plate
 function podHTML(v, i, o = {}) {
   const name = seatName(v, i);
-  const backs = 4;
   const cardCount = o.cardCount != null ? o.cardCount : null;
-  const mbArr = Array.from({ length: backs }, (_, idx) =>
-    idx === backs - 1 && cardCount != null
-      ? `<span class="mb mb-last"><span class="mb-count">${cardCount}</span></span>`
-      : `<span class="mb"></span>`
-  );
-  const mb = mbArr.join("");
-  const { away: isDisconnected, badge: disconnectedBadge, replaceBtn } = seatPresence(v, i);
-  // HLJ confidence signal: a small badge on the card stack's lower outer corner,
-  // apart from the dealer / bid chip slot.
-  const signalEl = o.signal
-    ? `<span class="pod-dealer-badge signal pod-signal" style="position:absolute;top:auto;right:auto;bottom:-6px;left:-6px;width:22px;height:22px;margin:0;transform:none;z-index:3">${o.signal}</span>`
-    : "";
+  const mb = `<span class="mb"></span>`.repeat(4);
+  const { away: isDisconnected, badge: away, replaceBtn } = seatPresence(v, i);
+  const dot = o.team ? `<span class="teamdot t${o.team}"></span>` : "";
+  const countInPlate = cardCount != null && !o.avatar;
+  const plate = `<div class="pod-plate">${dot}<span class="pod-name">${esc(name)}</span>${countInPlate ? `<span class="pod-count" title="${cardCount} cards">${cardCount}</span>` : ""}${away}</div>`;
   const mainBlock = o.avatar
-    ? `<div class="pod-av-id" style="--avseat:${i}">
-        <span class="pod-av">${(esc(name)[0] || "?").toUpperCase()}</span>
-        ${cardCount != null ? `<span class="pod-av-count">${cardCount}</span>` : ""}
-        <span class="pod-av-name">${esc(name)}${disconnectedBadge}</span>
+    ? `<div class="pod-av-id">
+        <span class="pod-av">${esc(initials(name))}</span>
+        ${cardCount != null ? `<span class="pod-av-count" title="${cardCount} cards">${cardCount}</span>` : ""}
       </div>`
-    : `<div class="ministack">
-        ${mb}
-        ${signalEl}
-        <span class="back-name">${esc(name)}${disconnectedBadge}</span>
-      </div>`;
-  return `<div class="pod ${o.active ? "active" : ""} ${o.partner ? "partner" : ""} ${o.team ? "t" + o.team : ""} ${isDisconnected ? "disconnected" : ""} ${o.extraClass || ""}">
+    : `<div class="ministack">${mb}</div>`;
+  const badge = o.highBid != null ? `<div class="pod-dealer-badge bid" title="Winning bid">${o.highBid}</div>`
+    : o.dealer ? `<div class="pod-dealer-badge" title="Dealer">D</div>` : "";
+  // HLJ confidence signal (public for the whole hand): its own chip on the
+  // stack's other corner, apart from the dealer / bid chip.
+  const signal = o.signal ? `<div class="pod-dealer-badge signal pod-signal">${o.signal}</div>` : "";
+  const cls = ["pod", o.active && "active", o.partner && "partner", o.team && `t${o.team}`, isDisconnected && "disconnected", o.extraClass].filter(Boolean).join(" ");
+  return `<div class="${cls}">
     ${mainBlock}
-    ${o.highBid != null ? `<div class="pod-dealer-badge bid">${o.highBid}</div>` : o.dealer ? `<div class="pod-dealer-badge">D</div>` : ""}
-    ${o.pts != null || o.count != null ? `<div class="pod-info">
-      ${o.pts != null ? `<span class="pts">${o.pts}</span>` : ""}
-      ${o.count != null ? `<span class="count">${o.count}</span>` : ""}
-    </div>` : ""}
+    ${plate}
+    ${badge}
+    ${signal}
+    ${o.pts != null ? `<div class="pod-info"><span class="pts" title="Score">${o.pts}</span></div>` : ""}
     ${o.note ? `<div class="note">${esc(o.note)}</div>` : ""}
     ${replaceBtn}
   </div>`;
 }
 
-// fanned hand with per-card rotation + arc, overlap scaled to fit
-function fanHand(cards, optFn, { scrollable = false, arcScale = 1 } = {}) {
+// Landscape puts the controls in side rails and lets the felt take the height.
+const isRails = () => window.matchMedia("(orientation: landscape)").matches;
+
+// Card width + usable width for the player's hand; mirrors the CSS breakpoints.
+function handMetrics() {
+  const W = window.innerWidth || 390, H = window.innerHeight || 800;
+  if (isRails()) {
+    const tall = H >= 600;
+    const cardW = tall ? (W >= 1400 && H >= 800 ? 92 : 84) : 62;
+    const rails = tall ? 2 * (W >= 1400 && H >= 800 ? 150 : 132) + 56 : 2 * 66 + 48;
+    const feltW = Math.min(W - rails, (H - 16) * 1.95);
+    return { cardW, avail: Math.max(260, Math.min(feltW - 24, tall ? 900 : 620)) };
+  }
+  const cardW = W >= 600 ? 82 : W <= 360 ? 60 : 66;
+  return { cardW, avail: Math.min(W - 20, W >= 600 ? 760 : 440) };
+}
+
+// Fanned hand with per-card rotation + arc. Cards overlap just enough to fit
+// the available width; very large hands shrink the cards, then scroll sideways.
+// Returns the full scroller markup (.fan-scroll > .fan-inner > cards).
+function fanHand(cards, optFn, { arcScale = 1, cls = "", cardW: forceW = null, avail: forceAvail = null } = {}) {
   const n = cards.length;
   if (!n) return "";
-  const cardW = scrollable ? 68 : 64;
-  const baseAvail = Math.min(360, (window.innerWidth || 360) - 30);
-  // Scrollable fans expand to give each card comfortable room (40px visible per card).
-  const avail = scrollable ? Math.max(baseAvail, n * 40 + cardW) : baseAvail;
-  const step = n > 1 ? Math.min(44, Math.max(20, (avail - cardW) / (n - 1))) : 0;
+  const m = handMetrics();
+  let cardW = forceW || m.cardW;
+  const avail = forceAvail || m.avail;
+  const MIN = 0.34, MAX = 0.68; // visible slice per card, as a fraction of its width
+  const room = avail - 24; // fan-inner side padding
+  let step = n > 1 ? (room - cardW) / (n - 1) : 0;
+  if (n > 1 && !forceW && step < cardW * MIN) {
+    // shrink the cards (down to ~3/4 size) before resorting to a scrolling hand
+    const fit = Math.floor(room / (1 + MIN * (n - 1)));
+    cardW = Math.max(Math.round(cardW * 0.76), Math.min(cardW, fit));
+    step = (room - cardW) / (n - 1);
+  }
+  step = Math.max(cardW * MIN, Math.min(cardW * MAX, step));
+  const overflows = n > 1 && cardW + (n - 1) * step > room + 1;
   const overlap = step - cardW; // negative => overlap
   const spread = Math.min(3, 24 / n);
   const arc = (n > 2 ? Math.min(13, n * 1.4) : 0) * arcScale;
   const mid = (n - 1) / 2 || 1;
-  return cards
+  const inner = cards
     .map((c, i) => {
       const off = i - (n - 1) / 2;
       const rot = off * spread;
       const lift = -arc * (1 - (off / mid) ** 2);
       const o = optFn(c, i) || {};
-      o.style = `${i ? `margin-left:${overlap.toFixed(1)}px;` : ""}transform:rotate(${rot.toFixed(2)}deg) translateY(${lift.toFixed(1)}px);z-index:${i + 1};`;
+      o.style = `--w:${cardW}px;${i ? `margin-left:${overlap.toFixed(1)}px;` : ""}transform:rotate(${rot.toFixed(2)}deg) translateY(${lift.toFixed(1)}px);z-index:${i + 1};`;
       // Drag-to-play: a touch drag on a card must reach the pointer handlers,
-      // not become a browser pan (which fires pointercancel). A .fan-scroll fan
-      // keeps its own pan-x so it can still scroll sideways.
-      if (!scrollable && (o.action === "play-card" || o.action === "toggle-card")) o.style += "touch-action:none;";
+      // not become a browser pan (which fires pointercancel). A hand too wide
+      // for the screen keeps its pan-x so it can still scroll sideways.
+      if (!overflows && (o.action === "play-card" || o.action === "toggle-card")) o.style += "touch-action:none;";
       return cardHTML(c, o);
     })
     .join("");
+  return `<div class="fan-scroll${overflows ? " overflows" : ""}"><div class="fan-inner${cls ? " " + cls : ""}" style="--w:${cardW}px">${inner}</div></div>`;
 }
 
 let toastTimer = null;
@@ -568,6 +589,7 @@ function resetGameUi() {
   _autoPlayTimer = null;
   resetSeatUi(null);
   S.showLog = false;
+  S.confirmLeave = false;
   S.logTab = "log";
   S.logExpandedId = null;
   S.lbySettingsOpen = false;
@@ -739,15 +761,25 @@ async function connectLocal(handoff = null) {
 }
 
 // ---------- app bar ----------
-function appbar(v, opts = {}) {
-  return `<div class="appbar">
-    ${opts.leftContent ? `<div class="appbar-left">${opts.leftContent}</div>` : `<div class="spacer"></div>`}
-    ${S.offline ? "" : `<div class="roomtag">room <b>${esc(S.room)}</b></div>`}
-    ${opts.log && v.phase !== "lobby" ? `<button class="btn sm ghost" data-action="toggle-log">Log</button>` : ""}
-    ${!S.offline && v.phase !== "lobby" ? `<button class="btn sm ghost" data-action="share-link">Share</button>` : ""}
-    ${opts.rightExtra || ""}
-    <button class="btn sm ghost" data-action="leave">Leave</button>
-  </div>`;
+// Top bar. In portrait it's a row (Leave · title · scores/Log); in landscape the
+// CSS dissolves it so each control lands in a side rail (see styles §19).
+function appbar(v, o = {}) {
+  const g = GAMES[S.party];
+  const where = S.offline ? "Offline" : `Room <b>${esc(S.room)}</b>`;
+  const sub = [where, o.sub].filter(Boolean).join(" · ");
+  const inGame = v.phase !== "lobby";
+  return `<header class="appbar">
+    <div class="bar-start">
+      <button class="iconbtn" data-action="leave" aria-label="Leave table" title="Leave table">${ICON.back}<span class="lbl">Leave</span></button>
+      ${o.start || ""}
+    </div>
+    <div class="bar-title"><span class="bar-game">${esc(g ? g.label : "Bonhomme")}</span><span class="bar-sub">${sub}</span></div>
+    <div class="bar-end">
+      ${o.scores ? `<div class="scoreboard">${o.scores}</div>` : ""}
+      ${!S.offline && inGame ? `<button class="iconbtn" data-action="share-link" aria-label="Invite players" title="Invite players">${ICON.share}<span class="lbl">Invite</span></button>` : ""}
+      ${inGame ? `<button class="iconbtn" data-action="toggle-log" aria-label="Move log" title="Move log">${ICON.log}<span class="lbl">Log</span></button>` : ""}
+    </div>
+  </header>`;
 }
 
 function logSheet() {
@@ -784,14 +816,14 @@ function logSheet() {
     }
     const rows = entries.length
       ? [...entries].reverse().map((e) => `<div class="logrow">${logEntryHTML(v, e)}</div>`).join("") + dealtRows + rummyHandRows
-      : dealtRows + rummyHandRows || `<div class="logrow" style="color:var(--ink-dim)">No moves yet.</div>`;
+      : dealtRows + rummyHandRows || `<div class="logrow empty">No moves yet.</div>`;
     return `<div class="loglist">${rows}</div>`;
   };
 
   // --- Melds tab ---
   const meldsBody = () => {
     const melds = v && v.melds ? v.melds : [];
-    if (!melds.length) return `<div class="logrow" style="color:var(--ink-dim)">No melds on the table yet.</div>`;
+    if (!melds.length) return `<div class="logrow empty">No melds on the table yet.</div>`;
     // Group by owner seat
     const byPlayer = {};
     for (const m of melds) {
@@ -814,20 +846,51 @@ function logSheet() {
   };
 
   const isRummy = S.party === "rummy500";
-  const tabs = (t) => `<div class="log-tabs">
-    <button class="log-tab${t === "log" ? " active" : ""}" data-action="log-tab" data-tab="log">Log</button>
-    ${isRummy ? `<button class="log-tab${t === "melds" ? " active" : ""}" data-action="log-tab" data-tab="melds">Melds</button>` : ""}
-  </div>`;
+  const head = isRummy
+    ? `<div class="log-tabs" role="tablist">
+        <button class="log-tab${tab === "log" ? " active" : ""}" data-action="log-tab" data-tab="log" role="tab" aria-selected="${tab === "log"}">Log</button>
+        <button class="log-tab${tab === "melds" ? " active" : ""}" data-action="log-tab" data-tab="melds" role="tab" aria-selected="${tab === "melds"}">Melds</button>
+      </div>`
+    : `<span class="sheet-title">Move log</span>`;
 
-  return `<div class="logsheet">
-      <div class="loghead">${tabs(tab)}<button class="btn sm ghost" data-action="download-state" title="Download game state for diagnostics">↓</button><button class="btn sm ghost" data-action="toggle-log">Close</button></div>
-      <div class="logbody">${tab === "melds" ? meldsBody() : logBody()}</div>
+  return `<div class="sheet-back" data-action="toggle-log"></div>
+    <div class="logsheet" role="dialog" aria-label="Move log">
+      <div class="sheet-grip"></div>
+      <div class="loghead">${head}<div class="loghead-tools">
+        ${S.offline ? "" : `<button class="iconbtn sm" data-action="share-link" title="Invite players" aria-label="Invite players">${ICON.share}</button>`}
+        <button class="iconbtn sm" data-action="download-state" title="Download game state (diagnostics)" aria-label="Download game state">${ICON.download}</button>
+        <button class="iconbtn sm" data-action="toggle-log" title="Close" aria-label="Close log">${ICON.close}</button>
+      </div></div>
+      <div class="logbody">${tab === "melds" && isRummy ? meldsBody() : logBody()}</div>
+    </div>`;
+}
+
+// "Leave this game?" — only while a hand is in progress.
+function leaveConfirm() {
+  if (!S.confirmLeave) return "";
+  const v = S.view;
+  const others = v ? v.seats.filter((s, i) => s.kind === "human" && i !== v.you).length : 0;
+  const solo = S.offline || others === 0; // nobody else here: leaving ends the game
+  return `<div class="modal-back" data-action="leave-cancel">
+      <div class="modal" data-stop="1" role="alertdialog" aria-label="Leave game" style="max-width:360px">
+        <div class="modalhead"><span>Leave this game?</span></div>
+        <div class="modalbody">
+          <p class="confirm-text">${solo
+            ? "This game will end and can't be resumed."
+            : "You'll give up your seat — a bot takes over your hand for the rest of the game."}</p>
+          <div class="modal-actions">
+            <button class="btn ghost" data-action="leave-cancel">Stay</button>
+            <button class="btn danger" data-action="leave-confirm">Leave</button>
+          </div>
+        </div>
+      </div>
     </div>`;
 }
 
 // shared table frame: pods distributed around the felt, center play area, your rail at the bottom
 function tableShell(v, parts) {
-  const isLandscape = window.innerWidth > window.innerHeight && window.innerHeight < 500;
+  // Wide (landscape) felts pull the side pods in off the walls.
+  const isLandscape = isRails();
   // pods can be [{seat,html},...] for compass layout, or legacy string[] for special cases
   const podItems = parts.pods;
   let feltPods;
@@ -866,7 +929,7 @@ function tableShell(v, parts) {
     const slots = infos.length
       ? infos.map(({ html, x, y, side }) => {
           if (side === "pos-bottom") {
-            return `<div class="pod-slot pos-bottom" style="position:absolute;bottom:-8%;left:50%;transform:translateX(-50%);z-index:2">${html}</div>`;
+            return `<div class="pod-slot pos-bottom" style="position:absolute;bottom:3%;left:50%;transform:translateX(-50%);z-index:2">${html}</div>`;
           }
           // Portrait: side pods anchor flush to the felt edge (narrow felt).
           // Landscape: bring side pods in off the wall so they read like the
@@ -874,7 +937,9 @@ function tableShell(v, parts) {
           const insetSide = isLandscape && (side === "pos-left" || side === "pos-right");
           // Arc the side pods: higher pods sit further toward center, the lowest
           // stays flush. shift grows with height above the bottom reference (~72%).
-          let arcShift = Math.max(0, 72 - y) * 0.24;
+          // A lone pod on a wall (3–4 seats) stays put so the trick card beside
+          // it has room.
+          let arcShift = n <= 4 ? 0 : Math.max(0, 72 - y) * 0.24;
           // HLJ 8-player landscape: swap the side pods' horizontal distances from
           // center. Top & bottom side pods move out to the middle pod's distance;
           // the middle pod moves out to the bottom pod's (flush) distance. Vertical
@@ -903,56 +968,41 @@ function tableShell(v, parts) {
   }
 
   let self;
-  let appbarExtra = "";
   if (v.you != null) {
     const myName = seatName(v, v.you);
-    const selfNameHtml = parts.selfName ? parts.selfName : `<span class="name">${esc(myName)}</span>`;
-    // Always inject ls-self into appbar; CSS shows it only in landscape.
-    const lsActions = parts.actions !== null
-      ? `<div class="ls-actions">${parts.actions || `<span class="hint">Watching…</span>`}</div>`
-      : "";
-    appbarExtra = `<div class="ls-self">
-      ${avatarHTML(myName, { host: v.you === v.hostSeat, team: parts.selfTeam })}
-      <div class="ls-self-info">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>
-      ${parts.selfTurn ? `<div class="ls-self-turn">${parts.selfTurn}</div>` : ""}
-    </div>${lsActions}`;
-    // selfwrap always has the full rail; CSS hides selfbar+actions in landscape.
-    const avatarEl = avatarHTML(myName, { host: v.you === v.hostSeat, team: parts.selfTeam });
-    self = `<div class="hand deal ${parts.hand ? "" : "empty"}">${parts.hand || ""}</div>
-      <div class="selfbar${parts.selfReverse ? " selfbar-reversed" : ""}">
-        ${parts.selfReverse
-          ? `<div class="selfbar-name-block">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>${avatarEl}`
-          : `${avatarEl}<div class="selfbar-name-block">${selfNameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>`}
+    const nameHtml = parts.selfName || `<span class="name">${esc(myName)}</span>`;
+    self = `<div class="hand deal${parts.hand ? "" : " empty"}">${parts.hand || ""}</div>
+      <div class="selfbar">
+        ${avatarHTML(myName, { host: v.you === v.hostSeat, team: parts.selfTeam })}
+        <div class="selfbar-name-block">${nameHtml}<span class="me-pts">${parts.selfMeta || ""}</span></div>
         ${parts.selfTurn || ""}
       </div>
       ${parts.selfExtra ? `<div class="self-extra">${parts.selfExtra}</div>` : ""}
-      ${parts.actions !== null ? `<div class="actions">${parts.actions || `<span class="hint">Watching the table…</span>`}</div>` : ""}`;
+      ${parts.actions ? `<div class="actions">${parts.actions}</div>` : ""}`;
   } else {
-    self = `<div class="selfbar"><div class="name">Spectating</div><div class="me-pts">${parts.selfMeta || ""}</div></div>`;
+    self = `<div class="selfbar spectating"><div class="selfbar-name-block"><span class="name">Spectating</span><span class="me-pts">${parts.selfMeta || ""}</span></div></div>`;
   }
-  return `<div class="table">
-    ${appbar(v, { log: true, leftContent: appbarExtra + (parts.appbarLeft || ""), rightExtra: parts.appbarRight || "" })}
-    <div class="felt-frame${parts.feltHeader ? ' has-frame-title' : ''}">
-    ${parts.feltHeader ? `<div class="frame-title">${parts.feltHeader}</div>` : ""}
-    ${parts.railCounters ? `<div class="rail-counters">${parts.railCounters}</div>` : ""}
-    <div class="felt">
-      <div class="felt-stage${parts.feltLedger ? ' has-ledger' : ''}${parts.ledgerLandscape ? ' ledger-landscape' : ''}${parts.ledgerSplit ? ' ledger-split' : ''}">
-        ${feltPods}
-        ${parts.feltLedger ? `<div class="felt-ledger"${parts.ledgerRows ? ` style="--rows:${parts.ledgerRows}"` : ""}>${parts.feltLedger}</div>` : ""}
-        ${parts.feltTop ? `<div class="felt-top">${parts.feltTop}</div>` : ""}
+  const tableCls = ["table", `g-${S.party}`, v.phase === "lobby" ? "is-lobby" : "is-game", parts.hand ? "" : "no-hand"].filter(Boolean).join(" ");
+  const stageCls = ["felt-stage", parts.feltLedger && "has-ledger", parts.ledgerLandscape && "ledger-landscape", parts.ledgerSplit && "ledger-split"].filter(Boolean).join(" ");
+  const centerCls = ["center", parts.centerFull && "full", parts.centerBottom && "at-bottom"].filter(Boolean).join(" ");
+  return `<div class="${tableCls}">
+    ${appbar(v, { scores: parts.scores, start: parts.barStart, sub: parts.barSub })}
+    <div class="felt-frame">
+      <div class="felt">
         ${parts.feltOverlay ? `<div class="felt-overlay">${parts.feltOverlay}</div>` : ""}
         ${parts.cornerSuits ? `<div class="felt-corners" aria-hidden="true">${parts.cornerSuits}</div>` : ""}
-        <div class="center${parts.centerFull ? ' full' : ''}${parts.centerBottom ? ' at-bottom' : ''}">${parts.center}</div>
-        ${parts.trick || ""}
-        ${parts.feltBid || ""}
-        ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
+        <div class="${stageCls}">
+          ${feltPods}
+          ${parts.feltLedger ? `<div class="felt-ledger"${parts.ledgerRows ? ` style="--rows:${parts.ledgerRows}"` : ""}>${parts.feltLedger}</div>` : ""}
+          <div class="${centerCls}">${parts.center || ""}</div>
+          ${parts.trick || ""}
+          ${parts.feltBid || ""}
+          ${parts.feltBottom ? `<div class="felt-bottom">${parts.feltBottom}</div>` : ""}
+        </div>
       </div>
     </div>
-    </div>
-    <div class="selfwrap-spacer"></div>
-    ${parts.aboveSelf ? `<div class="above-self">${parts.aboveSelf}</div>` : ""}
     <div class="selfwrap">${self}</div>
-  </div>${logSheet()}`;
+  </div>${logSheet()}${leaveConfirm()}`;
 }
 
 // ---------- render router ----------
@@ -969,22 +1019,26 @@ function render() {
 }
 
 function renderConnecting() {
-  const gameName = S.party && GAMES[S.party] ? esc(GAMES[S.party].label) : "Bonhomme";
-  const suit = S.party && GAMES[S.party] ? GAMES[S.party].suit : "\u2663";
+  const g = S.party && GAMES[S.party];
+  const gameName = g ? esc(g.label) : "Bonhomme";
+  const suit = g ? g.suit : "♣";
+  const red = suit === "♥" || suit === "♦";
   const reconnecting = S.joinedOnline && !S.offline && !S.connected;
-  const sub = S.connected ? "Joined \u2014 dealing you in."
-    : reconnecting ? "Connection lost \u2014 reconnecting\u2026"
-    : S.connectSlow ? "Still connecting\u2026" : "Connecting\u2026";
+  const sub = S.connected ? "Joined — dealing you in…"
+    : reconnecting ? "Connection lost — reconnecting…"
+    : S.connectSlow ? "Still connecting…" : "Finding your table…";
   // Going offline is always the player's explicit choice once a room is involved.
   const offerOffline = !S.offline && !S.connected && (reconnecting || S.connectSlow);
   app.__set = `<div class="felt-screen">
-    <div class="connect-card">
-      <div class="connect-suit">${suit}</div>
+    <div class="connect-card" role="status">
+      <div class="connect-suit${red ? " red" : ""}">${suit}</div>
       <div class="connect-name">${gameName}</div>
       <div class="connect-msg">${sub}</div>
-      <div class="connect-dots"><span></span><span></span><span></span></div>
-      ${offerOffline ? `<button class="btn" style="width:100%;margin-top:22px" data-action="play-offline">Play offline vs bots</button>` : ""}
-      <button class="btn ghost sm" style="width:100%;margin-top:${offerOffline ? 10 : 22}px" data-action="leave">Leave</button>
+      <div class="connect-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      ${offerOffline ? `<div class="connect-acts">
+        <button class="btn" data-action="play-offline">Play offline vs bots</button>
+        <button class="btn ghost" data-action="leave">Leave</button>
+      </div>` : `<button class="btn ghost sm" data-action="leave">${reconnecting ? "Leave" : "Cancel"}</button>`}
     </div>
   </div>`;
 }
@@ -996,14 +1050,14 @@ function renderPass() {
   const ready = S.passReady;
   app.__set = `<div class="passwrap">
     <div class="passcard">
-      <div class="passlogo">\u{1F0A0}</div>
+      <div class="passlogo" aria-hidden="true"></div>
       <p class="passlabel">Pass the device to</p>
       <h1 class="passname">${esc(name)}</h1>
-      <p class="sub">Hand it over so no one else sees the cards, then tap below.</p>
-      <button class="btn" style="width:100%;margin-top:20px" data-action="reveal-hand" ${ready ? "" : "disabled"}>
+      <p class="sub">Hand it over so nobody else sees the cards, then tap below.</p>
+      <button class="btn" data-action="reveal-hand" ${ready ? "" : "disabled"}>
         ${ready ? `I’m ${esc(name)} — show my hand` : "One moment…"}
       </button>
-      <button class="btn ghost sm" style="width:100%;margin-top:10px" data-action="leave">Leave game</button>
+      <button class="btn ghost" data-action="leave">Leave game</button>
     </div>
   </div>`;
 }
@@ -1019,7 +1073,6 @@ const GAME_CARD_META = {
 
 function renderStart() {
   const g = S.pickGame;
-  // HLJ first (longest name, should be visible), then the rest
   // Pegs & Jokers hidden until ready for prime time
   const gameIds = ["rummy500", "high-low-jack", "hearts"];
 
@@ -1038,91 +1091,55 @@ function renderStart() {
     const posStyle = sel
       ? `left:${pos.left};z-index:10`
       : `left:${pos.left};top:${pos.top};transform:rotate(${pos.rot});z-index:${i + 1}`;
-    return `<button class="tbl-card${sel ? " selected" : ""} ${meta.color}"
-        style="${posStyle}" data-action="pick-game" data-game="${id}" tabindex="-1">
-      <span class="tbl-card-corner tl">${meta.suit}</span>
+    return `<button class="tbl-card${sel ? " selected" : ""} ${meta.color}" style="${posStyle}"
+        data-action="pick-game" data-game="${id}" aria-pressed="${sel}" aria-label="${esc(info.label)}">
+      <span class="tbl-card-corner tl" aria-hidden="true">${meta.suit}</span>
       <span class="tbl-card-name">${esc(info.label)}</span>
-      <span class="tbl-card-corner br">${meta.suit}</span>
+      <span class="tbl-card-corner br" aria-hidden="true">${meta.suit}</span>
     </button>`;
   }).join("");
+
+  const info = g && GAMES[g];
+  const blurb = info
+    ? `<div class="hs-blurb"><b>${esc(info.range)}</b>${esc(info.blurb)}</div>`
+    : `<div class="hs-blurb muted">Tap a card to choose your game.</div>`;
 
   app.__set = `
     <div class="hs-rail">
       <div class="hs-felt">
-        <h1 class="hs-title">BONHOMME!</h1>
-
-        <label class="hs-lbl hs-lbl-room" style="margin-top:16px">Room Code</label>
-        <input class="hs-fld" id="f-room" value="${esc(S.room || "")}"
-          placeholder="blank = new room" autocomplete="off" />
-
-        <div class="hs-wm-spacer"></div>
-
-        <label class="hs-lbl hs-lbl-game">Choose a Game</label>
-        <div class="tbl-fan">
-          <input type="hidden" id="f-game" value="${esc(g)}" />
-          <div class="tbl-fan-inner">${gameCards}</div>
+        <div class="hs-brand">
+          <h1 class="hs-title">BONHOMME!</h1>
+          <p class="hs-tag">Classic card games with friends &amp; bots</p>
+          <div class="hs-hero"><div class="hs-wm" role="img" aria-label="Jester hat"></div></div>
         </div>
-
-        <label class="hs-lbl hs-lbl-name">Your Name</label>
-        <input class="hs-fld" id="f-name" value="${esc(S.name || "")}"
-          placeholder="e.g. Alex" autocomplete="off" />
-
-        <button class="hs-cta" data-action="connect">Take a Seat</button>
-
+        <div class="hs-form">
+          <div class="hs-lbl hs-lbl-game" id="hs-pick-label">Choose a Game</div>
+          <div class="tbl-fan" role="group" aria-labelledby="hs-pick-label">
+            <input type="hidden" id="f-game" value="${esc(g || "")}" />
+            <div class="tbl-fan-inner">${gameCards}</div>
+          </div>
+          ${blurb}
+          <div class="hs-fields">
+            <label class="hs-field"><span class="hs-lbl hs-lbl-name">Your Name</span>
+              <input class="hs-fld" id="f-name" value="${esc(S.name || "")}" placeholder="e.g. Alex" autocomplete="nickname" maxlength="24" enterkeyhint="go" /></label>
+            <label class="hs-field"><span class="hs-lbl hs-lbl-room">Room Code</span>
+              <input class="hs-fld" id="f-room" value="${esc(S.room || "")}" placeholder="New room" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" /></label>
+          </div>
+          <button class="hs-cta" data-action="connect">Take a Seat</button>
+        </div>
       </div>
-      <div class="hs-wm-wrap"><img class="hs-wm" src="/joker-hat.png" alt=""></div>
     </div>`;
   requestAnimationFrame(() => {
     if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
-    // The morph preserves .hs-wm-wrap's inline style across re-renders (see
-    // morphNode), so it only needs positioning once on first mount — not on
-    // every re-render (e.g. picking a game), which on some devices recomputes
-    // to a slightly different value mid-interaction and causes a visible jump.
-    const wrap = document.querySelector(".hs-wm-wrap");
-    if (wrap && !wrap.style.width) positionHatWatermark();
   });
 }
-// The hat watermark lives outside .hs-felt (which clips overflow for its
-// rounded corners) so it can bleed onto the wood rail without being cut off.
-// Its position is measured from the invisible .hs-wm-spacer left in its old
-// flow position, so it lines up exactly where it used to render in-flow.
-function positionHatWatermark() {
-  const rail = document.querySelector(".hs-rail");
-  const spacer = document.querySelector(".hs-wm-spacer");
-  const wrap = document.querySelector(".hs-wm-wrap");
-  const img = wrap && wrap.querySelector(".hs-wm");
-  if (!rail || !spacer || !wrap || !img) return;
-  const r = rail.getBoundingClientRect();
-  const s = spacer.getBoundingClientRect();
-  const isStandalone = document.documentElement.classList.contains("is-standalone");
-  // Tablet/desktop browser: smaller footprint so the hat is decorative, not dominant.
-  // Standalone capped at 482px so it doesn't overflow on iPad.
-  const isTablet = window.innerWidth > 560;
-  const tabletBrowser = !isStandalone && isTablet;
-  const width = Math.min(s.width * (isStandalone && isTablet ? 1.68 : isStandalone ? 1.276 : tabletBrowser ? 0.864 : 1.18),
-    isStandalone && isTablet ? 696 : tabletBrowser ? 576 : 482);
-  // joker-hat.png is 1024x1536 with its opaque artwork spanning y=59..1527 —
-  // there's a third, forward-hanging point (with two of the three bells)
-  // that reaches almost the full height of the image. Crop tight to that
-  // actual content box, scaled to the hat's own rendered width (not
-  // viewport height), so every bell is always visible at any screen size.
-  wrap.style.width = width + "px";
-  wrap.style.height = width * 1.5 * ((1527 - 59) / 1536) + "px";
-  wrap.style.top = (s.top - r.top - 28) + "px";
-  if (isTablet) {
-    // On tablet the right-offset calculation drifts; center the hat over the spacer instead.
-    // Apply regardless of standalone so iPad PWA also gets centered hat.
-    wrap.style.right = "";
-    wrap.style.left = (s.left - r.left + s.width / 2 - width / 2) + "px";
-  } else {
-    // Mobile browser nudges the hat slightly left; standalone is unchanged.
-    const mobileBrowser = !isStandalone && window.innerWidth <= 560;
-    wrap.style.left = "";
-    wrap.style.right = (r.right - s.right - 70 + (mobileBrowser ? 16 : 0)) + "px";
-  }
-  img.style.marginTop = -(width * 1.5 * (59 / 1536)) + "px";
-}
-window.addEventListener("resize", () => positionHatWatermark());
+// Layout math (hand fan, pod insets, trick positions) depends on the viewport,
+// so re-render when it changes shape. Debounced: resize fires continuously.
+let _resizeT = null;
+window.addEventListener("resize", () => {
+  clearTimeout(_resizeT);
+  _resizeT = setTimeout(() => { if (S.party) { try { render(); } catch {} } }, 120);
+});
 window.matchMedia("(orientation:landscape)").addEventListener("change", () => render());
 // iOS standalone web apps can fire a transient portrait orientation/resize while
 // the screen locks; if the matching landscape event is missed on unlock, the
@@ -1134,54 +1151,25 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) { rerenderForViewport(); setTimeout(rerenderForViewport, 300); reconnectNow(); }
 });
 window.addEventListener("pageshow", rerenderForViewport);
-// Renders the HLJ scores strip. 2×2 grid: rows=BID/SCORE, cols=TeamA/TeamB.
-// scores=null → lobby (ghost rings). scores=[a,b] → gameplay (filled numbers).
-// highBid={seat,amount} → shows winning bid in that team's BID cell.
-function hljScoresStrip(scores, highBid) {
-  const isLobby = scores === null;
-
-  const scoreChipA = isLobby
-    ? `<div class="hlj-score-chip tA ghost"><span class="hlj-sc-ghost">A</span></div>`
-    : `<div class="hlj-score-chip tA"><span class="hlj-sc-num">${scores[0]}</span></div>`;
-  const scoreChipB = isLobby
-    ? `<div class="hlj-score-chip tB ghost"><span class="hlj-sc-ghost">B</span></div>`
-    : `<div class="hlj-score-chip tB"><span class="hlj-sc-num">${scores[1]}</span></div>`;
-
-  const bidTeam = highBid != null ? highBid.seat % 2 : null;
-  const bidChipA = (bidTeam === 0 && highBid)
-    ? `<div class="hlj-score-chip tA"><span class="hlj-sc-num">${highBid.amount}</span></div>`
-    : `<div class="hlj-score-chip tA ghost"><span class="hlj-sc-ghost">A</span></div>`;
-  const bidChipB = (bidTeam === 1 && highBid)
-    ? `<div class="hlj-score-chip tB"><span class="hlj-sc-num">${highBid.amount}</span></div>`
-    : `<div class="hlj-score-chip tB ghost"><span class="hlj-sc-ghost">B</span></div>`;
-
-  return `<div class="hlj-panel hlj-panel-grid">
-    <div class="hlj-cell hlj-cell-label"><span class="hlj-row2-bid">BID</span></div>
-    <div class="hlj-cell hlj-cell-chips">${bidChipA}${bidChipB}</div>
-    <div class="hlj-cell hlj-cell-label hlj-cell-row2"><span class="hlj-row2-bid">SCORE</span></div>
-    <div class="hlj-cell hlj-cell-chips hlj-cell-row2">${scoreChipA}${scoreChipB}</div>
-  </div>`;
-}
-const HLJ_FELT_HEADER = `<div class="hlj-felt-title"><span class="hlj-t-red">HIGH</span> <span class="hlj-t-dark">LOW</span> <span class="hlj-t-red">JACK</span></div>`;
-
 // ---------- lobby ----------
 function renderLobby(v) {
   const isHost = v.you !== null && v.you === v.hostSeat;
   const isPJ = S.party === "pegs-and-jokers";
   const isHLJ = S.party === "high-low-jack";
-  const isHearts = S.party === "hearts";
-  const isTeamGame = isHLJ || isPJ;
-  const counts = isPJ ? [4] : GAMES[S.party].players;
-  const link = `${location.origin}/?game=${S.party}&room=${encodeURIComponent(S.room)}`;
   const isRummyLobby = S.party === "rummy500";
+  const isTeamGame = isHLJ || isPJ;
+  const counts = isPJ ? [4, 6] : GAMES[S.party].players;
   const DIFF_LABELS = ["Easy", "Medium", "Hard", "Expert"];
   const n = v.seats.length;
   const you = v.you;
+  const hasHotseats = Object.keys(S.hotseats).length > 0;
+  const removeBtn = (action, i, label) =>
+    `<button class="seat-remove" data-action="${action}" data-seat="${i}" aria-label="${label}" title="${label}">${ICON.close}</button>`;
 
   // Rummy bot level for a seat (applied on "change", sent with the full lobby config).
   const diffPicker = (i) => {
     const diff = v.botDifficulty?.[i] ?? 2;
-    return `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}" value="${diff}">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`;
+    return `<select class="difficulty-pick" data-action="set-bot-difficulty" data-seat="${i}" value="${diff}" aria-label="Seat ${i + 1} bot difficulty">${DIFF_LABELS.map((l, d) => `<option value="${d}"${d === diff ? " selected" : ""}>${l}</option>`).join("")}</select>`;
   };
   // Empty seats: the host may reserve one for a pass-and-play guest — but only
   // while no other online player is seated, since that deal runs on this device.
@@ -1190,255 +1178,194 @@ function renderLobby(v) {
   const remoteHumans = S.offline ? 0 : v.seats.filter((s, i) => s.kind === "human" && i !== you).length;
   const emptyAction = isHost && (S.offline || remoteHumans === 0) ? "reserve-hotseat" : S.offline ? null : "sit";
 
-  // Build a pod for each non-self seat (same positions as gameplay pods).
-  const lbyPod = (s, i) => {
+  // A seat around the table: avatar (or a dashed "+" for an open seat) over a name plate.
+  const seatToken = (s, i) => {
     const isEmpty = s.kind === "empty";
     const isBot = s.kind === "bot";
     const reserved = isHost && isEmpty && S.hotseats[i];
     const tc = isTeamGame ? (i % 2 === 0 ? "tA" : "tB") : "";
-    const name = reserved ? esc(S.hotseats[i]) : isEmpty ? "Open" : esc(s.name || "Player");
-    const initial = isEmpty && !reserved ? "+" : isBot ? "B" : name.charAt(0).toUpperCase();
-    const avCls = reserved ? "local" : isEmpty ? "empty" : isBot ? "bot" : "human";
-    const role = reserved ? "pass &amp; play"
-      : isEmpty ? (emptyAction === "sit" ? "tap to sit" : emptyAction ? "tap to add" : "open")
-      : isBot ? "bot" : i === v.hostSeat ? "host" : "player";
-    const seatClick = isEmpty && !reserved && emptyAction ? ` data-action="${emptyAction}" data-seat="${i}" style="cursor:pointer"` : "";
-
-    let removeBtn = "";
-    if (reserved) {
-      removeBtn = `<button class="lby-pod-remove" data-action="clear-hotseat" data-seat="${i}">✕</button>`;
-    } else if (isBot && isHost) {
-      removeBtn = (isRummyLobby ? diffPicker(i) : "") + `<button class="lby-pod-remove" data-action="removebot" data-seat="${i}">✕</button>`;
-    } else if (S.offline && s.kind === "human" && i !== v.hostSeat) {
-      removeBtn = `<button class="lby-pod-remove" data-action="clearseat" data-seat="${i}">✕</button>`;
-    }
-
-    // Team games, Rummy, and Hearts use outlined box-style seats
-    if (isTeamGame || isRummyLobby || isHearts) {
-      const isEmptyUnreserved = isEmpty && !reserved;
-      const boxLabel = reserved ? name.toUpperCase().substring(0, 8)
-        : isEmpty ? (emptyAction === "sit" ? "SIT" : "OPEN")
-        : (isBot ? "BOT" : name.toUpperCase().substring(0, 8));
-      const boxIcon = isEmptyUnreserved ? "+" : initial;
-      return `<div class="lby-seat-box ${tc} ${isEmptyUnreserved ? "lby-seat-empty" : ""}"${seatClick}>
-        <div class="lby-seat-box-main">${boxIcon}</div>
-        <div class="lby-seat-box-sub">${boxLabel}</div>
-        ${removeBtn}
-      </div>`;
-    }
-
-    return `<div class="pod lby-pod ${tc} ${isEmpty ? "lby-pod-empty" : ""}"${seatClick}>
-      <div class="lby-pod-av ${avCls}">${initial}</div>
-      <div class="lby-pod-name">${name}</div>
-      <div class="lby-pod-role">${role}</div>
-      ${removeBtn}
+    const kind = reserved ? "local" : isEmpty ? "empty" : isBot ? "bot" : "human";
+    const rawName = reserved ? S.hotseats[i] : isEmpty ? "" : (s.name || (isBot ? "Bot" : "Player"));
+    const act = isEmpty && !reserved ? emptyAction : null;
+    const label = isEmpty && !reserved ? (act === "sit" ? "Sit here" : act ? "Add player" : "Open seat") : rawName;
+    const role = reserved ? "Pass & play" : isBot ? "Bot" : !isEmpty && i === v.hostSeat ? "Host" : "";
+    const av = isEmpty && !reserved ? ICON.plus : esc(initials(rawName));
+    const actLabel = act === "sit" ? `Sit in seat ${i + 1}` : `Add a pass-and-play player in seat ${i + 1}`;
+    const avEl = act
+      ? `<button class="seat-av" data-action="${act}" data-seat="${i}" aria-label="${actLabel}" title="${actLabel}">${av}</button>`
+      : `<span class="seat-av">${av}</span>`;
+    let extra = "";
+    if (reserved) extra = removeBtn("clear-hotseat", i, "Remove player");
+    else if (isBot && isHost) extra = removeBtn("removebot", i, "Remove bot") + (isRummyLobby ? diffPicker(i) : "");
+    else if (S.offline && s.kind === "human" && i !== v.hostSeat) extra = removeBtn("clearseat", i, "Remove player");
+    return `<div class="seat-token ${tc} is-${kind}${act ? " can-" + act : ""}">
+      ${avEl}
+      <span class="seat-name">${esc(label)}</span>
+      ${role ? `<span class="seat-role">${role}</span>` : ""}
+      ${extra}
     </div>`;
   };
 
-  // Pods: every seat that isn't "you" (or all seats if spectating)
   const pods = v.seats
-    .map((s, i) => ({ seat: i, html: lbyPod(s, i) }))
+    .map((s, i) => ({ seat: i, html: seatToken(s, i) }))
     .filter(({ seat }) => seat !== you);
 
-  // Poker-chip player count picker
-  const chipRow = (action, opts, selected, note = "") =>
-    `<div class="lby-cfg-row"><span class="lby-cfg-label">Players</span>
-       <div class="lby-chip-row">${opts.map((c, idx) =>
-         `<button class="lby-count-chip${c === selected ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="${action}" data-count="${c}">${c}</button>`
-       ).join("")}</div></div>${note ? `<p class="sub" style="margin:2px 0 10px 72px">${note}</p>` : ""}`;
-
-  const cfgControls = isPJ
-    ? chipRow("pj-setplayers", [4, 6], v.players, v.players === 6 ? "Two teams of three." : "Two pairs, partners opposite.") +
-      `<div class="lby-cfg-row"><span class="lby-cfg-label">Marbles</span>
-         <div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
-    : isHLJ
-    ? ""
-    : chipRow("setcount", counts, v.players);
-
-  const hasHotseats = Object.keys(S.hotseats).length > 0;
-  let shareRow = "";
-  if (S.offline) {
-    shareRow = `<p class="lby-mode-note">${hasHotseats ? "Pass &amp; Play — device is shared between turns." : "Offline — all bots play on this device."}</p>`;
-  } else {
-    shareRow = `<div class="lby-share-row">
-      <button class="btn lby-share-btn" data-action="share-link">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        Invite Players
-      </button>
+  // centre panel: game, room, who's here, and (for the host) the table size
+  const seated = v.seats.filter((s, i) => s.kind !== "empty" || (isHost && S.hotseats[i])).length;
+  const where = S.offline ? "Offline table" : `Room <b>${esc(S.room)}</b>`;
+  const series = isTeamGame && v.scores && (v.scores[0] || v.scores[1])
+    ? `<div class="lby-series"><span class="teamcircle tA">A</span><b>${v.scores[0]}</b><span>vs</span><b>${v.scores[1]}</b><span class="teamcircle tB">B</span></div>`
+    : "";
+  const countChips = isHost && counts.length > 1
+    ? `<div class="lby-cfg"><span class="lby-cfg-label">Players</span><div class="lby-chip-row">${counts.map((c, idx) =>
+        `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="${isPJ ? "pj-setplayers" : "setcount"}" data-count="${c}" aria-pressed="${c === v.players}" aria-label="${c} players">${c}</button>`
+      ).join("")}</div></div>`
+    : "";
+  const marbles = isPJ && isHost
+    ? `<div class="lby-cfg"><span class="lby-cfg-label">Marbles</span><div class="seg">${GAMES["pegs-and-jokers"].marbles.map((m) => `<button class="${m === v.marbles ? "on" : ""}" data-action="pj-setmarbles" data-m="${m}">${m}</button>`).join("")}</div></div>`
+    : "";
+  const note = !isHost ? ""
+    : hasHotseats ? "Pass &amp; play — the device is handed around between turns."
+    : S.offline ? "Bots fill every empty seat when you deal."
+    : "Invite friends, or deal now — bots fill any empty seats.";
+  const center = `<div class="lby-panel">
+      <div class="lby-title">${esc(GAMES[S.party].label)}</div>
+      <div class="lby-meta">${where} · ${seated}/${n} seated</div>
+      ${series}
+      ${isHost ? countChips + marbles : `<div class="lby-wait">Waiting for the host to deal…</div>`}
+      ${note ? `<div class="lby-note">${note}</div>` : ""}
     </div>`;
-  }
 
-  // Score strip (shown in center for ongoing series)
-  const seatedCount = v.seats.filter(s => s.kind !== "empty").length;
-  const centerScore = isTeamGame && v.scores
-    ? `<div class="lby-center-score">
-        <span class="tA">A <b>${v.scores[0]}</b></span>
-        <span class="lby-center-score-sep">vs</span>
-        <span class="tB">B <b>${v.scores[1]}</b></span>
-        <span class="lby-center-score-to">· to ${v.target ?? 21}</span>
-      </div>`
-    : `<div class="lby-center-status">${seatedCount} of ${n} seated</div>`;
-
-  const center = (isHLJ || isRummyLobby || isHearts)
-    ? ""
-    : `<div class="lby-center">
-        <div class="lby-center-title">${esc(GAMES[S.party].label)}</div>
-        ${centerScore}
-        ${isHost ? `<div class="lby-center-cfg">${cfgControls}</div>` : ""}
-      </div>`;
-
-  // HLJ: title now lives on the felt overlay (not the wood frame)
-  const feltTop = "";
-  const feltHeader = "";
-
-  const feltChips = (isHLJ || isRummyLobby || isHearts) && isHost
-    ? `<div class="lby-felt-chips">
-        <span class="lby-fc-players">PLAYERS</span>
-        <div class="lby-fc-row">${counts.map((c, idx) => `<button class="lby-count-chip${c === v.players ? " on" : ""}${idx % 2 === 1 ? " red" : ""}" data-action="setcount" data-count="${c}">${c}</button>`).join("")}</div>
-      </div>`
-    : "";
-  const lobbyScores = isHLJ ? hljScoresStrip(null, null) : "";
-
-  // Inline editable name in the selfbar (tableShell renders it twice — appbar for
-  // landscape, selfbar for portrait — so it carries a class, never an id)
-  const nameInput = `<div class="lby-name-row"><input class="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="off" maxlength="24" size="10" /><button class="lby-name-btn" data-action="lby-rename">✓</button></div>`;
-  const selfExtra = "";
-
-  // Joker watermark + corner suits for the felt
-  const feltOverlay = `<div class="lby-felt-watermark"></div>`;
-  const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
-    `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
-  ).join("");
-
-  // Share + Deal on the same row
-  const shareBtn = !S.offline
-    ? `<button class="btn lby-share-btn" data-action="share-link">Invite Players</button>`
-    : "";
-  // Tutorial: single human only (no pass-and-play), sits between Invite and Deal.
-  // Works online or offline — a solo "vs bots" deal from an online lobby moves the
-  // table into a LocalRoom (see doStart), and in the lobby the other seats are still
-  // empty (bots fill them on deal), so we gate on a lone human seat, not S.offline.
-  const singlePlayer = !hasHotseats && v.seats.filter((s) => s.kind === "human").length === 1;
-  const tutorialBtn = (isHost && singlePlayer)
-    ? `<button class="btn ghost lby-tutorial-btn${S.tutorial ? " active" : ""}" data-action="toggle-tutorial" aria-pressed="${S.tutorial ? "true" : "false"}" title="Play a guided practice hand">${S.tutorial ? "Tutorial ✓" : "Tutorial"}</button>`
-    : "";
-  const dealAction = isHost
-    ? `<div class="lby-action-row">${shareBtn}${tutorialBtn}<button class="btn lby-deal-btn" data-action="start">${isPJ ? "Deal &amp; Start" : "Deal"}</button></div>`
-    : `<div class="lby-action-row">${shareBtn}${shareBtn ? "" : ""}<span class="hint">Waiting for the host to deal…</span></div>`;
-
+  // your seat: editable name
+  const nameInput = `<div class="lby-name-row"><input class="lby-name-input" value="${esc(S.name || "")}" placeholder="Your name" autocomplete="nickname" maxlength="24" enterkeyhint="done" aria-label="Your name" /><button class="lby-name-btn" data-action="lby-rename" aria-label="Save name" title="Save name">${ICON.check}</button></div>`;
   const myTc = you != null && isTeamGame ? (you % 2 === 0 ? "A" : "B") : null;
   const selfMeta = you != null && v.seats[you]
-    ? `<span class="lby-pod-role">${v.seats[you].kind === "human" ? (you === v.hostSeat ? "host" : "player") : ""}</span>`
+    ? `<span class="lby-role">${you === v.hostSeat ? "Host" : "Player"}${myTc ? ` · Team ${myTc}` : ""}</span>`
     : "";
 
-  // Settings modal
+  // actions: Invite · Tutorial · Deal
+  const shareBtn = !S.offline
+    ? `<button class="btn ghost lby-share-btn" data-action="share-link">${ICON.share}Invite</button>`
+    : "";
+  // Tutorial: single human only (no pass-and-play). Works online or offline — in
+  // production a solo "vs bots" game is a normal server room, not S.offline, and in
+  // the lobby the other seats are still empty (bots fill them on deal), so we gate on
+  // a lone human seat rather than the offline flag.
+  const singlePlayer = !hasHotseats && v.seats.filter((s) => s.kind === "human").length === 1;
+  const tutorialBtn = isHost && singlePlayer
+    ? `<button class="btn ghost lby-tutorial-btn${S.tutorial ? " active" : ""}" data-action="toggle-tutorial" aria-pressed="${S.tutorial ? "true" : "false"}" title="Play a guided practice hand">${S.tutorial ? `${ICON.check}Tutorial` : "Tutorial"}</button>`
+    : "";
+  const actions = isHost
+    ? `${shareBtn}${tutorialBtn}<button class="btn lby-deal-btn" data-action="start">Deal</button>`
+    : `${shareBtn}<span class="hint">The host deals when everyone’s seated.</span>`;
+
+  // settings (host)
   const winsNeeded = v.winsNeeded ?? 1;
   const bestOf = winsNeeded <= 1 ? 1 : winsNeeded * 2 - 1;
   const settingsModal = isHost && S.lbySettingsOpen
     ? `<div class="modal-back" data-action="close-lby-settings">
-        <div class="modal" data-stop="1">
-          <div class="modalhead"><span>Settings</span><button class="btn sm ghost" data-action="close-lby-settings">Close</button></div>
-          <div class="modalbody">
-            ${isHLJ ? `<div class="lby-set-row">
-              <span class="lby-set-label">Best of</span>
-              <div class="seg">
-                ${[1, 3].map(nn => `<button class="${nn === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${nn}">${nn === 1 ? "1 game" : `${nn} games`}</button>`).join("")}
-              </div>
+        <div class="modal" data-stop="1" role="dialog" aria-label="Table settings">
+          <div class="modalhead"><span>Table settings</span><button class="iconbtn sm" data-action="close-lby-settings" aria-label="Close">${ICON.close}</button></div>
+          <div class="modalbody"><div class="set-list">
+            ${isHLJ ? `<div class="set-row">
+              <span>Match length<small>First team to 21 wins a game</small></span>
+              <div class="seg">${[1, 3].map((nn) => `<button class="${nn === bestOf ? "on" : ""}" data-action="lby-set-bestof" data-n="${nn}">${nn === 1 ? "1 game" : `Best of ${nn}`}</button>`).join("")}</div>
             </div>` : ""}
-            ${(isRummyLobby || isHearts) ? `<div class="lby-set-row">
-              <span class="lby-set-label">Play to</span>
-              <input class="lby-pts" id="f-target" type="number" min="1" max="10000" value="${v.target ?? GAMES[S.party].target}" />
+            ${(isRummyLobby || S.party === "hearts") ? `<div class="set-row">
+              <span>Play to<small>${S.party === "hearts" ? "Lowest score wins when someone reaches it" : "First to reach it wins"} · up to ${GAMES[S.party].maxTarget}</small></span>
+              <input class="lby-pts" id="f-target" type="number" inputmode="numeric" min="1" max="${GAMES[S.party].maxTarget}" value="${v.target ?? GAMES[S.party].target}" aria-label="Target score" />
             </div>` : ""}
-            ${isRummyLobby ? `<div class="lby-set-row">
-              <span class="lby-set-label">Must discard</span>
-              <button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard">${v.requireDiscard ? "On" : "Off"}</button>
+            ${isRummyLobby ? `<div class="set-row">
+              <span>Must discard to go out<small>Your last card has to be a discard</small></span>
+              <button class="lby-toggle${v.requireDiscard ? " on" : ""}" data-action="rummy-toggle-discard" aria-pressed="${!!v.requireDiscard}">${v.requireDiscard ? "On" : "Off"}</button>
             </div>
             ${v.seats.map((s, i) => s.kind === "bot" || (s.kind === "empty" && !S.hotseats[i])
-              ? `<div class="lby-set-row">
-              <span class="lby-set-label">Seat ${i + 1} bot</span>
+              ? `<div class="set-row">
+              <span>Seat ${i + 1} bot<small>${s.kind === "bot" ? "Seated now" : "Joins when you deal"}</small></span>
               ${diffPicker(i)}
             </div>` : "").join("")}` : ""}
-            ${!S.offline ? `<div class="lby-set-row">
-              <label class="lby-set-toggle">
-                <input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} />
-                <span>Auto-replace disconnects with bots</span>
-              </label>
+            ${!S.offline ? `<div class="set-row">
+              <span>Replace disconnects<small>A bot plays for anyone who drops out</small></span>
+              <label class="switch"><input type="checkbox" data-action="toggle-bot-replacement" ${v.botReplacement ? "checked" : ""} aria-label="Auto-replace disconnects with bots" /><span></span></label>
             </div>` : ""}
-          </div>
+          </div></div>
         </div>
       </div>`
     : "";
-
   const settingsBtn = isHost
-    ? `<button class="btn sm ghost lby-gear-btn" data-action="open-lby-settings" title="Settings">⚙</button>`
+    ? `<button class="iconbtn lby-gear-btn" data-action="open-lby-settings" aria-label="Table settings" title="Table settings">${ICON.gear}<span class="lbl">Settings</span></button>`
     : "";
 
-  // Spectator view: show all seats as pods (no selfwrap)
+  const feltOverlay = `<div class="lby-felt-watermark"></div>`;
+  const cornerSuits = ["♠", "♥", "♦", "♣"].map((s, i) =>
+    `<span class="felt-corner-suit ${i === 1 || i === 2 ? "red" : ""} ${["tl", "tr", "br", "bl"][i]}">${s}</span>`
+  ).join("");
+
+  // Spectator view: every seat around the table, no player bar
   if (you === null) {
     app.__set = tableShell(v, {
-      pods: v.seats.map((s, i) => ({ seat: i, html: lbyPod(s, i) })),
-      center,
-      feltHeader,
-      feltTop,
-      feltOverlay,
-      cornerSuits,
-      feltBottom: feltChips,
-      hand: null,
-      selfMeta: "",
-      selfTurn: null,
-      selfExtra: null,
-      actions: null,
-    }) + settingsModal;
+      pods: v.seats.map((s, i) => ({ seat: i, html: seatToken(s, i) })),
+      center, feltOverlay, cornerSuits, hand: null, selfMeta: "", actions: null,
+    });
     return;
   }
 
   app.__set = tableShell(v, {
-    pods,
-    center,
-    feltHeader,
-    feltTop,
-    feltOverlay,
-    cornerSuits,
-    feltBottom: feltChips,
+    pods, center, feltOverlay, cornerSuits,
     hand: "",
     selfName: nameInput,
     selfMeta,
     selfTeam: myTc,
-    selfReverse: true,
-    selfTurn: null,
-    selfExtra,
-    actions: dealAction,
-    appbarRight: settingsBtn,
+    actions,
+    barStart: settingsBtn,
   }) + settingsModal;
 }
 
 // ---------- shared: game over ----------
-function scoreList(rows) {
-  return `<div class="seats">${rows
-    .map(
-      (r) => `<div class="seat ${r.you ? "me" : ""}">${avatarHTML(r.name)}
-        <div class="nm">${esc(r.name)}${r.you ? ' <span class="chip you">you</span>' : ""}${r.win ? ' <span class="chip host">winner</span>' : ""}</div>
-        <div class="tags"><b style="font-family:Fraunces,serif;font-size:22px;color:${r.win ? "var(--brass-hi)" : "var(--ink)"}">${r.score}</b></div></div>`,
-    )
+// rows: [{ name, score, win, you }] — already in seat order; shown best-first.
+function scoreList(rows, { lowWins = false } = {}) {
+  const sorted = rows.map((r, i) => ({ ...r, i })).sort((a, b) =>
+    (b.win - a.win) || (typeof a.score === "number" && typeof b.score === "number" ? (lowWins ? a.score - b.score : b.score - a.score) : 0) || a.i - b.i);
+  return `<div class="standings">${sorted
+    .map((r, k) => `<div class="standing${r.you ? " me" : ""}${r.win ? " win" : ""}">
+        <span class="standing-rank">${r.win ? "♛" : k + 1}</span>
+        ${avatarHTML(r.name, { team: r.team })}
+        <span class="standing-name">${esc(r.name)}${r.you ? "<small>you</small>" : ""}</span>
+        <span class="standing-score">${r.score}</span>
+      </div>`)
     .join("")}</div>`;
 }
 
-// `lastHTML` (optional) is the deciding hand/round's breakdown, shown above the
-// totals; the log stays reachable so the whole final hand can be reviewed.
-function renderGameOver(v, title, scoresHTML, lastHTML = "") {
+// Results pages keep the move log one tap away (Leave sits with the actions),
+// so the whole final hand can be reviewed.
+function resultTools() {
+  return `<div class="result-tools"><button class="iconbtn" data-action="toggle-log" aria-label="Move log" title="Move log">${ICON.log}<span class="lbl">Log</span></button></div>`;
+}
+// One labelled card on a results page.
+const resultCard = (label, body) => `<section class="result-card"><div class="result-label">${label}</div>${body}</section>`;
+
+// `o.last` (optional) is the deciding hand/round's breakdown, shown above the totals.
+function renderGameOver(v, title, scoresHTML, o = {}) {
   // Offline every seated human shares this device, so whoever holds it can redeal.
   const isHost = v.you !== null && (v.you === v.hostSeat || S.offline);
-  app.__set = `${appbar(v, { log: true })}
-    <div class="stage">
-      <div class="panel cream" style="text-align:center">
-        <div class="hero"><div class="logo">\u2660</div><h1>${esc(title)}</h1><p class="sub">Good game.</p></div>
+  const g = GAMES[S.party];
+  app.__set = `<div class="result-page">
+    ${resultTools()}
+    <div class="result-scroll">
+      <div class="result-head">
+        <div class="result-eyebrow">${esc(g ? g.label : "")} · Game over</div>
+        <div class="result-crown" aria-hidden="true">♛</div>
+        <h1 class="result-title">${esc(title)}</h1>
+        <p class="result-sub">${o.sub || "Good game."}</p>
       </div>
-      ${lastHTML}
-      <div class="panel"><h2 style="margin-bottom:10px">Final scores</h2>${scoresHTML}</div>
-      <div class="panel" style="text-align:center">${
-        isHost ? `<button class="btn" data-action="newgame">Deal a new game</button>` : `<p class="sub">Waiting for the host to deal again…</p>`
-      }</div>
-    </div>${logSheet()}`;
+      ${o.last || ""}
+      ${resultCard("Final scores", scoresHTML)}
+      <div class="result-actions">
+        ${isHost ? `<button class="btn" data-action="newgame">Deal a new game</button>` : `<p class="result-wait">Waiting for the host to deal again…</p>`}
+        <button class="btn ghost" data-action="leave">Leave table</button>
+      </div>
+    </div>
+  </div>${logSheet()}`;
 }
 
 // Perimeter layout: map t∈[0,1] to a point on the felt rectangle.
@@ -1516,26 +1443,22 @@ function wallPerimPos(off, n, b) {
 // `n`      – total seat count
 // options  – winSeat: seat whose card gets .win; faded: dim the whole trick
 function trickHTML(plays, you, n, { winSeat = null, faded = false, mini = true, collecting = false } = {}) {
-  const lsMobile = window.matchMedia("(max-height:500px) and (orientation:landscape)").matches;
-  const anchor = you ?? 0;
+  const rails = isRails();
+  const anchor = you ?? 0; // a spectator sees the table from seat 0's chair
   const circleStyle = (seat) => {
     const off = (seat - anchor + n) % n;
     let x, y;
-    if (lsMobile) {
-      // The user's own played card drops to the very bottom of the felt, just
-      // above their hand (fixed; animation:none keeps dropinC's centring
-      // transform from shifting it). A spectator has no hand: seat 0 rings in.
-      if (off === 0 && you != null) return "position:fixed;bottom:76px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none";
-      // Everyone else: an orderly oval ring (like portrait), widened for the
-      // short, wide landscape felt. The centre sits low (cy 55.5) so the top
-      // card tucks just under the raised top pod (.pod-slot.pos-top in the
-      // landscape CSS).
-      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 55.5, rx: 26, ry: 22.5 }));
+    if (rails) {
+      // Landscape: an orderly oval ring widened for the short, wide felt. Your
+      // own card sits at the bottom of the ring, just above your hand (the felt
+      // stage already stops above the hand). The centre sits low (cy 54) so the
+      // top card tucks just under the top pod.
+      ({ x, y } = ovalPos(off, n, { cx: 50, cy: 54, rx: 27, ry: 25 }));
       // 8-player: drop the bottom side row (off 1 = bottom-left, off n-1 =
       // bottom-right) a bit lower so those cards sit nearer their players.
       if (n === 8 && (off === 1 || off === n - 1)) y += 6;
       // Spectator: seat 0's pod sits at the bottom of this short felt; clear it.
-      if (off === 0) y -= 16;
+      if (off === 0 && you == null) y -= 16;
       // Top-pod card (player directly across, even tables): nudge up so its gap
       // from the top pod matches the user's card-to-hand gap.
       if (n % 2 === 0 && off === n / 2) y -= 4;
@@ -1703,13 +1626,13 @@ function renderHLJ(v) {
     }
 
     const nextBtn = isHost
-      ? `<button class="hlj-result-next-btn" data-action="newgame">New game</button>`
-      : `<p class="sub" style="text-align:center;padding:10px 0">Waiting for the host to deal again…</p>`;
+      ? `<div class="result-actions"><button class="btn hlj-result-next-btn" data-action="newgame">Deal a new game</button><button class="btn ghost" data-action="leave">Leave table</button></div>`
+      : `<div class="result-actions"><p class="result-wait">Waiting for the host to deal again…</p><button class="btn ghost" data-action="leave">Leave table</button></div>`;
 
-    // The app bar (Log / Leave) sits inside the full-screen page, so nobody is
-    // stuck on the final scores waiting for a host who may never deal again.
+    // Leave sits with the actions, so nobody is stuck on the final scores
+    // waiting for a host who may never deal again; the log stays reachable.
     app.__set = `<div class="hlj-result-page">
-      <div style="padding-top:env(safe-area-inset-top)">${appbar(v, { log: true })}</div>
+      ${resultTools()}
       <div class="hlj-result-felt">
         <div class="hlj-result-scroll">
           ${handSection}
@@ -1781,8 +1704,8 @@ function renderHLJ(v) {
     const winName = v.trickWinner != null ? esc(seatName(v, v.trickWinner)) : null;
     const trickEl = trickHTML(trickPlays, you, v.seats.length, { mini: false, winSeat: v.trickWinner });
     // A spectator can't advance the gate: no tap target, no "Tap to continue".
-    const hint = [winName ? `Won by ${winName}` : "", you != null ? "Tap to continue" : ""].filter(Boolean).join(" · ");
-    hljTrick = `<div class="trick-gate"${you != null ? ` data-action="advance-trick"` : ` style="cursor:default"`}>${trickEl}`
+    const hint = [winName ? `<b>${winName}</b> takes it` : "", you != null ? "Tap to continue" : ""].filter(Boolean).join(" · ");
+    hljTrick = `<div class="trick-gate${you != null ? "" : " view-only"}"${you != null ? ` data-action="advance-trick"` : ""}>${trickEl}`
       + (hint ? `<div class="trick-gate-hint">${hint}</div>` : "") + `</div>`;
   } else if (v.phase === "playing" && v.currentTrick.length) {
     const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
@@ -1810,10 +1733,10 @@ function renderHLJ(v) {
       return `<div class="lt-fan-card" style="--fan-angle:${angle}deg;--fan-i:${i};z-index:${isWin ? total + 1 : i}">${cardHTML(c, { win: isWin })}</div>`;
     }).join("");
     if (S.hljLastTrickOpen) {
-      const expanded = `<div class="fan-inner lt-expanded-fan">${fanHand(ltCards, () => ({}))}</div>`;
-      hljTrick = `<div class="lasttrick open" data-action="toggle-last-trick"><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))} \u25b2</div>${expanded}</div>`;
+      const expanded = fanHand(ltCards, () => ({}), { cls: "lt-expanded-fan", cardW: 60, avail: 340 });
+      hljTrick = `<div class="lasttrick open" data-action="toggle-last-trick"><div class="lt-label">Last trick \u00b7 ${esc(seatName(v, v.lastTrick.winner))} \u25b4</div>${expanded}</div>`;
     } else {
-      hljTrick = `<div class="lasttrick" data-action="toggle-last-trick"><div class="lt-fan">${fanCards}</div><div class="lt-label">Last trick \u2014 won by ${esc(seatName(v, v.lastTrick.winner))} \u25bc</div></div>`;
+      hljTrick = `<div class="lasttrick" data-action="toggle-last-trick"><div class="lt-fan">${fanCards}</div><div class="lt-label">Last trick \u00b7 ${esc(seatName(v, v.lastTrick.winner))} \u25be</div></div>`;
     }
   } else if (v.phase === "bidding") {
     centerExtra = "";
@@ -1840,12 +1763,12 @@ function renderHLJ(v) {
     a.rank - b.rank
   );
   const holdActive = v.phase === "trickComplete"; // cards aren't playable during the gate
-  const hand = `<div class="fan-inner">${fanHand(sortedHand, (c) => ({
+  const hand = fanHand(sortedHand, (c) => ({
     playable: !holdActive && plays.size < sortedHand.length && plays.has(cardKey(c)),
     dim: !holdActive && plays.size > 0 && !plays.has(cardKey(c)),
     action: !holdActive && plays.has(cardKey(c)) ? "play-card" : "",
     key: cardKey(c),
-  }))}</div>`;
+  }));
 
   // Bid result tokens positioned on the felt near each player
   // plus your chip buttons anchored at the bottom of the felt
@@ -1853,37 +1776,30 @@ function renderHLJ(v) {
   const curHighAmt = v.highBid ? v.highBid.amount : null;
   const bidHistory = Array.isArray(v.bidHistory) ? v.bidHistory : [];
 
-  // In mobile landscape the felt is short — drop the top bid token lower so it
-  // clears the top pod, and raise the bottom reference accordingly.
-  const lsMobile = window.matchMedia("(max-height:500px) and (orientation:landscape)").matches;
-  const bidBounds = lsMobile
-    ? { x1: 20, x2: 80, y1: 40, y2: 78, topY: 27 }
+  // On a wide (landscape) felt, drop the top bid token lower so it clears the
+  // top pod, and raise the bottom reference accordingly.
+  const rails = isRails();
+  const bidBounds = rails
+    ? { x1: 22, x2: 78, y1: 40, y2: 76, topY: 30 }
     : { x1: 26, x2: 74, y1: 33, y2: 71, topY: 21 };
-  // Bid token positions use the same circle formula as trick cards
-  const bidPosStyle = (seat) => {
-    const n = v.seats.length;
-    const off = (seat - (you ?? 0) + n) % n; // spectators: from seat 0's chair
-    // User's own seat: raised so it clears the confidence chip row.
-    // In mobile landscape, align it with the fixed bid chip bar (.hlj-felt-bid,
-    // bottom:88px) so the token sits at the same height the picker chips did.
-    if (off === 0) return !lsMobile
-      ? "top:76%;left:50%;transform:translate(-50%,-50%)"
-      : you != null
-      ? "position:fixed;bottom:88px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none"
-      : "top:62%;left:50%;transform:translate(-50%,-50%)"; // spectator: above seat 0's pod
-    // Other seats: tighter bounds so chips appear inward from card backs
+  // Bid token position for `seat` on a table of n seen from `me` (same wall
+  // layout as the pods, pulled in toward the centre). Spectators see the
+  // table from seat 0's chair.
+  const bidPos = (seat, n, me) => {
+    const off = (seat - (me ?? 0) + n) % n;
+    // Your own token: low and centred, clear of the confidence chips. A
+    // spectator's seat-0 token sits higher, above seat 0's pod.
+    if (off === 0) return `top:${me == null ? 62 : rails ? 74 : 76}%;left:50%;transform:translate(-50%,-50%)`;
     const { x, y } = wallPerimPos(off, n, bidBounds);
     // Match the side-pod arc: higher side chips sit further toward center.
     const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
-    const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.15 : 0;
+    const arcShift = rails && isSide ? Math.max(0, 78 - y) * 0.15 : 0;
     const ax = x < 50 ? x + arcShift : x - arcShift;
     return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
   };
-  // The user's own bid chip is routed OUT of the overlay (see bidOverlay below):
-  // the overlay is absolute/inset:0 sized to the felt-stage and lives inside the
-  // transformed, overflow-hidden .table, so on iOS a position:fixed child of it
-  // gets clipped. Rendering the user's chip as a direct felt-stage sibling (like
-  // the bid bar, which is not clipped) avoids the cutoff.
+  const bidPosStyle = (seat) => bidPos(seat, v.seats.length, you);
+  // The user's own bid chip is rendered as a direct felt-stage sibling (outside
+  // the overlay) so it stacks above the bid bar like the bar itself.
   let selfBidToken = "";
   const tokenHTML = (b, highBidSeat, posStyle) => {
     const label = b.type === "pass" ? "Pass" : String(b.amount);
@@ -1896,20 +1812,7 @@ function renderHLJ(v) {
     // While the bid-end hold is active, freeze the full bid overlay
     if (S.hljBidHold && v.phase === "playing") {
       const bh = S.hljBidHold;
-      const holdPos = (seat) => {
-        const n = bh.seats.length;
-        const off = (seat - (bh.you ?? 0) + n) % n;
-        if (off === 0) return !lsMobile
-          ? "top:76%;left:50%;transform:translate(-50%,-50%)"
-          : bh.you != null
-          ? "position:fixed;bottom:88px;top:auto;left:50%;transform:translateX(-50%);z-index:60;animation:none"
-          : "top:62%;left:50%;transform:translate(-50%,-50%)";
-        const { x, y } = wallPerimPos(off, n, bidBounds);
-        const isSide = x < bidBounds.x1 + 1 || x > bidBounds.x2 - 1;
-        const arcShift = lsMobile && isSide ? Math.max(0, 78 - y) * 0.15 : 0;
-        const ax = x < 50 ? x + arcShift : x - arcShift;
-        return `top:${y}%;left:${ax}%;transform:translate(-50%,-50%)`;
-      };
+      const holdPos = (seat) => bidPos(seat, bh.seats.length, bh.you);
       const highBidSeat = bh.highBid?.seat ?? null;
       let toks = "";
       (bh.bidHistory ?? []).filter(b => !b.implicit).forEach(b => {
@@ -1952,7 +1855,7 @@ function renderHLJ(v) {
   const gateSeat = v.pendingSignal ? (v.pendingSignalSeat ?? null) : null;
   const showSignalPicker = gateSeat != null && gateSeat === v.you;
   const gateWait = gateSeat != null && !showSignalPicker
-    ? `<div class="hlj-felt-bid" style="pointer-events:none"><span style="font-family:Fraunces,serif;font-style:italic;font-size:13.5px;color:var(--ink-soft);white-space:nowrap">${esc(seatName(v, gateSeat))} is choosing a signal\u2026</span></div>`
+    ? `<div class="hlj-felt-bid gate-wait"><span class="gate-wait-msg">${esc(seatName(v, gateSeat))} is choosing a signal…</span></div>`
     : "";
 
   // Bid chips on the felt (hidden once player has bid).
@@ -1984,43 +1887,38 @@ function renderHLJ(v) {
           </div>`
         : ""
     : "";
-  const bidSlider = "";  // removed from selfExtra
-  const trumpControl = "";
-
-  const playHint = "";
-
-  // Team score strip below hand
-  const myTeamIdx = you != null ? you % 2 : 0; // 0=A, 1=B
-  const oppTeamIdx = 1 - myTeamIdx;
-  const myTeamLetter = myTeamIdx === 0 ? "A" : "B";
-  const oppTeamLetter = myTeamIdx === 0 ? "B" : "A";
-  const seriesA = v.gamesWon?.[myTeamIdx] ?? 0;
-  const seriesB = v.gamesWon?.[oppTeamIdx] ?? 0;
-  const seriesSuffix = (v.winsNeeded ?? 1) > 1 ? ` (${seriesA}\u2013${seriesB})` : "";
-  const teamScores = `<div class="hlj-scores">
-    <span class="hlj-score-pill t${myTeamLetter} mine"><span class="teamcircle t${myTeamLetter}">${myTeamLetter}</span><b>${v.scores[myTeamIdx]}</b>${seriesSuffix}</span>
-    <span class="hlj-score-pill t${oppTeamLetter}"><span class="teamcircle t${oppTeamLetter}">${oppTeamLetter}</span><b>${v.scores[oppTeamIdx]}</b></span>
-  </div>`;
-
-  const selfExtra = `${trumpControl}${playHint}`;
+  // Team scores — in the top bar (portrait) or the rail corners (landscape), A then B.
+  const myTeamIdx = you != null ? you % 2 : null;
+  const winsNeeded = v.winsNeeded ?? 1;
+  const scores = [0, 1].map((t) => {
+    const L = t === 0 ? "A" : "B";
+    const mine = t === myTeamIdx;
+    const pips = winsNeeded > 1
+      ? `<span class="pips" aria-hidden="true">${Array.from({ length: winsNeeded }, (_, k) => `<i class="${k < (v.gamesWon?.[t] ?? 0) ? "on" : ""}"></i>`).join("")}</span>`
+      : "";
+    return `<span class="score-pill t${L}${mine ? " mine" : ""}" title="Team ${L}${mine ? " (your team)" : ""} \u00b7 ${v.scores[t]} of ${v.target}">`
+      + `<span class="teamcircle t${L}">${L}</span><b>${v.scores[t]}</b>${pips}</span>`;
+  }).join("");
 
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfTeam = you != null ? (you % 2 === 0 ? "A" : "B") : null;
   // Your own signal (once given) sits beside your bid / dealer chip for the hand.
   const selfSignal = you != null && signalImg(you) ? `<span class="pod-dealer-badge signal">${signalImg(you)}</span>` : "";
+  const myBadge = you == null ? ""
+    : (v.phase === "playing" || v.phase === "trickComplete") && v.highBid?.seat === you
+      ? `<span class="pod-dealer-badge bid ${myTeamCls}" title="Your winning bid">${v.highBid.amount}</span>`
+    : isYouDealer ? `<span class="pod-dealer-badge" title="You deal">D</span>` : "";
   const selfMeta = you != null
-    ? selfSignal + ((v.phase === "playing" || v.phase === "trickComplete") && v.highBid?.seat === you
-        ? `<span class="pod-dealer-badge bid ${myTeamCls}">${v.highBid.amount}</span>`
-        : isYouDealer ? `<span class="pod-dealer-badge">D</span>` : "")
+    ? `${selfSignal}${myBadge}<span>Team ${selfTeam} \u00b7 to ${v.target}</span>`
     : `play to ${v.target}`;
   const selfTurn = handResultPending
     ? ""
     : v.yourTurn
-    ? `<span class="turnflag">Your turn</span>`
+    ? `<span class="turnflag">${v.phase === "bidding" ? "Your bid" : "Your turn"}</span>`
     : showSignalPicker && v.phase === "bidding"
     ? `<span class="turnflag">Your signal</span>`
     : v.toAct != null
-    ? `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`
+    ? `<span class="waitflag"><span>${esc(seatName(v, v.toAct))}${v.phase === "bidding" ? " is bidding" : "\u2019s turn"}</span></span>`
     : "";
 
   // End-of-hand result popup
@@ -2109,7 +2007,7 @@ function renderHLJ(v) {
     const dealtHandsModal = dealtHands && S.hljShowDealtHands
       ? `<div class="modal-back" data-action="hlj-close-dealt-hands">
           <div class="modal" data-stop="1" style="max-width:360px">
-            <div class="modalhead"><span>Dealt hands</span><button class="btn sm ghost" data-action="hlj-close-dealt-hands">Close</button></div>
+            <div class="modalhead"><span>Dealt hands</span><button class="iconbtn sm" data-action="hlj-close-dealt-hands" aria-label="Close">${ICON.close}</button></div>
             <div class="modalbody" style="padding:10px 14px 14px;display:flex;flex-direction:column;gap:12px">
               ${dealtHands.map((hand, seat) => {
                 const sorted = [...hand].sort((a, b) => {
@@ -2148,7 +2046,7 @@ function renderHLJ(v) {
             ${scoreRows}
           </div>
           ${dealtPile}
-          <button class="hlj-result-next-btn" data-action="hlj-ack-hand">${gameWon ? "Next game" : "Next hand"} →</button>
+          <button class="btn hlj-result-next-btn" data-action="hlj-ack-hand">${gameWon ? "Next game" : "Next hand"} \u2192</button>
         </div>
       </div>
     </div>`;
@@ -2164,7 +2062,7 @@ function renderHLJ(v) {
   const cornerSuits = ['♠','♥','♦','♣'].map((s,i) =>
     `<span class="felt-corner-suit ${i===1||i===2 ? 'red' : ''} ${ ['tl','tr','br','bl'][i] }">${s}</span>`
   ).join("");
-  app.__set = tableShell(v, { pods, center, feltHeader: "", trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTeam, selfReverse: true, selfTurn, selfExtra, appbarLeft: teamScores });
+  app.__set = tableShell(v, { pods, center, trick: (hljTrick || "") + bidOverlay, feltBid: feltBidPanel, feltOverlay, cornerSuits, hand, actions: null, selfMeta, selfTeam, selfTurn, scores });
 }
 
 // ---------- Rummy 500: client-side rule mirror ----------
@@ -2484,21 +2382,20 @@ function rummyLedgerRows(v, ctx) {
     const you = i === me;
     const name = esc(seatName(v, i));
     const count = you ? (v.yourHand ? v.yourHand.length : 0) : (v.handCounts[i] ?? 0);
-    const badge = `<span class="ledger-count">${count}</span>`;
+    const badge = `<span class="ledger-count" title="${count} cards in hand">${count}</span>`;
     const nameplate = `<span class="ledger-av" style="--avseat:${i}">${you ? "You" : name}</span>`;
     const myMelds = byOwner[i] || [];
     const ribbon = myMelds.length
       ? `<div class="ledger-ribbon">${myMelds.map((m) => ctx.meldTile(m)).join("")}</div>`
-      : `<div class="ledger-empty">no melds yet</div>`;
+      : `<div class="ledger-empty">No melds yet</div>`;
     // Same "away" chip and host Replace button the table pods carry.
     const presence = seatPresence(v, i);
-    const presenceEl = presence.away
-      ? `<div class="ledger-away" style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:none">${presence.badge}${presence.replaceBtn}</div>`
-      : "";
+    const presenceEl = presence.away ? `<div class="ledger-away">${presence.badge}${presence.replaceBtn}</div>` : "";
     return `<div class="ledger-row${active ? " active" : ""}${you ? " you" : ""}${presence.away ? " disconnected" : ""}">
       <div class="ledger-id">${nameplate}${badge}</div>
       ${presenceEl}
       ${ribbon}
+      <span class="ledger-score" title="Score">${v.scores[i] ?? 0}</span>
     </div>`;
   });
 }
@@ -2540,11 +2437,11 @@ function renderRummy(v) {
     const rows = v.seats.map((s, i) => ({ name: seatName(v, i), score: v.scores[i], win: i === v.winner, you: i === v.you }));
     // The deciding round goes straight to game over, so its breakdown lives here.
     const lr = v.lastRound;
-    const lastHTML = lr
-      ? `<div class="panel"><h2 style="margin-bottom:10px">Last round \u2014 ${lr.outSeat != null ? `${esc(seatName(v, lr.outSeat))} went out` : "stock exhausted"}</h2>
-          <div style="display:flex;flex-direction:column;gap:12px">${rummyRoundPlayers(v, lr)}</div></div>`
+    const last = lr
+      ? resultCard(`Last round · ${lr.outSeat != null ? `${esc(seatName(v, lr.outSeat))} went out` : "stock exhausted"}`,
+          `<div class="rhc-players">${rummyRoundPlayers(v, lr)}</div>`)
       : "";
-    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows), lastHTML);
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows), { last });
   }
 
   const lm = v.yourTurn ? v.legalMoves : [];
@@ -2567,17 +2464,17 @@ function renderRummy(v) {
             dealer: i === v.dealerSeat,
             cardCount: v.handCounts[i],
             pts: v.scores[i],
-            note: i === v.toAct && v.turnPhase ? v.turnPhase : null,
+            note: i === v.toAct && v.turnPhase ? (v.turnPhase === "draw" ? "drawing…" : "playing…") : null,
           }) },
     )
     .filter(Boolean);
 
-  // center: stock + discard piles (mini), then melds on the felt
+  // center: stock + discard piles
   const stock = `<div class="pile mini-pile">
       <div class="lbl">Stock</div>
-      <div class="stockwrap" ${canStock ? `data-action="draw-stock" style="cursor:pointer"` : ""}>
+      <div class="stockwrap${canStock ? " can-draw" : ""}" ${canStock ? `data-action="draw-stock" style="cursor:pointer" title="Draw from the stock"` : ""}>
         ${v.stockCount > 1 ? cardHTML({}, { back: true, mini: true, style: "position:absolute;top:2px;left:2px;opacity:.6" }) : ""}
-        ${v.stockCount > 0 ? cardHTML({}, { back: true, mini: true }) : `<div class="card mini" style="opacity:.22"></div>`}
+        ${v.stockCount > 0 ? cardHTML({}, { back: true, mini: true }) : `<div class="pile-empty"></div>`}
       </div>
       <div class="pts">${v.stockCount} left</div>
     </div>`;
@@ -2592,92 +2489,38 @@ function renderRummy(v) {
     .join("");
   const discard = `<div class="pile mini-pile">
       <div class="lbl">Discard</div>
-      <div class="discardstack" data-action="open-discard" title="View discard pile" style="cursor:pointer">
-        ${top ? stackCards : `<div class="card mini" style="opacity:.22"></div>`}
+      <div class="discardstack" data-action="open-discard" title="View the discard pile" style="cursor:pointer">
+        ${top ? stackCards : `<div class="pile-empty"></div>`}
       </div>
+      <div class="pts">${v.discard.length} card${v.discard.length === 1 ? "" : "s"}</div>
     </div>`;
-  // Compute selected cards early so melds can highlight valid layoff targets
-  const orderedForMelds = rummyOrdered(v.yourHand);
-  const selCardsForMelds = orderedForMelds.filter((c) => S.rummySel.has(c.id));
-  // The chosen lay-off target, or (none chosen) a meld the selection could be
-  // laid off on — the same highlight on the felt and in the phone ledger.
-  const meldCls = (m) => S.rummyLayoff === m.id ? "target"
-    : inPlay && selCardsForMelds.length >= 1 && S.rummyLayoff === null
-      && rCanLayoff(m, selCardsForMelds) && rKeepsDiscard(v, selCardsForMelds)
-      && !rStrandsForced(v, selCardsForMelds, m) ? "layoff-hint" : "";
-
-  const meldsInner = v.melds.length
-    ? `<div class="melds">${v.melds.map((m) => {
-          const jokerRes = resolveJokers(m);
-          const meldAttrs = `data-action="open-meld" data-meldid="${m.id}"`;
-          let inner;
-          if (m.kind === "set") {
-            // Fan like runs; put the odd-color card on top (last = highest z-index)
-            const naturals = m.cards.filter((c) => !c.joker);
-            const redCount = naturals.filter((c) => RED.has(c.suit)).length;
-            const blackCount = naturals.length - redCount;
-            const oddIsRed = redCount < blackCount; // minority color is the odd one
-            const sorted = [...m.cards].sort((a, b) => {
-              const aOdd = a.joker ? 0 : (RED.has(a.suit) === oddIsRed ? 1 : 0);
-              const bOdd = b.joker ? 0 : (RED.has(b.suit) === oddIsRed ? 1 : 0);
-              return aOdd - bOdd; // odd-color card sorts last (on top)
-            });
-            const n = sorted.length;
-            const negMargin = n <= 1 ? 0 : Math.round(44 * (n - 2) / (n - 1));
-            const allCards = sorted.map((c, ci) => {
-              const ml = ci === 0 ? "" : `margin-left:-${negMargin}px`;
-              return cardHTML(c, { mini: true, inMeld: true, style: ml });
-            }).join("");
-            inner = `<div class="run-dense tappable">${allCards}</div>`;
-          } else {
-            // Run: fixed total width of 2 mini cards; margin shrinks as count grows
-            const n = m.cards.length;
-            const negMargin = n <= 1 ? 0 : Math.round(44 * (n - 2) / (n - 1));
-            const allCards = m.cards.map((c, ci) => {
-              const ml = ci === 0 ? "" : `margin-left:-${negMargin}px`;
-              return cardHTML(c, { mini: true, jokerAs: jokerRes[ci] ?? undefined, inMeld: true, style: ml });
-            }).join("");
-            inner = `<div class="run-dense tappable">${allCards}</div>`;
-          }
-          return `<div class="meld tappable ${meldCls(m)}" ${meldAttrs}>${inner}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
-        }).join("")}</div>`
-    : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
-  // Wrap in a scrollable felt container. Clicking the wrapper (but not an individual
-  // meld) opens the melds tab of the log for a full-screen view.
-  const melds = `<div class="rummy-melds-scroll" data-action="open-melds-log" title="View all melds">${meldsInner}</div>`;
   const center = `<div class="piles">${stock}${discard}</div>`;
 
-  // hand: selected cards float to a row above the fan; unselected cards are fanned.
-  // Cards incompatible with the current selection are dimmed.
+  // Selected cards lift in place; cards that can't join the selection dim.
   const ordered = rummyOrdered(v.yourHand);
   const selCards = ordered.filter((c) => S.rummySel.has(c.id));
-  // Exclude the drawn-card-preview card from the fan (it's shown in the preview instead)
-  const fanCards = ordered.filter((c) => !S.rummySel.has(c.id) && c.id !== S.rummyDrawnCard?.id);
   const layMeld = v.melds.find((m) => m.id === S.rummyLayoff);
 
-  // Determine which unselected cards are compatible with the current selection
+  // Melds: highlight the target meld, and any meld the selection could lay off
+  // onto — the same highlight on the felt and in the phone ledger.
+  const meldClass = (m) => S.rummyLayoff === m.id ? "target"
+    : inPlay && selCards.length && S.rummyLayoff === null
+      && rCanLayoff(m, selCards) && rKeepsDiscard(v, selCards)
+      && !rStrandsForced(v, selCards, m) ? "layoff-hint" : "";
+  const meldTile = (m) => `<div class="meld tappable ${meldClass(m)}" data-action="open-meld" data-meldid="${m.id}">${rummyMeldInner(m)}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
+  const meldsInner = v.melds.length
+    ? `<div class="melds">${v.melds.map(meldTile).join("")}</div>`
+    : `<div class="callout" style="font-size:13px">No melds down yet.</div>`;
+  // Clicking the strip (but not an individual meld) opens the melds tab of the log.
+  const melds = `<div class="rummy-melds-scroll" data-action="open-melds-log" title="View all melds">${meldsInner}</div>`;
+
   const compatibleIds = inPlay && selCards.length
-    ? new Set(fanCards.filter((c) => rCompatible(selCards, c, layMeld, ordered.filter((p) => p !== c && !S.rummySel.has(p.id)), v.melds)).map((c) => c.id))
+    ? new Set(ordered.filter((c) => !S.rummySel.has(c.id)
+        && rCompatible(selCards, c, layMeld, ordered.filter((p) => p !== c && !S.rummySel.has(p.id)), v.melds)).map((c) => c.id))
     : null; // null = no filtering
-
-  // Drawn card preview (shown above fan after drawing from stock; cleared above
-  // once the turn ends or the card leaves the hand)
-  const drawnPreview = S.rummyDrawnCard
-    ? `<div class="rummy-drawn-preview" data-action="dismiss-drawn">
-        ${cardHTML(S.rummyDrawnCard, {})}
-        <div class="rummy-drawn-label">You drew this</div>
-      </div>`
-    : "";
-
-  const selRow = selCards.length
-    ? `<div class="selrow">${selCards.map((c) => cardHTML(c, {
-        action: "toggle-card", id: c.id, sel: true, style: "touch-action:none", // drag-to-play (see fanHand)
-        must: c.id === v.mustMeldCardId,
-      })).join("")}</div>`
-    : "";
-  const twoPlayer = v.seats.length <= 2;
-  const fan = fanHand(fanCards, (c) => {
-    const incompatible = inPlay && compatibleIds != null && !compatibleIds.has(c.id);
+  const hand = fanHand(ordered, (c) => {
+    const sel = S.rummySel.has(c.id);
+    const incompatible = !sel && inPlay && compatibleIds != null && !compatibleIds.has(c.id);
     return {
       action: incompatible ? "" : "toggle-card",
       id: incompatible ? undefined : c.id,
@@ -2685,26 +2528,10 @@ function renderRummy(v) {
       must: c.id === v.mustMeldCardId,
       playable: inPlay && !incompatible,
       dim: incompatible,
+      sel,
+      fresh: c.id === S.rummyDrawnCard?.id,
     };
-  }, { scrollable: twoPlayer, arcScale: 0.6 });
-
-  // Dynamic hand sizing: shrink card width when many cards exceed the available space
-  const handN = fanCards.length;
-  const handAvail = Math.min(360, (window.innerWidth || 360) - 30);
-  const naturalCardW = 64;
-  const minStepPx = 20;
-  const maxAtNormal = handN > 1 ? Math.floor((handAvail - naturalCardW) / minStepPx) + 1 : 999;
-  const cardWpx = handN > maxAtNormal && handN > 1
-    ? Math.max(36, handAvail - (handN - 1) * minStepPx)
-    : naturalCardW;
-  const handSizeStyle = cardWpx < naturalCardW ? `style="--w:${cardWpx}px"` : "";
-
-  const fanWrap = fan
-    ? (twoPlayer
-        ? `<div class="fan-scroll"><div class="fan-inner" ${handSizeStyle}>${fan}</div></div>`
-        : `<div class="fan-inner" ${handSizeStyle}>${fan}</div>`)
-    : "";
-  const hand = drawnPreview + selRow + fanWrap;
+  }, { arcScale: 0.6 });
   const keepsDiscard = rKeepsDiscard(v, selCards);
   const meldFits = selCards.length >= 3 && rValidMeld(selCards) && keepsDiscard;
   const layFits = !!layMeld && selCards.length >= 1 && rCanLayoff(layMeld, selCards) && keepsDiscard;
@@ -2714,85 +2541,60 @@ function renderRummy(v) {
   const strands = !canMeld && !canLay && (meldFits || layFits);
   const canDiscard = selCards.length === 1 && v.mustMeldCardId == null;
 
-  // sort controls (available whenever you hold cards) \u2014 single alternating button
+  // sort controls (available whenever you hold cards) — single alternating button
   const nextSort = S.rummySort === "suit" ? "rank" : "suit";
   const sortBar = v.yourHand.length
-    ? `<button class="btn ghost sm" data-action="sort-toggle">Sort<span class="btn-extra"> ${nextSort === "suit" ? "\u2660\u2665 suit" : "1\u20139 rank"}</span></button>`
+    ? `<button class="btn ghost sm" data-action="sort-toggle" title="Sort by ${nextSort}">Sort<span class="btn-extra"> by ${nextSort}</span></button>`
     : "";
 
   // actions
   const acts = [];
   if (v.yourTurn && v.turnPhase === "draw") {
-    if (canStock) acts.push(`<button class="btn" data-action="draw-stock">Draw<span class="btn-extra"> stock</span></button>`);
+    if (canStock) acts.push(`<button class="btn" data-action="draw-stock">Draw<span class="btn-extra"> from stock</span></button>`);
     acts.push(sortBar);
-    acts.push(`<span class="hint">Draw from stock, or tap the discard pile to pick up cards.</span>`);
+    acts.push(`<span class="hint">Draw from the stock, or tap the discard pile to pick up cards.</span>`);
   } else if (inPlay) {
     const n = S.rummySel.size;
-    if (canMeld) {
-      acts.push(`<button class="btn" data-action="meld-selected">Play meld (${n})</button>`);
-      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
-    } else if (canLay) {
-      acts.push(`<button class="btn" data-action="layoff-selected">Lay off (${n})</button>`);
-      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
-    } else if (canDiscard) {
-      acts.push(`<button class="btn" data-action="discard-selected">Discard</button>`);
-      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
-    } else if (n) {
-      acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
-    }
+    if (canMeld) acts.push(`<button class="btn" data-action="meld-selected">Meld ${n}</button>`);
+    else if (canLay) acts.push(`<button class="btn" data-action="layoff-selected">Lay off ${n}</button>`);
+    else if (canDiscard) acts.push(`<button class="btn" data-action="discard-selected">Discard</button>`);
+    if (n) acts.push(`<button class="btn ghost sm" data-action="clear-sel">Clear</button>`);
     acts.push(sortBar);
-    // Rule reasons stay visible in landscape (.key), where other hints are hidden.
+    // Rule reasons (.key) stay visible where the other hints are hidden.
     if (strands) acts.push(`<span class="hint key">${R_STRANDS}</span>`);
-    else if (v.mustMeldCardId != null) acts.push(`<span class="hint key">The green card must be melded or laid off before you discard.</span>`);
-    else if (!keepsDiscard) acts.push(`<span class="hint key">Must discard is on \u2014 keep a card back to go out on.</span>`);
-    else if (canMeld) acts.push(`<span class="hint">Tap \u201cPlay meld\u201d to put these ${n} cards down.</span>`);
-    else if (canLay) acts.push(`<span class="hint">Tap \u201cLay off\u201d to add these cards to the highlighted meld.</span>`);
-    else if (n >= 3) acts.push(`<span class="hint">These cards don\u2019t form a valid meld.</span>`);
-    else acts.push(`<span class="hint">Select cards to meld or lay off, or select one to discard. Tap a meld to lay off onto it.</span>`);
+    else if (v.mustMeldCardId != null) acts.push(`<span class="hint key">Meld or lay off the green-ringed card before you discard.</span>`);
+    else if (!keepsDiscard) acts.push(`<span class="hint key">Must discard is on — keep a card back to go out on.</span>`);
+    else if (canMeld) acts.push(`<span class="hint">These ${n} cards make a meld — put them down.</span>`);
+    else if (canLay) acts.push(`<span class="hint">Lay these cards off onto the highlighted meld.</span>`);
+    else if (n >= 3) acts.push(`<span class="hint">These cards don’t form a valid meld.</span>`);
+    else acts.push(`<span class="hint">Select cards to meld, tap a meld to lay off, or select one card to discard.</span>`);
   } else {
     acts.push(sortBar);
   }
 
   const myScore = v.you != null ? v.scores[v.you] : null;
   const selfMeta = (myScore != null
-    ? `${myScore} of ${v.target}`
-    : `play to ${v.target}`) + (v.tiebreak ? " \u00b7 tiebreak round" : "");
+    ? `Score <b>${myScore}</b> / ${v.target}`
+    : `play to ${v.target}`) + (v.tiebreak ? " · tiebreak round" : "");
   const selfTurn = v.yourTurn
-    ? `<span class="turnflag">Your turn \u2014 ${v.turnPhase === "draw" ? "draw" : "play"}</span>`
-    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+    ? `<span class="turnflag">${v.turnPhase === "draw" ? "Your draw" : "Your play"}</span>`
+    : v.toAct != null
+    ? `<span class="waitflag"><span>${esc(seatName(v, v.toAct))}’s turn</span></span>`
+    : "";
 
-  // Center watermark: suit of the most recent meld (first non-joker card's suit).
-  const lastMeldSuit = v.melds.length
-    ? v.melds[v.melds.length - 1].cards.find((c) => !c.joker)?.suit ?? null
-    : null;
   // Watermarks (felt overlay + corner suits) are disabled for Rummy 500.
-  const rummyFeltOverlay = "";
-  const rummyCornerSuits = "";
-  // Ledger tiles sit in a scrolling ribbon that would clip an outline drawn
-  // outside them, so a highlighted tile draws it inside.
-  const ledgerCtx = {
-    meldTile: (m) => {
-      const cls = meldCls(m);
-      return `<div class="meld tappable ${cls}"${cls ? ` style="outline-offset:-2px"` : ""} data-action="open-meld" data-meldid="${m.id}">${rummyMeldInner(m)}<span class="owner">${esc(seatName(v, m.owner))}</span></div>`;
-    },
-  };
+  const ledgerCtx = { meldTile };
   const useLedger = window.matchMedia("(max-width:1023px)").matches;
-  const isLandscape = window.matchMedia("(orientation:landscape)").matches;
+  const isLandscape = isRails();
   const rummyParts = useLedger
     ? isLandscape
       ? { pods: [], feltLedger: rummyLedgerSplit(v, ledgerCtx), ledgerRows: v.seats.length,
           center, centerBottom: false, ledgerLandscape: true, ledgerSplit: true,
-          feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
-          hand, actions: acts.join(""), selfMeta, selfTurn,
-          selfExtra: "" }
+          hand, actions: acts.join(""), selfMeta, selfTurn }
       : { pods: [], feltLedger: rummyLedgerHTML(v, ledgerCtx), ledgerRows: v.seats.length,
           center, centerBottom: true,
-          ledgerLandscape: false,
-          feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits,
-          hand, actions: acts.join(""), selfMeta, selfTurn,
-          selfExtra: "" }
-    : { pods, center, feltBottom: melds,
-        feltOverlay: rummyFeltOverlay, cornerSuits: rummyCornerSuits, hand, actions: acts.join(""), selfMeta, selfTurn };
+          hand, actions: acts.join(""), selfMeta, selfTurn }
+    : { pods, center, feltBottom: melds, hand, actions: acts.join(""), selfMeta, selfTurn };
   app.__set = tableShell(v, rummyParts) + discardModal(v) + rummyMeldModal(v) + rummyRoundModal(v);
 }
 
@@ -2810,7 +2612,7 @@ function rummyRoundKey(v) {
 function rummyRoundModal(v) {
   const key = rummyRoundKey(v);
   if (!v.lastRound || key == null || S.rummyRoundShown !== key || S.rummyRoundAcked === key) return "";
-  return rummyRoundSummary(v, "Last round \u2014 ", `<button class="btn" data-action="ack-round">Close</button>`);
+  return rummyRoundSummary(v, "Last round", `<button class="btn" data-action="ack-round">Close</button>`);
 }
 
 // Seat that placed each card melded this round (card id -> seat). A melded card
@@ -2849,7 +2651,7 @@ function rummyRoundPlayers(v, lr) {
 
     // How the delta is made up (the engine's own split).
     const breakdown = lr.meldedPts && lr.heldPts
-      ? `<div class="rhc-breakdown" style="font-size:12px;color:var(--ink-soft);margin:-4px 0 6px">melded +${lr.meldedPts[i]} \u2212 held ${lr.heldPts[i]}</div>`
+      ? `<div class="rhc-breakdown">Melded +${lr.meldedPts[i]} · held −${lr.heldPts[i]}</div>`
       : "";
 
     // Cards this player placed (green border), one group per meld they added to
@@ -2876,7 +2678,7 @@ function rummyRoundPlayers(v, lr) {
         <span class="rhc-total">/ ${total}</span>
       </div>
       ${breakdown}
-      ${meldsEl ? `<div class="rhc-melds" style="margin-bottom:6px">${meldsEl}</div>` : ""}
+      ${meldsEl ? `<div class="rhc-melds">${meldsEl}</div>` : ""}
       ${heldEl}
     </div>`;
   }).join("");
@@ -2887,25 +2689,28 @@ function rummyHandCompleteScreen(v) {
   if (!v.lastRound) return "";
   const nextBtn = v.you != null
     ? `<button class="btn" data-action="advance-round">Next hand →</button>`
-    : `<span class="hint">Waiting for a player to deal the next hand…</span>`;
-  return rummyRoundSummary(v, "", nextBtn) + logSheet();
+    : `<p class="result-wait">Waiting for a player to deal the next hand…</p>`;
+  return rummyRoundSummary(v, "Round over", nextBtn) + logSheet() + leaveConfirm();
 }
 
-// The round summary page. It carries the app bar (Log / Leave), so no one —
-// a spectator included — is stuck on it until a seated player moves on.
-function rummyRoundSummary(v, prefix, footHTML) {
+// The round summary page. It carries Leave and Log, so no one — a spectator
+// included — is stuck on it until a seated player moves on.
+function rummyRoundSummary(v, eyebrow, footHTML) {
   const lr = v.lastRound;
   const heading = lr.outSeat != null
     ? `${esc(seatName(v, lr.outSeat))} went out`
     : "Stock exhausted";
   // Past the target with the lead shared: the game plays on (engine tie rule).
   const tie = v.tiebreak
-    ? `<div class="rhc-tie">Tied for the lead at ${Math.max(...v.scores)} \u2014 another round decides</div>`
+    ? `<div class="rhc-tie">Tied for the lead at ${Math.max(...v.scores)} — another round decides</div>`
     : "";
-  return `<div class="rhc-wrap" style="flex-direction:column;justify-content:flex-start;gap:6px">
-    <div style="align-self:stretch;padding-top:env(safe-area-inset-top)">${appbar(v, { log: true })}</div>
-    <div class="rhc-modal" style="margin:auto 0;max-height:calc(100% - 60px)">
-      <div class="rhc-head">${prefix}${heading}</div>${tie}
+  return `<div class="rhc-wrap">
+    <div class="rhc-modal">
+      <div class="rhc-head">
+        <button class="iconbtn sm rhc-leave" data-action="leave" aria-label="Leave table" title="Leave table">${ICON.back}</button>
+        <button class="iconbtn sm rhc-log" data-action="toggle-log" aria-label="Move log" title="Move log">${ICON.log}</button>
+        <small>${eyebrow}</small>${heading}
+      </div>${tie}
       <div class="rhc-body">${rummyRoundPlayers(v, lr)}</div>
       <div class="rhc-foot">${footHTML}</div>
     </div>
@@ -2932,11 +2737,11 @@ function rummyMeldModal(v) {
     : "";
   return `<div class="modal-back" data-action="close-meld">
       <div class="modal" data-stop="1">
-        <div class="modalhead"><span>${kind} — ${owner}</span>
-          <button class="btn sm ghost" data-action="close-meld">Close</button></div>
+        <div class="modalhead"><span>${kind} \u00b7 ${owner}</span>
+          <button class="iconbtn sm" data-action="close-meld" aria-label="Close">${ICON.close}</button></div>
         <div class="modalbody">
           <div class="meld-modal-cards">${cards}</div>
-          ${layBtn ? `<div style="margin-top:10px">${layBtn}</div>` : ""}
+          ${layBtn ? `<div class="modal-actions">${layBtn}</div>` : ""}
         </div>
       </div>
     </div>`;
@@ -2965,12 +2770,12 @@ function discardModal(v) {
       }).join("")
     : `<div class="callout" style="font-size:13px">The discard pile is empty.</div>`;
   const hint = canDraw
-    ? `<p class="sub" style="margin:8px 14px 0">Tap a card to take it and everything above it. Greyed cards can't be taken this turn.</p>`
-    : `<p class="sub" style="margin:8px 14px 0">Oldest first \u2014 top card is highlighted.</p>`;
+    ? `<p class="modal-note">Tap a card to take it and everything above it. Greyed-out cards can\u2019t be taken this turn.</p>`
+    : `<p class="modal-note">Oldest first \u2014 the top card is outlined.</p>`;
   return `<div class="modal-back" data-action="close-discard">
       <div class="modal" data-stop="1">
-        <div class="modalhead"><span>Discard pile \u2014 ${n} card${n === 1 ? "" : "s"}</span>
-          <button class="btn sm ghost" data-action="close-discard">Close</button></div>
+        <div class="modalhead"><span>Discard pile \u00b7 ${n} card${n === 1 ? "" : "s"}</span>
+          <button class="iconbtn sm" data-action="close-discard" aria-label="Close">${ICON.close}</button></div>
         <div class="modalbody"><div class="dgrid">${cards}</div></div>
         ${hint}
       </div>
@@ -3002,13 +2807,12 @@ function renderHearts(v) {
     // The game-ending hand never gets its own result screen, so show what it
     // scored (and a moon shot) above the totals.
     const lh = v.lastHand;
-    const lastHTML = lh
-      ? `<div class="panel"><h2 style="margin-bottom:4px">Last hand</h2>${
-          lh.shooter != null ? `<p class="sub">${esc(seatName(v, lh.shooter))} shot the moon!</p>` : ""
-        }${scoreList(v.seats.map((s, i) => ({ name: seatName(v, i), score: `${lh.delta[i] > 0 ? "+" : ""}${lh.delta[i]}`, you: i === v.you })))}</div>`
+    const last = lh
+      ? resultCard("Last hand", `${lh.shooter != null ? `<p class="result-note">${esc(seatName(v, lh.shooter))} shot the moon!</p>` : ""}${
+          scoreList(v.seats.map((s, i) => ({ name: seatName(v, i), score: `${lh.delta[i] > 0 ? "+" : ""}${lh.delta[i]}`, you: i === v.you })), { lowWins: true })}`)
       : "";
     // Lowest score wins, so the title still points at v.winner (server picks the min).
-    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows), lastHTML);
+    return renderGameOver(v, v.winner == null ? "Game over" : `${seatName(v, v.winner)} wins!`, scoreList(rows, { lowWins: true }), { sub: "Lowest score wins.", last });
   }
 
   const passing = v.phase === "passing";
@@ -3039,23 +2843,21 @@ function renderHearts(v) {
   let center, heartsTrick;
   if (passing) {
     const dir = passDir(v.passOffset, v.players);
-    center = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
-        <span class="crest">passing <b>${dir}</b></span>
-        <span class="crest">hand ${v.handNo + 1}</span>
+    center = `<div class="crestrow">
+        <span class="crest">Hand <b>${v.handNo + 1}</b></span>
+        <span class="crest">Passing <b>${dir}</b></span>
       </div>
-      <div class="callout">${
-        v.youPassed ? "Your cards are away \u2014 waiting for the table." : `Choose 3 cards to pass ${dir}.`
-      }</div>`;
+      ${v.youPassed ? `<div class="callout">Your cards are away \u2014 waiting for the table.</div>` : ""}`;
   } else {
-    const crests = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><span class="crest">hand ${v.handNo + 1}</span></div>`;
+    const crests = `<div class="crestrow"><span class="crest">Hand <b>${v.handNo + 1}</b></span></div>`;
     if (v.phase === "trickComplete") {
       // Trick-gate: show the completed trick with a tap-to-continue overlay.
       const trickPlays = v.currentTrick.map((p) => ({ ...p, name: seatName(v, p.seat) }));
       const winName = v.trickWinner != null ? esc(seatName(v, v.trickWinner)) : null;
       const trickEl = trickHTML(trickPlays, v.you, v.seats.length, { mini: false, winSeat: v.trickWinner });
       // A spectator can't advance the gate: no tap target, no "Tap to continue".
-      const hint = [winName ? `Won by ${winName}` : "", v.you != null ? "Tap to continue" : ""].filter(Boolean).join(" &middot; ");
-      heartsTrick = `<div class="trick-gate"${v.you != null ? ` data-action="advance-trick"` : ` style="cursor:default"`}>${trickEl}`
+      const hint = [winName ? `<b>${winName}</b> takes it` : "", v.you != null ? "Tap to continue" : ""].filter(Boolean).join(" · ");
+      heartsTrick = `<div class="trick-gate${v.you != null ? "" : " view-only"}"${v.you != null ? ` data-action="advance-trick"` : ""}>${trickEl}`
         + (hint ? `<div class="trick-gate-hint">${hint}</div>` : "") + `</div>`;
       center = crests;
     } else {
@@ -3092,10 +2894,10 @@ function renderHearts(v) {
           const isWin = p.seat === winSeat;
           return `<div class="lt-fan-card" style="--fan-angle:${angle}deg;--fan-i:${i};z-index:${isWin ? total + 1 : i}">${cardHTML(p.card, { win: isWin })}</div>`;
         }).join("");
-        heartsTrick = `<div class="lasttrick" data-action="toggle-last-trick"><div class="lt-fan">${fanCards}</div><div class="lt-label">Last trick — won by ${esc(seatName(v, v.lastTrick.winner))} ▼</div></div>`;
+        heartsTrick = `<div class="lasttrick" data-action="toggle-last-trick"><div class="lt-fan">${fanCards}</div><div class="lt-label">Last trick \u00b7 ${esc(seatName(v, v.lastTrick.winner))} \u25be</div></div>`;
       } else if (showLast && S.heartsLastTrickOpen) {
-        const expanded = `<div class="fan-inner lt-expanded-fan">${fanHand(v.lastTrick.cards.map(p => p.card), () => ({}))}</div>`;
-        heartsTrick = `<div class="lasttrick open" data-action="toggle-last-trick"><div class="lt-label">Last trick — won by ${esc(seatName(v, v.lastTrick.winner))} ▲</div>${expanded}</div>`;
+        const expanded = fanHand(v.lastTrick.cards.map(p => p.card), () => ({}), { cls: "lt-expanded-fan", cardW: 60, avail: 340 });
+        heartsTrick = `<div class="lasttrick open" data-action="toggle-last-trick"><div class="lt-label">Last trick \u00b7 ${esc(seatName(v, v.lastTrick.winner))} \u25b4</div>${expanded}</div>`;
       }
       const note = showLast
         ? ""
@@ -3125,63 +2927,51 @@ function renderHearts(v) {
   }
   const heartsHand = S.heartsOrder.map((id) => v.yourHand.find((c) => c.id === id)).filter(Boolean);
 
-  // Hand: in passing, selected cards lift into a selrow above the fan (Rummy-style).
-  // After pass exchange, received cards show in selrow for 5s before merging —
-  // still playable, since the leader may have been passed the lowest club.
-  let hand;
+  // Hand: cards chosen to pass lift in place; cards just received glow for a
+  // few seconds after the exchange — still playable, since the leader may have
+  // been passed the lowest club.
   const receivedSet = new Set(S.heartsReceivedCards);
   const playOpts = (c) => {
     const can = plays.has(c.id);
-    return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can };
+    return { action: can ? "play-hearts" : "", id: c.id, playable: can, dim: plays.size > 0 && !can, fresh: receivedSet.has(c.id) };
   };
+  let hand;
   if (passing && !v.youPassed) {
-    const selCards = heartsHand.filter((c) => S.heartsPass.has(c.id));
-    const fanCards = heartsHand.filter((c) => !S.heartsPass.has(c.id));
-    const selRow = selCards.length
-      ? `<div class="selrow">${selCards.map((c) => cardHTML(c, { action: "toggle-pass", id: c.id, sel: true })).join("")}</div>`
-      : "";
     const full = S.heartsPass.size >= 3;
-    const fan = fanHand(fanCards, (c) => ({ action: full ? "" : "toggle-pass", id: c.id, playable: !full, dim: full }), { scrollable: true });
-    const fanHtml = fan ? `<div class="fan-scroll"><div class="fan-inner">${fan}</div></div>` : "";
-    hand = selRow + fanHtml;
-  } else if (!passing && receivedSet.size > 0) {
-    const recCards = heartsHand.filter((c) => receivedSet.has(c.id));
-    const restCards = heartsHand.filter((c) => !receivedSet.has(c.id));
-    const selRow = recCards.length
-      ? `<div class="selrow">${recCards.map((c) => cardHTML(c, { ...playOpts(c), sel: true })).join("")}</div>`
-      : "";
-    hand = selRow + `<div class="fan-scroll"><div class="fan-inner">${fanHand(restCards, playOpts, { scrollable: true })}</div></div>`;
+    hand = fanHand(heartsHand, (c) => {
+      const sel = S.heartsPass.has(c.id);
+      return { action: full && !sel ? "" : "toggle-pass", id: c.id, sel, playable: !full || sel, dim: full && !sel };
+    });
   } else {
-    hand = `<div class="fan-scroll"><div class="fan-inner">${fanHand(heartsHand, (c) => (passing ? { id: c.id, dim: true } : playOpts(c)), { scrollable: true })}</div></div>`;
+    hand = fanHand(heartsHand, (c) => (passing ? { id: c.id, dim: true } : playOpts(c)));
   }
 
   // Actions.
   const acts = [];
   if (passing && !v.youPassed) {
     const n = S.heartsPass.size;
-    acts.push(`<button class="btn" data-action="pass-3" ${v.yourTurn && n === 3 ? "" : "disabled"}>Pass 3${n ? ` (${n}/3)` : ""}</button>`);
-    acts.push(`<span class="hint">${n === 3 ? "Tap a selected card to swap it out." : v.yourTurn ? `Select ${3 - n} more card${3 - n === 1 ? "" : "s"} to pass.` : "Stage 3 cards \u2014 you'll confirm on your turn."}</span>`);
+    const dir = passDir(v.passOffset, v.players);
+    acts.push(`<button class="btn" data-action="pass-3" ${v.yourTurn && n === 3 ? "" : "disabled"}>Pass ${dir}${n && n < 3 ? ` (${n}/3)` : ""}</button>`);
+    if (n) acts.push(`<button class="btn ghost sm" data-action="clear-pass">Clear</button>`);
+    acts.push(`<span class="hint">${n === 3 ? (v.yourTurn ? "Ready — tap a lifted card to swap it out." : "Ready — you’ll confirm on your turn.") : `Choose ${3 - n} more card${3 - n === 1 ? "" : "s"} to pass ${dir}.`}</span>`);
   } else if (passing) {
-    acts.push(`<span class="hint">Passed \u2014 waiting for the others.</span>`);
+    acts.push(`<span class="hint">Passed — waiting for the others.</span>`);
   } else if (v.you != null) {
-    // A seated player always gets a cue (an empty row reads "Watching the table…").
-    acts.push(`<span class="hint">${
-      v.yourTurn ? "Tap a highlighted card to play it."
-      : v.phase === "trickComplete" ? "Tap the trick to continue."
-      : v.toAct != null ? `Waiting for ${esc(seatName(v, v.toAct))}\u2026` : ""
-    }</span>`);
+    const cue = v.yourTurn ? "Tap a highlighted card to play it."
+      : v.phase === "trickComplete" ? "Tap the trick to continue." : "";
+    if (cue) acts.push(`<span class="hint">${cue}</span>`);
   }
 
   const you = v.you;
-  const selfMeta = (you != null ? `Score ${v.scores[you]} \u00b7 play to ${v.target} \u00b7 low wins` : `play to ${v.target} \u00b7 low wins`)
-    + (v.tiebreak ? " \u00b7 tiebreak hand" : "");
+  const selfMeta = (you != null ? `Score <b>${v.scores[you]}</b> · to ${v.target}, low wins` : `play to ${v.target} · low wins`)
+    + (v.tiebreak ? " · tiebreak hand" : "");
   // Nobody is to act during the trick gate (toAct is null): name the trick's winner.
   const selfTurn = v.yourTurn
     ? `<span class="turnflag">${passing ? "Your pass" : "Your turn"}</span>`
     : v.toAct != null
-    ? `<span class="waitflag">${esc(seatName(v, v.toAct))}${passing ? " is passing" : "'s turn"}</span>`
+    ? `<span class="waitflag"><span>${esc(seatName(v, v.toAct))}${passing ? " is passing" : "’s turn"}</span></span>`
     : v.phase === "trickComplete" && v.trickWinner != null
-    ? `<span class="waitflag">Trick to ${esc(seatName(v, v.trickWinner))}</span>`
+    ? `<span class="waitflag"><span>Trick to ${esc(seatName(v, v.trickWinner))}</span></span>`
     : "";
 
   const ledSuit = (v.currentTrick?.length && !passing)
@@ -3236,7 +3026,7 @@ function renderHearts(v) {
             <div class="hlj-rr-seclabel">Score — play to ${v.target}, low wins</div>
             ${scoreRows}
           </div>
-          <button class="hlj-result-next-btn" data-action="hearts-ack-hand">Next hand →</button>
+          <button class="btn hlj-result-next-btn" data-action="hearts-ack-hand">Next hand \u2192</button>
         </div>
       </div>
     </div>`;
@@ -3360,8 +3150,8 @@ function renderPJ(v) {
     const tally = (t) => v.homeCounts.reduce((a, c, p) => a + (p % 2 === t ? c : 0), 0);
     const seatsOf = (t) => v.seats.map((_, i) => i).filter((i) => i % 2 === t).map((i) => i + 1).join(" & ");
     const rows = [
-      { name: `Team A \u00b7 seats ${seatsOf(0)}`, score: `${tally(0)}/${perTeam}`, win: v.winner === 0, you: v.you != null && v.you % 2 === 0 },
-      { name: `Team B \u00b7 seats ${seatsOf(1)}`, score: `${tally(1)}/${perTeam}`, win: v.winner === 1, you: v.you != null && v.you % 2 === 1 },
+      { name: `Team A \u00b7 seats ${seatsOf(0)}`, team: "A", score: `${tally(0)}/${perTeam}`, win: v.winner === 0, you: v.you != null && v.you % 2 === 0 },
+      { name: `Team B \u00b7 seats ${seatsOf(1)}`, team: "B", score: `${tally(1)}/${perTeam}`, win: v.winner === 1, you: v.you != null && v.you % 2 === 1 },
     ];
     return renderGameOver(v, v.winner == null ? "Game over" : `Team ${v.winner === 0 ? "A" : "B"} wins!`, scoreList(rows));
   }
@@ -3389,8 +3179,8 @@ function renderPJ(v) {
   const pods = [`<div class="pjstrip">${strip}</div>`];
 
   // Authentic scale: show the whole board, as large as the viewport allows.
-  const maxW = `min(94vw, ${((v.board.viewW / v.board.viewH) * 90).toFixed(1)}vh)`;
-  const center = `<div class="pjwrap" style="max-width:${maxW}">${pjBoardSVG(v, glow)}</div>`;
+  // The board scales to whatever space the felt has (see .g-pegs-and-jokers in styles).
+  const center = `<div class="pjwrap">${pjBoardSVG(v, glow)}</div>`;
 
   // hand: tap a usable card to reveal its moves — wrap in row so cards lay horizontal
   const usable = new Set(v.legalMoves.filter((m) => "cardId" in m).map((m) => m.cardId));
@@ -3417,7 +3207,9 @@ function renderPJ(v) {
   const playingPartner = yours && v.playingFor.length && v.playingFor[0] !== v.you;
   const selfTurn = yours
     ? `<span class="turnflag">Your turn${playingPartner ? " \u2014 playing teammate" : ""}</span>`
-    : `<span class="waitflag">${esc(seatName(v, v.toAct))}'s turn</span>`;
+    : v.toAct != null
+    ? `<span class="waitflag"><span>${esc(seatName(v, v.toAct))}\u2019s turn</span></span>`
+    : "";
 
   app.__set = tableShell(v, { pods, center, centerFull: true, hand, actions: acts.join(""), selfMeta, selfTeam, selfTurn });
 }
@@ -3529,10 +3321,13 @@ function doStart() {
 function renameFrom(inp) {
   const newName = inp ? inp.value.trim().slice(0, 24) : "";
   if (!newName) return;
+  const changed = newName !== S.name;
   S.name = newName;
   localStorage.setItem("cg_name", newName);
   inp.blur();
+  // Re-joining with the same pid renames your seat for everyone.
   send({ t: "join", pid: S.pid, name: newName });
+  if (changed) toast("Name updated.");
   render();
 }
 
@@ -3582,16 +3377,11 @@ app.addEventListener("click", (e) => {
     case "sort-toggle": { const m = S.rummySort === "suit" ? "rank" : "suit"; S.rummySort = m; return rummySort(v.yourHand, m); }
     case "sort-hearts": { const suitOrder = { S: 0, H: 1, C: 2, D: 3 }; S.heartsOrder = [...v.yourHand].sort((a, b) => (suitOrder[a.suit] - suitOrder[b.suit]) || (a.rank - b.rank)).map((c) => c.id); return render(); }
     case "pick-game": {
-      // keep what's been typed: the re-render redraws the fields from S
-      S.room = document.getElementById("f-room")?.value ?? S.room;
-      S.name = document.getElementById("f-name")?.value ?? S.name;
+      // keep anything typed so far — the re-render resets fields to S.*
+      const nm = document.getElementById("f-name"), rm = document.getElementById("f-room");
+      if (nm) S.name = nm.value;
+      if (rm) S.room = rm.value.trim() || null;
       S.pickGame = t.dataset.game;
-      return renderStart();
-    }
-    case "set-theme": {
-      S.theme = t.dataset.t;
-      localStorage.setItem("cg_theme", S.theme);
-      applyTheme(S.theme);
       return renderStart();
     }
     case "download-state": {
@@ -3609,7 +3399,14 @@ app.addEventListener("click", (e) => {
     case "expand-log": { const eid = +t.dataset.entryid; S.logExpandedId = S.logExpandedId === eid ? null : eid; return render(); }
     case "connect": return doConnect();
     case "share-link": return shareLink();
-    case "leave": return doLeave();
+    case "leave": {
+      // Mid-game, confirm first: leaving hands your seat to a bot (or ends a solo game).
+      const live = v && S.connected && v.phase !== "lobby" && v.phase !== "gameOver";
+      if (live && !S.confirmLeave) { S.confirmLeave = true; return render(); }
+      return doLeave();
+    }
+    case "leave-confirm": return doLeave();
+    case "leave-cancel": S.confirmLeave = false; return render();
     case "play-offline": return doPlayOffline();
     case "sit": return send({ t: "sit", seat: +t.dataset.seat });
     case "addbot": return send({ t: "addBot", seat: +t.dataset.seat });
@@ -4005,8 +3802,9 @@ app.addEventListener("change", (e) => {
   // the host's "play to" value
   if (e.target.id === "f-target") {
     const target = Number(e.target.value);
-    if (Number.isInteger(target) && target >= 1 && target <= 10000) send({ t: "setConfig", config: lobbyConfig(v, { target }) });
-    else { e.target.value = v.target ?? ""; toast("Play to: pick a whole number from 1 to 10000."); }
+    const max = GAMES[S.party].maxTarget;
+    if (Number.isInteger(target) && target >= 1 && target <= max) send({ t: "setConfig", config: lobbyConfig(v, { target }) });
+    else { e.target.value = v.target ?? ""; toast(`Play to: pick a whole number from 1 to ${max}.`); }
   }
   // Rummy bot level for a seat ("change" is what a native picker fires on iOS)
   if (e.target.matches?.(".difficulty-pick")) {
@@ -4017,7 +3815,9 @@ app.addEventListener("change", (e) => {
 });
 
 app.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && e.target.classList?.contains("lby-name-input")) renameFrom(e.target);
+  if (e.key !== "Enter") return;
+  if (e.target.classList?.contains("lby-name-input")) { e.preventDefault(); renameFrom(e.target); }
+  else if (e.target.id === "f-name" || e.target.id === "f-room") { e.preventDefault(); doConnect(); }
 });
 
 // ---------- init ----------

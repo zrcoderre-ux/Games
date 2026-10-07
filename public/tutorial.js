@@ -59,7 +59,7 @@
     display:flex;align-items:center;gap:7px}
   .tut-hint::before{content:"";width:8px;height:8px;border-radius:50%;background:#e6cf78;
     box-shadow:0 0 8px #e6cf78;animation:tutPulse 1.4s ease-in-out infinite}
-  .tut-skip{position:fixed;z-index:9001;top:max(10px,env(safe-area-inset-top));right:12px;
+  .tut-skip{position:fixed;z-index:9001;top:calc(env(safe-area-inset-top,0px) + 64px);right:12px;
     appearance:none;border:1px solid rgba(230,207,120,.35);background:rgba(6,18,12,.6);color:rgba(238,243,230,.8);
     font:600 11px/1 ui-monospace,monospace;letter-spacing:.04em;padding:6px 10px;border-radius:999px;
     cursor:pointer;backdrop-filter:blur(4px)}

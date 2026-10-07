@@ -291,11 +291,14 @@ function dealHand(prev: HeartsState): HeartsState {
   return base;
 }
 
+// Highest "play to" a table may pick (a game is normally played to 100).
+const MAX_TARGET = 200;
+
 // Validate the lobby options (throws with a message the lobby can show).
 function createGame(config: HeartsConfig, seed: number): HeartsState {
   if (![3, 4, 5].includes(config.players)) throw new Error(`Unsupported player count: ${config.players}`);
   const target = config.target === undefined ? 100 : config.target;
-  if (!Number.isInteger(target) || target < 1 || target > 10000) throw new Error("Target must be a whole number from 1 to 10000");
+  if (!Number.isInteger(target) || target < 1 || target > MAX_TARGET) throw new Error(`Target must be a whole number from 1 to ${MAX_TARGET}`);
   const base: HeartsState = {
     players: config.players,
     target,

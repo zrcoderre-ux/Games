@@ -13,7 +13,7 @@
      touched or cached.
 */
 
-const CACHE = "bonhomme-v4";
+const CACHE = "bonhomme-v5";
 
 const PRECACHE = [
   "/",

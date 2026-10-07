@@ -138,12 +138,15 @@ function botPersonality(state: HljState, seat: number): Personality {
   return PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
 }
 
+// Highest "play to" a table may pick (a game is normally played to 21).
+const MAX_TARGET = 21;
+
 // Validate the lobby options (throws with a message the lobby can show): the
 // target is a whole number of points, bestOf (optional) an odd number of games.
 function gameOptions(config: HLJConfig): { target: number; winsNeeded: number } {
   const target = config.target === undefined ? 21 : config.target;
-  if (!Number.isInteger(target) || target < 1 || target > 10000) {
-    throw new Error("Target must be a whole number from 1 to 10000");
+  if (!Number.isInteger(target) || target < 1 || target > MAX_TARGET) {
+    throw new Error(`Target must be a whole number from 1 to ${MAX_TARGET}`);
   }
   const bestOf = config.bestOf ?? 1;
   if (!Number.isInteger(bestOf) || bestOf < 1 || bestOf > 9 || bestOf % 2 === 0) {

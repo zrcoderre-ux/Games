@@ -378,12 +378,15 @@ const botLevels = (players: number, raw: unknown): number[] =>
     return Number.isInteger(d) && d >= 0 && d <= 3 ? d : 2;
   });
 
+// Highest "play to" a table may pick (a game is normally played to 500).
+const MAX_TARGET = 1000;
+
 // Validate the lobby options (throws with a message the lobby can show).
 function createGame(config: RummyConfig, seed: number): RummyState {
   const players = config.players;
   if (!Number.isInteger(players) || players < 2 || players > 8) throw new Error(`Unsupported player count: ${players}`);
   const target = config.target === undefined ? 500 : config.target;
-  if (!Number.isInteger(target) || target < 1 || target > 10000) throw new Error("Target must be a whole number from 1 to 10000");
+  if (!Number.isInteger(target) || target < 1 || target > MAX_TARGET) throw new Error(`Target must be a whole number from 1 to ${MAX_TARGET}`);
   const requireDiscard = config.requireDiscard ?? false;
   if (typeof requireDiscard !== "boolean") throw new Error("Must discard to go out must be on or off");
   const base: RummyState = {
