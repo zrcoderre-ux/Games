@@ -86,12 +86,14 @@
     inset 0 -3px 3px rgba(0,0,0,.45),
     inset 0 0 0 1px rgba(0,0,0,.4),
     0 14px 30px -14px rgba(0,0,0,.8);
-  /* jester hat: joker-hat.png is 1024×1536 with the artwork in x 0–928,
-     y 206–1026. Elements showing it use aspect-ratio 928/820 and these
-     size/position values to crop to the artwork. */
-  --hat:url(/joker-hat.png);
-  --hat-size:110.345% 187.317%;
-  --hat-pos:0% 28.771%;
+  /* jester hat: joker-hat.webp is the 928×820 artwork cropped from the
+     1024×1536 source art (joker-hat.png, x 0–928, y 206–1026). Elements
+     showing it use aspect-ratio 928/820, so it fills them exactly. The
+     position is centred, not 0 0: on boxes with fractional coordinates
+     Chrome snaps a 0 0 image up to ~1px off where the old crop drew it. */
+  --hat:url(/joker-hat.webp);
+  --hat-size:100% 100%;
+  --hat-pos:50% 50%;
   --felt-bg:radial-gradient(130% 90% at 50% 30%,var(--felt-2) 0%,var(--felt-1) 45%,var(--felt-0) 100%);
   --room-bg:radial-gradient(120% 85% at 50% 40%,#143a2a 0%,#0c2318 58%,#06120c 100%);
   color-scheme:dark;

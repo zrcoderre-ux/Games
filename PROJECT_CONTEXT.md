@@ -98,7 +98,7 @@ Both are pure (no runtime imports beyond types/helpers), deterministic via a see
 
 ## 6. UI — "Warm cozy parlor" (the chosen aesthetic)
 
-Walnut wood frame around green baize, brass/gold accents, cream cards with depth. Brand: the **BONHOMME!** wordmark (Bevan, purple with a gold stroke) and the purple jester hat (`joker-hat.png`, cropped to its artwork in CSS via `--hat-size`/`--hat-pos`). Type: Bevan (brand + card faces), Fraunces (headings, numbers), Hanken Grotesk (UI). Mobile-first. All colors, radii and fonts are tokens at the top of `styles.css` (§1); the stylesheet is organised in numbered sections listed in its header comment.
+Walnut wood frame around green baize, brass/gold accents, cream cards with depth. Brand: the **BONHOMME!** wordmark (Bevan, purple with a gold stroke) and the purple jester hat (`joker-hat.webp`, the 928×820 artwork cropped from the source art `joker-hat.png`; shown through the `--hat` / `--hat-size` / `--hat-pos` tokens). Type: Bevan (brand + card faces), Fraunces (headings, numbers), Hanken Grotesk (UI). Mobile-first. All colors, radii and fonts are tokens at the top of `styles.css` (§1); the stylesheet is organised in numbered sections listed in its header comment.
 
 Layout is a **real table**: opponents are "pods" around the felt (a stack of team-colored card backs — or an avatar in Hearts — over a name plate; the plate turns gold on their turn; dealer / bid chips sit on the stack's inner corner, an HLJ confidence signal on its outer corner; a dropped player's plate shows an "away" chip and the host gets a Replace button); your fanned hand rides over the bottom of the felt; the center shows the trick (HLJ/Hearts), stock + discard + melds (Rummy) or the board (P&J).
 
