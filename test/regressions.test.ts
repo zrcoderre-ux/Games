@@ -148,7 +148,11 @@ test("while the signal gate is open nobody may act, and only the bidder may sign
   assert.equal(picked.pendingSignal, false);
   assert.equal(picked.signals[bidder], "strong");
   assert.equal(hljModule.seatToAct(picked), 2, "bidding resumes with the next seat");
-  assert.deepEqual(picked.log, s.log, "a signal leaves the move log alone");
+  assert.deepEqual(picked.log.slice(0, s.log.length), s.log, "a signal only appends to the log");
+  assert.deepEqual(picked.log.slice(s.log.length).map((e) => [e.seat, e.msg]), [[bidder, "signals strong"]]);
+  assert.equal(picked.logSeq, s.logSeq + 1);
+  const again = hljModule.aux!.apply(picked, bidder, "strong");
+  assert.equal(again.log.length, picked.log.length, "re-sending the same signal logs nothing");
 });
 
 test("the gate's pacing is a 30 s safety net owned by the bidder", () => {
