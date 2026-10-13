@@ -66,6 +66,11 @@ export type Personality = {
   // must clear the value of passing. Negative = bids lighter hands.
   bidMargin: number;
 
+  // Bidding six: how far (same units) a bid of 6 must clear the best lower bid,
+  // or passing, before the bot takes it. 0 = the bot's natural read; each step
+  // up makes it shyer of the six without changing how it bids 2-5.
+  sixMargin: number;
+
   // The remaining knobs shape the card-play heuristic, which breaks ties
   // between cards the search rates (nearly) equal.
 
@@ -90,6 +95,7 @@ export const PERSONALITIES: Record<string, Personality> = {
   conservative: {
     name: "Conservative",
     bidMargin: 3,
+    sixMargin: 0,
     trumpPullFrac: 0.5,
     lowKeepBonus: 40,
     endgameCutoff: 3,
@@ -99,6 +105,7 @@ export const PERSONALITIES: Record<string, Personality> = {
   balanced: {
     name: "Balanced",
     bidMargin: 0,
+    sixMargin: 0,
     trumpPullFrac: 0.35,
     lowKeepBonus: 25,
     endgameCutoff: 2,
@@ -108,6 +115,7 @@ export const PERSONALITIES: Record<string, Personality> = {
   aggressive: {
     name: "Aggressive",
     bidMargin: -3,
+    sixMargin: 0,
     trumpPullFrac: 0.20,
     lowKeepBonus: 10,
     endgameCutoff: 1,
@@ -638,6 +646,12 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
     expectedUtility(outlook, { myTeam, bidderTeam: myTeam, bid, scores: state.scores, target: state.target });
   let bestBid = needed;
   for (let b = needed + 1; b <= 6; b++) if (value(b) > value(bestBid)) bestBid = b;
+  // A six-shy seat takes the six only if it beats the best lower bid by its margin.
+  if (bestBid === 6 && needed < 6 && p.sixMargin > 0) {
+    let below = needed;
+    for (let b = needed + 1; b < 6; b++) if (value(b) > value(below)) below = b;
+    if (value(6) < value(below) + p.sixMargin) bestBid = below;
+  }
 
   // The dealer can't pass a hand nobody bid.
   if (isDealer && high === null) return { type: "bid", seat, amount: bestBid };
@@ -661,7 +675,8 @@ function decideBid(state: GameState, seat: number, rng: () => number, p: Persona
     passValue = 100 * winProb(state.target - state.scores[myTeam], state.target - state.scores[opp], state.target);
     if (high !== null && teamOf(high.seat) === myTeam) passValue += PARTNER_PREMIUM;
   }
-  return value(bestBid) >= passValue + p.bidMargin ? { type: "bid", seat, amount: bestBid } : { type: "pass", seat };
+  const margin = p.bidMargin + (bestBid === 6 ? p.sixMargin : 0);
+  return value(bestBid) >= passValue + margin ? { type: "bid", seat, amount: bestBid } : { type: "pass", seat };
 }
 
 // ---------- public entry points ----------

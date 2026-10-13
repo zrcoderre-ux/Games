@@ -39,6 +39,7 @@ type Room<State, Config> = {
   // hibernation (or a restart) still knows when it is due.
   stepDue: { key: string; at: number } | null;
   transitions: number; // bumped on every deal and applied move
+  sessionSeed: number; // fixed for the room's lifetime; handed to game.seatTable on every deal
 };
 
 export abstract class RoomServer<
@@ -71,6 +72,7 @@ export abstract class RoomServer<
     }
     if (this.room.stepDue === undefined) this.room.stepDue = null;
     if (this.room.transitions === undefined) this.room.transitions = 0;
+    if (this.room.sessionSeed === undefined) this.room.sessionSeed = randomSeed();
     // A game saved by an older deploy: let the module bring it up to date and
     // check it can still be served. If not, start the room over rather than
     // leave it throwing on every view, move and alarm with no way to reset.
@@ -107,6 +109,7 @@ export abstract class RoomServer<
       disconnectedSeats: {},
       stepDue: null,
       transitions: 0,
+      sessionSeed: randomSeed(),
     };
   }
 
@@ -432,7 +435,9 @@ export abstract class RoomServer<
     this.room.transitions++;
     this.room.config = config;
     this.commitSeats(seats, moved);
-    this.room.state = state;
+    this.room.state = this.game.seatTable
+      ? this.game.seatTable(state, seats.map((x) => x.kind), this.room.sessionSeed)
+      : state;
     this.room.pendingBotSeats = {};
     this.room.disconnectedSeats = {};
     await this.persist();

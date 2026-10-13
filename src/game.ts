@@ -73,6 +73,12 @@ export interface Game<State, Move extends SeatedMove, Config, View> {
   // purely seed-deterministic, which tests and harnesses rely on.
   reseed?(state: State, entropy: number[]): State;
 
+  // OPTIONAL: tell a freshly dealt game who sits where, once the table is
+  // final (after createGame and reseed), so it can tune its bots to the table.
+  // `sessionSeed` is fixed for the room's lifetime (a rematch keeps it) and
+  // differs between rooms.
+  seatTable?(state: State, kinds: SeatKind[], sessionSeed: number): State;
+
   // OPTIONAL: bring a persisted state from an older deploy up to the current
   // shape (fill defaults etc.). The room runs it on load; if it throws, the
   // room resets to a fresh lobby rather than staying broken.

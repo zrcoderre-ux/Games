@@ -21,6 +21,7 @@ import {
   isHandSignal,
   emptyProfile,
   trickWinner,
+  teamOf,
   SUPPORTED_PLAYERS,
   type GameState,
   type Move,
@@ -29,14 +30,14 @@ import {
 } from "./engine.ts";
 import { redact, type PlayerView } from "./protocol.ts";
 import { aiMove, handConfidence, PERSONALITIES, type Personality } from "./ai.ts";
-import type { Game, LogEntry } from "./game.ts";
+import type { Game, LogEntry, SeatKind } from "./game.ts";
 
 export type HLJConfig = { players: PlayerCount; target: number; bestOf?: number };
 
 // The engine's state plus an authoritative, append-only move log, and the
 // per-game seed the bots' personalities are drawn from (state.seed moves on
-// every deal).
-export type HljState = GameState & { log: LogEntry[]; logSeq: number; botSeed?: number };
+// every deal), and each seat's six rank (see seatTable).
+export type HljState = GameState & { log: LogEntry[]; logSeq: number; botSeed?: number; sixRanks?: number[] };
 
 const moveEq = (a: Move, b: Move): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -135,7 +136,40 @@ const PERSONALITY_TABLE: Personality[] = [
 ];
 function botPersonality(state: HljState, seat: number): Personality {
   const h = (((state.botSeed ?? state.seed) >>> 0) ^ Math.imul(seat + 1, 0x9e3779b9)) >>> 0;
-  return PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
+  const p = PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
+  const rank = state.sixRanks?.[seat] ?? 0;
+  return rank ? { ...p, sixMargin: rank * SIX_MARGIN_STEP } : p;
+}
+
+// How readily each seat bids six, so a table isn't six after six. Within each
+// team the seats are ranked 0, 1, 2...: rank 0 bids six at the bots' natural
+// level and each rank after it is a step shyer (SIX_MARGIN_STEP win-probability
+// points; one step cuts a bot's six bids by about a third). The team's humans
+// hold its most aggressive ranks, one each, so the bots beside them start
+// further down. Which bot seats get the bolder ranks is shuffled by the room's
+// session seed: it moves between sessions but holds for a rematch. A bot that
+// later replaces a human inherits the human's rank.
+const SIX_MARGIN_STEP = 4;
+function sixRanks(kinds: SeatKind[], sessionSeed: number): number[] {
+  let a = sessionSeed >>> 0;
+  const rng = () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const ranks = kinds.map(() => 0);
+  for (const team of [0, 1]) {
+    const seats = kinds.map((_, i) => i).filter((i) => teamOf(i) === team);
+    const humans = seats.filter((i) => kinds[i] === "human");
+    const bots = seats.filter((i) => kinds[i] !== "human");
+    for (let i = bots.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [bots[i], bots[j]] = [bots[j], bots[i]];
+    }
+    [...humans, ...bots].forEach((seat, rank) => (ranks[seat] = rank));
+  }
+  return ranks;
 }
 
 // Highest "play to" a table may pick (a game is normally played to 21).
@@ -185,6 +219,8 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
     const g = engineCreateGame(config.players, seed, target, winsNeeded);
     return { ...attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]), botSeed: seed };
   },
+
+  seatTable: (s, kinds, sessionSeed) => ({ ...s, sixRanks: sixRanks(kinds, sessionSeed) }),
 
   // Fresh entropy for the shuffle (the log and botSeed ride through the spread).
   reseed: (s, entropy) => engineReseed(s, entropy) as HljState,
