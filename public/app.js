@@ -375,6 +375,10 @@ function toast(msg) {
 }
 
 // ---------- move log (authoritative: rendered from view.log) ----------
+// HLJ confidence-signal badges (table pods, your chip, the picker, the log).
+const SIGNAL_SRCS = { weak: "/low-signal.webp", medium: "/medium-signal.webp", strong: "/high-signal.webp" };
+const SIGNAL_LABELS = { weak: "Weak", medium: "Medium", strong: "Strong" };
+
 function cardText(c) {
   if (!c) return "";
   if (c.joker) return `<span class="lc red">\u2605</span>`;
@@ -384,6 +388,12 @@ function logEntryHTML(v, e) {
   const who = e.seat != null ? `<b>${esc(seatName(v, e.seat))}</b> ` : "";
   const body = e.seat == null ? `<i>${esc(e.msg)}</i>` : esc(e.msg);
   const suit = e.suit ? ` <span class="lc ${RED.has(e.suit) ? "red" : ""}">${SUIT[e.suit]}</span>` : "";
+  // An HLJ confidence signal shows its badge after the level.
+  const sig = /^signals (weak|medium|strong)$/.exec(e.msg || "");
+  if (sig) {
+    const lvl = sig[1];
+    return `${who}signals ${SIGNAL_LABELS[lvl]} <img src="${SIGNAL_SRCS[lvl]}" alt="" class="signal-img log-signal">`;
+  }
   // "was dealt" and "kitty" entries use mini card images instead of text glyphs
   if ((e.msg === "was dealt" || e.msg === "kitty") && e.cards?.length) {
     const miniCards = e.cards.map(c => cardHTML(c, { mini: true })).join("");
@@ -1653,15 +1663,11 @@ function renderHLJ(v) {
 
   const teamLetter = (i) => (i % 2 === 0 ? "A" : "B");
 
-  // Confidence-signal image maps — declared before any use (pod badges, your
-  // chip, and the picker) to avoid a temporal-dead-zone ReferenceError that
-  // would throw mid-render and freeze the table.
-  const SIGNAL_SRCS = { weak: "/low-signal.webp", medium: "/medium-signal.webp", strong: "/high-signal.webp" };
-  const SIGNAL_LABELS = { weak: "Weak", medium: "Medium", strong: "Strong" };
-  // Signals are public for the whole hand (bots read every seat's), so each
-  // seat that has signalled shows its badge through bidding and play.
+  // Every seat's badge shows while bidding; once the bid is won only the
+  // winning bidder's stays up. The rest are reviewable in the move log.
   const signalImg = (i) => {
     const lvl = v.signals?.[i];
+    if (v.phase !== "bidding" && v.highBid?.seat !== i) return "";
     return SIGNAL_SRCS[lvl] ? `<img src="${SIGNAL_SRCS[lvl]}" alt="${SIGNAL_LABELS[lvl]}" class="signal-img">` : "";
   };
 
@@ -1902,7 +1908,8 @@ function renderHLJ(v) {
 
   const isYouDealer = you != null && you === v.dealerSeat;
   const selfTeam = you != null ? (you % 2 === 0 ? "A" : "B") : null;
-  // Your own signal (once given) sits beside your bid / dealer chip for the hand.
+  // Your own signal (once given) sits beside your bid / dealer chip while
+  // bidding, and stays for the hand only if you win the bid.
   const selfSignal = you != null && signalImg(you) ? `<span class="pod-dealer-badge signal">${signalImg(you)}</span>` : "";
   const myBadge = you == null ? ""
     : (v.phase === "playing" || v.phase === "trickComplete") && v.highBid?.seat === you

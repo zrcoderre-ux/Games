@@ -320,17 +320,20 @@ export const hljModule: Game<HljState, Move, HLJConfig, PlayerView> = {
 
   aiMove: (s, seat) => aiMove(s, seat, undefined, botPersonality(s, seat)),
 
-  // Hand signals: a non-turn side action that must preserve the log untouched.
-  // The payload is raw client input (and keys the bots' signal records), so only
-  // a real level is accepted; while the confidence gate is open only the bidder
-  // it waits on may signal, and that pick clears it.
+  // Hand signals: a non-turn side action. Each one is logged (only a change, so
+  // a repeated send adds nothing), because the table stops showing a seat's
+  // badge once bidding ends unless it won the bid. The payload is raw client
+  // input (and keys the bots' signal records), so only a real level is
+  // accepted; while the confidence gate is open only the bidder it waits on may
+  // signal, and that pick clears it.
   aux: {
     apply: (s, seat, payload) => {
       if (!isHandSignal(payload)) throw new Error("Invalid signal");
       const gate = signalGateSeat(s);
       if (gate !== null && seat !== gate) throw new Error("Waiting for the bidder to signal");
       const next = setSignal(s, seat, payload);
-      return { ...(next as HljState), log: s.log, logSeq: s.logSeq, pendingSignal: false, pendingSignalSeat: null };
+      const entries = s.signals[seat] === payload ? [] : [{ seat, msg: `signals ${payload}` }];
+      return { ...attach(next, s.log, s.logSeq, entries), pendingSignal: false, pendingSignalSeat: null };
     },
     botAux: (s, seat) => {
       if (s.phase !== "bidding" || s.signals[seat] != null) return null;
