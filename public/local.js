@@ -43,6 +43,8 @@ var LocalRoom = class {
   // the seat whose view we currently emit
   name = "You";
   botTimer = null;
+  // Fixed for this room's lifetime, so "play again" keeps it (game.seatTable).
+  sessionSeed = randomSeed();
   // Plain fields rather than constructor parameter properties, so Node's
   // type stripping can load this file directly (the tests do).
   game;
@@ -231,6 +233,7 @@ var LocalRoom = class {
     this.config = config;
     this.commitSeats(seats, moved);
     this.state = this.reseeded(state);
+    if (this.game.seatTable) this.state = this.game.seatTable(this.state, this.seats.map((x) => x.kind), this.sessionSeed);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }
@@ -1560,6 +1563,7 @@ var PERSONALITIES = {
   conservative: {
     name: "Conservative",
     bidMargin: 3,
+    sixMargin: 0,
     trumpPullFrac: 0.5,
     lowKeepBonus: 40,
     endgameCutoff: 3,
@@ -1569,6 +1573,7 @@ var PERSONALITIES = {
   balanced: {
     name: "Balanced",
     bidMargin: 0,
+    sixMargin: 0,
     trumpPullFrac: 0.35,
     lowKeepBonus: 25,
     endgameCutoff: 2,
@@ -1578,6 +1583,7 @@ var PERSONALITIES = {
   aggressive: {
     name: "Aggressive",
     bidMargin: -3,
+    sixMargin: 0,
     trumpPullFrac: 0.2,
     lowKeepBonus: 10,
     endgameCutoff: 1,
@@ -1911,6 +1917,11 @@ function decideBid(state, seat, rng, p) {
   const value = (bid) => expectedUtility(outlook, { myTeam, bidderTeam: myTeam, bid, scores: state.scores, target: state.target });
   let bestBid = needed;
   for (let b = needed + 1; b <= 6; b++) if (value(b) > value(bestBid)) bestBid = b;
+  if (bestBid === 6 && needed < 6 && p.sixMargin > 0) {
+    let below = needed;
+    for (let b = needed + 1; b < 6; b++) if (value(b) > value(below)) below = b;
+    if (value(6) < value(below) + p.sixMargin) bestBid = below;
+  }
   if (isDealer && high === null) return { type: "bid", seat, amount: bestBid };
   let passValue;
   if (isDealer && high !== null) {
@@ -1927,7 +1938,8 @@ function decideBid(state, seat, rng, p) {
     passValue = 100 * winProb(state.target - state.scores[myTeam], state.target - state.scores[opp], state.target);
     if (high !== null && teamOf(high.seat) === myTeam) passValue += PARTNER_PREMIUM;
   }
-  return value(bestBid) >= passValue + p.bidMargin ? { type: "bid", seat, amount: bestBid } : { type: "pass", seat };
+  const margin = p.bidMargin + (bestBid === 6 ? p.sixMargin : 0);
+  return value(bestBid) >= passValue + margin ? { type: "bid", seat, amount: bestBid } : { type: "pass", seat };
 }
 function aiMove(state, seat, rng = stateRng(state, seat), personality = PERSONALITIES.balanced) {
   if (state.phase === "gameOver") throw new Error("game is over");
@@ -2052,7 +2064,31 @@ var PERSONALITY_TABLE = [
 ];
 function botPersonality(state, seat) {
   const h = ((state.botSeed ?? state.seed) >>> 0 ^ Math.imul(seat + 1, 2654435769)) >>> 0;
-  return PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
+  const p = PERSONALITY_TABLE[h % PERSONALITY_TABLE.length];
+  const rank = state.sixRanks?.[seat] ?? 0;
+  return rank ? { ...p, sixMargin: rank * SIX_MARGIN_STEP } : p;
+}
+var SIX_MARGIN_STEP = 4;
+function sixRanks(kinds, sessionSeed) {
+  let a = sessionSeed >>> 0;
+  const rng = () => {
+    a = a + 1831565813 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+  const ranks = kinds.map(() => 0);
+  for (const team of [0, 1]) {
+    const seats = kinds.map((_, i) => i).filter((i) => teamOf(i) === team);
+    const humans = seats.filter((i) => kinds[i] === "human");
+    const bots = seats.filter((i) => kinds[i] !== "human");
+    for (let i = bots.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [bots[i], bots[j]] = [bots[j], bots[i]];
+    }
+    [...humans, ...bots].forEach((seat, rank) => ranks[seat] = rank);
+  }
+  return ranks;
 }
 var MAX_TARGET = 21;
 function gameOptions(config) {
@@ -2091,6 +2127,7 @@ var hljModule = {
     const g = createGame(config.players, seed, target, winsNeeded);
     return { ...attach(g, [], 0, [{ seat: g.dealerSeat, msg: "deals the first hand" }]), botSeed: seed };
   },
+  seatTable: (s, kinds, sessionSeed) => ({ ...s, sixRanks: sixRanks(kinds, sessionSeed) }),
   // Fresh entropy for the shuffle (the log and botSeed ride through the spread).
   reseed: (s, entropy) => reseed(s, entropy),
   // Saved games from older deploys: fill in fields added since (log, profiles,

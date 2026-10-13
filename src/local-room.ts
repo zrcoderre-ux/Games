@@ -49,6 +49,8 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
   private viewSeat: number | null = null; // the seat whose view we currently emit
   private name = "You";
   private botTimer: ReturnType<typeof setTimeout> | null = null;
+  // Fixed for this room's lifetime, so "play again" keeps it (game.seatTable).
+  private sessionSeed = randomSeed();
   // Plain fields rather than constructor parameter properties, so Node's
   // type stripping can load this file directly (the tests do).
   private game: Game<State, Move, Config, View>;
@@ -249,6 +251,7 @@ export class LocalRoom<State, Move extends { seat: number }, Config, View> {
     this.config = config;
     this.commitSeats(seats, moved);
     this.state = this.reseeded(state);
+    if (this.game.seatTable) this.state = this.game.seatTable(this.state, this.seats.map((x) => x.kind), this.sessionSeed);
     this.syncViewSeat();
     this.resolveBotsAndBroadcast();
   }

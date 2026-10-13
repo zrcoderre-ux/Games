@@ -386,3 +386,32 @@ test("revealed hands are sorted (HLJ result, Hearts game log)", () => {
     assert.deepEqual(keys, [...keys].sort((a, b) => a - b));
   }
 });
+
+test("HLJ six ranks: humans take their team's boldest ranks, bot order follows the session seed", () => {
+  const kinds = ["human", "bot", "bot", "bot", "bot", "bot"] as const;
+  const g = hljModule.createGame({ players: 6, target: 21 }, 7);
+  const ranksFor = (seed: number) => hljModule.seatTable!(g, [...kinds], seed).sixRanks!;
+  const firstBots = new Set<number>();
+  for (let seed = 1; seed <= 40; seed++) {
+    const r = ranksFor(seed);
+    assert.equal(r[0], 0, "the human is the team's most aggressive seat");
+    assert.deepEqual([r[2], r[4]].sort(), [1, 2], "the human's bot partners rank 1 and 2");
+    assert.deepEqual([r[1], r[3], r[5]].sort(), [0, 1, 2], "the other team gets the full range");
+    assert.deepEqual(ranksFor(seed), r, "same session, same seating");
+    firstBots.add([1, 3, 5].find((s) => r[s] === 0)!);
+  }
+  assert.equal(firstBots.size, 3, "the boldest bot's seat moves between sessions");
+});
+
+test("HLJ six ranks hold across play again in the same room", () => {
+  const r = localRoom(hljModule, { players: 6, target: 1 });
+  r.send({ t: "join", pid: "p", name: "Me" });
+  r.send({ t: "start" });
+  const first = (r.room as any).state.sixRanks;
+  (r.room as any).state = { ...(r.room as any).state, phase: "gameOver" };
+  r.send({ t: "newGame" });
+  r.send({ t: "start" });
+  assert.deepEqual((r.room as any).state.sixRanks, first);
+  assert.deepEqual(r.errors(), []);
+  r.room.close();
+});
