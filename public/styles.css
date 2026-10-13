@@ -590,7 +590,7 @@ button,input,select{font-family:inherit;color:inherit}
   filter:blur(.6px);user-select:none;transform:translateY(4%);
 }
 .trump-watermark.joker-placeholder,.lby-felt-watermark{
-  width:min(96%,660px);aspect-ratio:928/820;height:auto;filter:none;transform:translateY(8%);
+  width:min(81.6%,561px);aspect-ratio:928/820;height:auto;filter:none;transform:translateY(8%);
   background-color:rgba(45,122,74,.62);
   -webkit-mask:var(--hat) var(--hat-pos)/var(--hat-size) no-repeat;mask:var(--hat) var(--hat-pos)/var(--hat-size) no-repeat;
 }
@@ -1616,7 +1616,7 @@ button.seat-av:hover{transform:scale(1.06);background:rgba(255,255,255,.08)}
   /* felt furniture scaled for a short, wide table */
   .felt-frame{padding:8px}
   .trump-watermark{font-size:min(68dvh,48dvw)}
-  .trump-watermark.joker-placeholder,.lby-felt-watermark{width:min(70%,92dvh * 1.13)}
+  .trump-watermark.joker-placeholder,.lby-felt-watermark{width:min(59.5%,78.2dvh * 1.13)}
   .felt-corner-suit{font-size:clamp(22px,6vmin,40px)}
   .hlj-felt-bid{bottom:6px}
   .lasttrick .lt-fan{height:100px}
