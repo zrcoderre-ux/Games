@@ -492,7 +492,7 @@
         id: "honors",
         when: (v) => v.phase === "playing",
         title: "Where points come from",
-        body: "Each hand has up to <b>six</b> points to win: <b>High</b> (the highest trump in play), <b>Low</b> (the lowest natural trump in play — the Joker never counts as Low), <b>Jack</b> (the jack of trump), <b>Bonhomme</b> (the Joker) — worth <b>2 points</b>, not 1 — and <b>Game</b> (most card value: A=4, K=3, Q=2, J=1, 10=10). Capture them in your tricks.",
+        body: "Each hand has up to <b>six</b> points to win: <b>High</b> (the highest trump in play), <b>Low</b> (the lowest natural trump in play — the Joker never counts as Low), <b>Jack</b> (the jack of trump), <b>Bonhomme</b> (the Joker) — worth <b>2 points</b>, not 1 — and <b>Game</b> (most card value: A=4, K=3, Q=2, J=1, 10=10; a tie scores for nobody). Capture them in your tricks.",
         gate: "tap",
       },
       {

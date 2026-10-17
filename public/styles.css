@@ -1359,6 +1359,7 @@ button.seat-av:hover{transform:scale(1.06);background:rgba(255,255,255,.08)}
 .hlj-rr-game-gc.tA{color:var(--teamA)}
 .hlj-rr-game-gc.tB{color:var(--teamB)}
 .hlj-rr-game-gc-sep{font-size:12px;color:var(--ink-4);margin-left:4px}
+.hlj-rr-gametie{padding:8px 10px;font-size:14px;font-weight:600;color:var(--ink-3);text-align:center;border-top:1px solid rgba(255,255,255,.05)}
 .hlj-rr-kitty{display:flex;flex-wrap:wrap;gap:6px}
 .hlj-rr-scorerow{
   display:flex;align-items:center;gap:10px;min-height:46px;padding:0 12px;border-radius:10px;margin-bottom:6px;

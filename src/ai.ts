@@ -576,6 +576,21 @@ function stakesFor(state: GameState, seat: number): HandStakes {
   };
 }
 
+const isTen = (c: Card): boolean => !isJoker(c) && c.rank === 10;
+
+// Is the trick on the table certain to go to this seat's team? Its winner is a
+// teammate and either nobody plays after us or the winning card is a trump
+// above every trump still hidden from us.
+function lockedForUs(state: GameState, seat: number): boolean {
+  const trump = state.trump!;
+  if (!state.currentTrick.length) return false;
+  const winnerSeat = trickWinner(state.currentTrick, trump);
+  if (teamOf(winnerSeat) !== teamOf(seat)) return false;
+  if (state.currentTrick.length === state.players - 1) return true;
+  const winVal = trumpValue(state.currentTrick.find((p) => p.seat === winnerSeat)!.card, trump);
+  return winVal !== null && winVal > hiddenTopTrump(state, trump, state.hands[seat]);
+}
+
 // Pick a card by sampling worlds consistent with what this seat has seen and
 // playing each candidate out. The heuristic choice wins ties (and near-ties),
 // so the search only overrides it when it finds a clearly better card.
@@ -585,6 +600,10 @@ function decidePlayMC(state: GameState, seat: number, rng: () => number, p: Pers
     .map((m) => m.card);
   const heuristic = decidePlay(state, seat, p);
   if (legal.length === 1 || heuristic.type !== "play") return heuristic;
+  // Feeding an off-suit ten onto a trick our side has locked banks 10 Game
+  // pips. The search's margin for that is inside its sampling noise, so it
+  // could hold the ten back for nothing; the heuristic's feed stands.
+  if (lockedForUs(state, seat) && isTen(heuristic.card) && !isTrump(heuristic.card, state.trump!)) return heuristic;
 
   const ctx = buildContext(state, seat, state.trump!);
   const cands = legal.map(encodeCard);

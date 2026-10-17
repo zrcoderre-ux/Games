@@ -1564,6 +1564,12 @@ function hljTeammateStillToBid(v, bidAmount) {
   return false;
 }
 
+// A tied Game count scores for nobody, so it sits under both team columns.
+function hljGameTie(pts) {
+  if (pts.game != null || !pts.gameCount) return "";
+  return `<div class="hlj-rr-gametie">Game tied <span class="hlj-rr-game-gc tA">${pts.gameCount[0]}</span><span class="hlj-rr-game-gc-sep">·</span><span class="hlj-rr-game-gc tB">${pts.gameCount[1]}</span> — no point</div>`;
+}
+
 function renderHLJ(v) {
   if (v.phase === "gameOver") {
     const w = v.winner;
@@ -1599,7 +1605,7 @@ function renderHLJ(v) {
       const ptRows = `<div class="hlj-rr-twocol">
         <div class="hlj-rr-col tA"><div class="hlj-rr-colhdr tA">Team A · ${lh.pointsByTeam[0]} pt${lh.pointsByTeam[0] !== 1 ? "s" : ""}</div>${honorList(colA)}</div>
         <div class="hlj-rr-col tB"><div class="hlj-rr-colhdr tB">Team B · ${lh.pointsByTeam[1]} pt${lh.pointsByTeam[1] !== 1 ? "s" : ""}</div>${honorList(colB)}</div>
-      </div>`;
+      </div>${hljGameTie(pts)}`;
       const scoreRows = [0, 1].map(t => {
         const letter = t === 0 ? "A" : "B";
         const delta = lh.deltaByTeam[t];
@@ -1985,7 +1991,7 @@ function renderHLJ(v) {
         <div class="hlj-rr-colhdr tB">Team B · ${totalB} pt${totalB !== 1 ? "s" : ""}</div>
         ${honorList(colB)}
       </div>
-    </div>`;
+    </div>${hljGameTie(pts)}`;
 
     const made = lh.made;
     // A hand that wins a game mid-series is followed at once by the next game's
