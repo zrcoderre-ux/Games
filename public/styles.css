@@ -881,6 +881,8 @@ button,input,select{font-family:inherit;color:inherit}
 }
 .card.red{color:var(--suit-red)}
 .card .corner{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:.86;font-weight:700}
+/* Ink comes from the card, never from text rules of whatever holds it (.logrow b). */
+.card .corner b,.card .corner i{color:inherit}
 .card .corner b{font-size:calc(var(--w) * .28);font-weight:400}
 .card .corner i{font-size:calc(var(--w) * .2);font-style:normal;margin-top:4px}
 .card .corner.tl{top:5px;left:6px}
@@ -1441,6 +1443,13 @@ button.seat-av:hover{transform:scale(1.06);background:rgba(255,255,255,.08)}
 .hlj-dealt-row{display:flex;flex-direction:column;gap:6px}
 .hlj-dealt-name{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
 .hlj-dealt-cards{display:flex;flex-wrap:wrap;gap:4px}
+/* Mini cards laid out side by side (log, kitty, dealt hands): nothing overlaps
+   them, so the rank leads, big and centred over its suit, in place of the
+   corner index and pip. */
+:is(.hlj-dealt-cards,.log-extra-cards,.hlj-dh-cards,.hlj-rr-kitty) .card.mini .pip{display:none}
+:is(.hlj-dealt-cards,.log-extra-cards,.hlj-dh-cards,.hlj-rr-kitty) .card.mini .corner.tl{inset:0;justify-content:center}
+:is(.hlj-dealt-cards,.log-extra-cards,.hlj-dh-cards,.hlj-rr-kitty) .card.mini .corner b{font-size:calc(var(--w) * .46);letter-spacing:-.04em}
+:is(.hlj-dealt-cards,.log-extra-cards,.hlj-dh-cards,.hlj-rr-kitty) .card.mini .corner i{font-size:calc(var(--w) * .36);margin-top:3px}
 .log-tabs{display:inline-flex;gap:4px;padding:3px;border-radius:12px;background:rgba(0,0,0,.3);border:1px solid var(--line-soft)}
 .log-tab{
   appearance:none;cursor:pointer;height:32px;padding:0 16px;border-radius:9px;border:0;
