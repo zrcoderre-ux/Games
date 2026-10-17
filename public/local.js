@@ -1870,10 +1870,21 @@ function stakesFor(state, seat) {
     target: state.target
   };
 }
+var isTen = (c) => !isJoker(c) && c.rank === 10;
+function lockedForUs(state, seat) {
+  const trump = state.trump;
+  if (!state.currentTrick.length) return false;
+  const winnerSeat = trickWinner(state.currentTrick, trump);
+  if (teamOf(winnerSeat) !== teamOf(seat)) return false;
+  if (state.currentTrick.length === state.players - 1) return true;
+  const winVal = trumpValue(state.currentTrick.find((p) => p.seat === winnerSeat).card, trump);
+  return winVal !== null && winVal > hiddenTopTrump(state, trump, state.hands[seat]);
+}
 function decidePlayMC(state, seat, rng, p) {
   const legal = legalMoves(state).filter((m) => m.type === "play").map((m) => m.card);
   const heuristic = decidePlay(state, seat, p);
   if (legal.length === 1 || heuristic.type !== "play") return heuristic;
+  if (lockedForUs(state, seat) && isTen(heuristic.card) && !isTrump(heuristic.card, state.trump)) return heuristic;
   const ctx = buildContext(state, seat, state.trump);
   const cands = legal.map(encodeCard);
   const worlds = clamp(Math.floor(PLAY_BUDGET / (cands.length * cardsLeft(ctx))), MIN_WORLDS, MAX_WORLDS);
@@ -2032,7 +2043,7 @@ function hljEntries(prev, next, move) {
     const honors = [`High\u2192${teamLetter(d.high ?? 0)}`, `Low\u2192${teamLetter(d.low ?? 0)}`];
     if (d.jack !== null) honors.push(`Jack\u2192${teamLetter(d.jack)}`);
     if (d.bonhomme !== null) honors.push(`Joker\u2192${teamLetter(d.bonhomme)}`);
-    if (d.game !== null) honors.push(`Game\u2192${teamLetter(d.game)}`);
+    honors.push(d.game !== null ? `Game\u2192${teamLetter(d.game)}` : `Game tied ${d.gameCount[0]}\u2013${d.gameCount[1]}, no point`);
     out.push({ seat: null, msg: honors.join("    ") });
     const scores = r.finalScores ?? next.scores;
     out.push({ seat: null, msg: `Score \u2014 A ${scores[0]}, B ${scores[1]}` });

@@ -90,7 +90,9 @@ function hljEntries(prev: HljState, next: GameState, move: Move): Omit<LogEntry,
     const honors: string[] = [`High\u2192${teamLetter(d.high ?? 0)}`, `Low\u2192${teamLetter(d.low ?? 0)}`];
     if (d.jack !== null) honors.push(`Jack\u2192${teamLetter(d.jack)}`);
     if (d.bonhomme !== null) honors.push(`Joker\u2192${teamLetter(d.bonhomme)}`);
-    if (d.game !== null) honors.push(`Game\u2192${teamLetter(d.game)}`);
+    honors.push(d.game !== null
+      ? `Game\u2192${teamLetter(d.game)}`
+      : `Game tied ${d.gameCount[0]}\u2013${d.gameCount[1]}, no point`);
     out.push({ seat: null, msg: honors.join("    ") });
     // The hand's own totals: a game won mid-series has already reset next.scores.
     const scores = r.finalScores ?? next.scores;
